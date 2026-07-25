@@ -15,7 +15,11 @@ import { LatentEngine } from "@/lib/latent/engine";
  * Fallbacks: static frame under prefers-reduced-motion, CSS gradient when
  * WebGL2 is unavailable.
  */
-export default function LatentBackground() {
+export default function LatentBackground({
+  onReady,
+}: {
+  onReady?: () => void;
+}) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [failed, setFailed] = useState(false);
 
@@ -27,15 +31,19 @@ export default function LatentBackground() {
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
     const engine = new LatentEngine();
+    // Mobile GPUs are fill-rate bound on the raymarch, so cut DPR and steps
+    // hard there — smoothness matters more than crispness on the backdrop.
     const ok = engine.mount(canvas, {
       octaves: coarse ? 3 : 5,
-      marchSteps: coarse ? 28 : 48,
-      maxDpr: coarse ? 1 : 1.5,
+      marchSteps: coarse ? 20 : 48,
+      maxDpr: coarse ? 0.8 : 1.5,
     });
     if (!ok) {
       setFailed(true);
+      onReady?.();
       return;
     }
+    onReady?.();
     if (process.env.NODE_ENV !== "production") {
       (window as unknown as Record<string, unknown>).__latentEngine = engine;
     }
@@ -75,12 +83,61 @@ export default function LatentBackground() {
     window.addEventListener("resize", onResize);
     document.addEventListener("visibilitychange", onVisibility);
 
+    // Touch drag to reposition the sculpture. A gesture that starts mostly
+    // horizontal locks into "drag the sphere" (2D from then on); a mostly
+    // vertical start stays a normal page scroll — no hijack.
+    let tracking = false;
+    let decided = false;
+    let dragging = false;
+    let sx = 0;
+    let sy = 0;
+    let lx = 0;
+    let ly = 0;
+
+    const onTouchStart = (e: TouchEvent) => {
+      if (e.touches.length !== 1) return;
+      tracking = true;
+      decided = false;
+      dragging = false;
+      const t = e.touches[0];
+      sx = lx = t.clientX;
+      sy = ly = t.clientY;
+    };
+    const onTouchMove = (e: TouchEvent) => {
+      if (!tracking) return;
+      const t = e.touches[0];
+      if (!decided) {
+        const adx = Math.abs(t.clientX - sx);
+        const ady = Math.abs(t.clientY - sy);
+        if (adx > 8 || ady > 8) {
+          decided = true;
+          dragging = adx > ady * 1.2;
+        }
+      }
+      if (decided && dragging) {
+        e.preventDefault();
+        const min = Math.min(window.innerWidth, window.innerHeight);
+        engine.dragBy((t.clientX - lx) / min, -(t.clientY - ly) / min);
+      }
+      lx = t.clientX;
+      ly = t.clientY;
+    };
+    const onTouchEnd = () => {
+      tracking = false;
+    };
+    window.addEventListener("touchstart", onTouchStart, { passive: true });
+    window.addEventListener("touchmove", onTouchMove, { passive: false });
+    window.addEventListener("touchend", onTouchEnd, { passive: true });
+
     return () => {
       window.removeEventListener("scroll", onScroll);
       window.removeEventListener("pointermove", onPointer);
       window.removeEventListener("pointerdown", onDown);
       window.removeEventListener("resize", onResize);
       document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("touchstart", onTouchStart);
+      window.removeEventListener("touchmove", onTouchMove);
+      window.removeEventListener("touchend", onTouchEnd);
       engine.dispose();
     };
   }, []);

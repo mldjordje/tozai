@@ -79,6 +79,11 @@ export class LatentEngine {
   private grab: [number, number, number] = [0, 0, 0];
   private pulseV = 0;
 
+  // User drag offset (touch): reposition the sculpture in field coords.
+  // Eased toward the target so releasing/flinging feels smooth.
+  private dragTarget: [number, number] = [0, 0];
+  private drag: [number, number] = [0, 0];
+
   // Pointer trail ring buffer: 4 decaying lenses along the recent cursor
   // path give the field its ink-drag feel.
   private trail = new Float32Array([0.5, 0.5, 0, 0.5, 0.5, 0, 0.5, 0.5, 0, 0.5, 0.5, 0]);
@@ -214,6 +219,14 @@ export class LatentEngine {
     this.pulseV = 1;
   }
 
+  /** Drag the sculpture by a normalized field delta (touch reposition). */
+  dragBy(dx: number, dy: number) {
+    this.dragTarget[0] = Math.max(-0.5, Math.min(0.5, this.dragTarget[0] + dx));
+    this.dragTarget[1] = Math.max(-0.55, Math.min(0.55, this.dragTarget[1] + dy));
+    // A drag also counts as pointer energy so the field lights up under it.
+    this.energy = Math.min(1, this.energy + Math.hypot(dx, dy) * 3);
+  }
+
   /** Draw one static frame — used under prefers-reduced-motion. */
   renderOnce(progress = 0.3) {
     this.progress = this.progressTarget = progress;
@@ -289,13 +302,17 @@ export class LatentEngine {
     const canvas = this.canvas;
     if (!gl || !this.program || !canvas) return;
     let [bx, by, bs, morph] = this.blobAt(this.progress);
-    // Portrait screens: shrink the sculpture and float it high, above the
-    // copy — a jewel over the headline instead of a wall behind the text.
+    // Portrait screens: a bold jewel floating over the copy. Bigger than
+    // before and centred; the user can drag it anywhere (touch).
     if (canvas.width / canvas.height < 0.85) {
-      bs *= 0.55;
-      by = by * 0.4 + 0.68;
-      bx = Math.max(-0.1, Math.min(0.1, bx));
+      bs *= 0.92;
+      by = by * 0.35 + 0.5;
+      bx = Math.max(-0.14, Math.min(0.14, bx)) * 0.5;
     }
+
+    // Apply the user's drag offset (eased in the loop).
+    bx += this.drag[0];
+    by += this.drag[1];
 
     // Cursor grab: pointer position in sculpture-local coords. Strength
     // ramps as the cursor approaches; the target is clamped near the rim so
@@ -340,6 +357,8 @@ export class LatentEngine {
     this.progress += (this.progressTarget - this.progress) * 0.07;
     this.pointer[0] += (this.pointerTarget[0] - this.pointer[0]) * 0.1;
     this.pointer[1] += (this.pointerTarget[1] - this.pointer[1]) * 0.1;
+    this.drag[0] += (this.dragTarget[0] - this.drag[0]) * 0.14;
+    this.drag[1] += (this.dragTarget[1] - this.drag[1]) * 0.14;
     this.energy *= 0.96;
 
     // Velocity envelope: attack fast on scroll, release slow — the smear

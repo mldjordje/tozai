@@ -3,6 +3,7 @@ import Nav from "@/components/layout/Nav";
 import ScrollProgress from "@/components/ui/ScrollProgress";
 import GrainOverlay from "@/components/ui/GrainOverlay";
 import CursorGlow from "@/components/ui/CursorGlow";
+import Preloader from "@/components/ui/Preloader";
 import Reveal from "@/components/ui/Reveal";
 import KineticTitle from "@/components/ui/KineticTitle";
 import CountUp from "@/components/ui/CountUp";
@@ -23,6 +24,7 @@ const EDU_PILLS = ["1-na-1 mentorstvo", "Tvoj tempo", "Konkretno za tvoj biznis"
 export default function Home() {
   return (
     <>
+      <Preloader />
       <LatentBackground />
       <GrainOverlay />
       <CursorGlow />
