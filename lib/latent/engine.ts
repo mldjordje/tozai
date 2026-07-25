@@ -38,13 +38,15 @@ export interface LatentOptions {
 // sides as sections alternate text alignment, re-seeds the orbit (morph), and
 // morphs into a distinct primitive per section (shape 0..5 — see shapeSDF):
 // 0 blob · 1 crystal · 2 ring · 3 cubes · 4 star · 5 sphere.
+// Scale column trimmed ~30% — the sculpture is a quieter accent now, so the
+// stormcloud field can breathe (cinematic negative space).
 const BLOB_KEYS: [number, number, number, number, number, number][] = [
-  [0.0, 0.3, 0.04, 0.42, 0.0, 0.0], // hero — liquid blob, right of headline
-  [0.16, -0.34, 0.02, 0.34, 1.2, 1.0], // stats — crystal, left
-  [0.36, 0.32, 0.06, 0.38, 2.3, 2.0], // proof — ring, right
-  [0.56, -0.3, 0.0, 0.36, 3.1, 3.0], // paketi — cubes, left
-  [0.76, 0.3, -0.02, 0.34, 3.9, 4.0], // edukacija — star, right
-  [1.0, 0.0, 0.1, 0.48, 4.6, 5.0], // booking — calm sphere, center
+  [0.0, 0.32, 0.04, 0.29, 0.0, 0.0], // hero — liquid blob, right of headline
+  [0.16, -0.34, 0.02, 0.23, 1.2, 1.0], // stats — crystal, left
+  [0.36, 0.33, 0.06, 0.26, 2.3, 2.0], // proof — ring, right
+  [0.56, -0.31, 0.0, 0.25, 3.1, 3.0], // paketi — cubes, left
+  [0.76, 0.31, -0.02, 0.23, 3.9, 4.0], // edukacija — star, right
+  [1.0, 0.0, 0.1, 0.33, 4.6, 5.0], // booking — calm sphere, center
 ];
 
 function smootherstep(t: number): number {
@@ -461,7 +463,7 @@ export class LatentEngine {
     // Portrait screens: a bold jewel floating over the copy. Bigger than
     // before and centred; the user can drag it anywhere (touch).
     if (canvas.width / canvas.height < 0.85) {
-      bs *= 0.92;
+      bs *= 0.85;
       by = by * 0.35 + 0.5;
       bx = Math.max(-0.14, Math.min(0.14, bx)) * 0.5;
     }

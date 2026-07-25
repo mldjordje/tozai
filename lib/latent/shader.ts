@@ -217,88 +217,73 @@ void main() {
   float prog = clamp(uProgress, 0.0, 1.0);
   float warm = smoothstep(0.78, 1.0, prog);
 
-  // ---------------------------------------------------------------- field
-  vec2 flow = vec2(0.0, prog * 2.6);
+  // ------------------------------------------------------------- stormcloud
+  // Cinematic stormcloud: soft billowing fbm density lit from within by
+  // lightning. Deliberately clean — deep charcoal-ink base, one electric hue,
+  // lots of negative space so the layout breathes. No veins / static / bands /
+  // chromatic fringing (that read as clutter); the drama is the strike.
 
+  // Slow drift; scroll nudges the whole cloudscape upward.
+  vec2 drift = vec2(t * 0.05, -t * 0.03 - prog * 0.55);
+  vec2 cp = p * 1.15 + drift;
+
+  // Two-scale fbm = billowing cumulonimbus. Domain-warp the detail octave a
+  // touch so the body churns instead of sliding as one flat sheet.
+  float baseN = fbm(cp * 1.35);
+  float detail = fbm(cp * 3.0 + baseN * 0.8 + vec2(t * 0.04, 0.0));
+  float dens = smoothstep(0.34, 0.96, baseN * 0.62 + detail * 0.46);
+  // Storm eases toward the booking CTA — the clouds thin as the page resolves.
+  float order = smoothstep(0.55, 1.0, prog);
+  dens *= mix(1.0, 0.82, order);
+
+  // Pointer parts the clouds a little where the cursor rests.
   vec2 pc = (uPointer - 0.5) * uResolution / mn;
   vec2 toPtr = p - pc;
-  float pinf = exp(-dot(toPtr, toPtr) * 9.0) * uPointerEnergy;
+  float pinf = exp(-dot(toPtr, toPtr) * 7.0) * uPointerEnergy;
+  dens *= 1.0 - pinf * 0.3;
 
-  vec2 P = p * 1.35 + flow;
-  vec2 q = vec2(fbm(P + vec2(0.0, t)), fbm(P + vec2(5.2, 1.3) - t * 0.7));
-  q += toPtr * pinf * 0.6;
+  float f = dens; // downstream warm grade reads cloud density
 
-  // Pointer trail: decaying lenses along the recent cursor path drag the
-  // field like a finger through ink — the fluid-sim feel without an FBO sim.
-  float trailGlow = 0.0;
-  for (int i = 0; i < 4; i++) {
-    vec2 tp = (uTrail[i].xy - 0.5) * uResolution / mn;
-    vec2 tv = p - tp;
-    float tinf = exp(-dot(tv, tv) * 11.0) * uTrail[i].z;
-    q += tv * tinf * 0.55;
-    trailGlow += tinf;
-  }
-  vec2 r = vec2(
-    fbm(P + 2.4 * q + vec2(1.7, 9.2) + t * 1.4),
-    fbm(P + 2.4 * q + vec2(8.3, 2.8) - t)
-  );
-  float f = fbm(P + 2.1 * r);
+  // Hue: electric blue, warming to ember as the finale approaches.
+  vec3 acc = mix(ACCENT, EMBER, warm);
 
-  // Hero: raw latent static folded into the field, dissolving by mid-page.
-  float chaos = 1.0 - smoothstep(0.0, 0.6, prog);
-  if (chaos > 0.002) {
-    float staticN = fbm(p * 22.0 + vec2(0.0, uTime * 0.6));
-    f = mix(f, f * 0.62 + staticN * 0.45, chaos * 0.5);
-  }
+  // --- lightning ----------------------------------------------------------
+  // One quick strike per ~2.6s window at a random moment/column; scroll and
+  // clicks make strikes brighter and more frequent (warped clock upstream).
+  float period = 2.6;
+  float widx = floor(uTime / period);
+  float local = fract(uTime / period);
+  float rt   = 0.12 + 0.55 * fract(sin(widx * 91.7) * 4390.1); // strike moment
+  float seed = fract(sin(widx * 57.3) * 1000.3);               // strike column
+  float dtf  = local - rt;
+  // Sharp flash: fast attack/decay plus a shorter afterflicker.
+  float env = exp(-dtf * dtf * 240.0) + 0.3 * exp(-dtf * dtf * 1600.0);
+  float boost = 0.55 + uVelocity * 1.1 + uPulse * 1.4;
+  float flash = clamp(env, 0.0, 1.6) * boost;
 
-  // Finale: the field settles into laminar bands — the render resolves.
-  float order = smoothstep(0.5, 0.95, prog);
-  if (order > 0.002) {
-    float bands = 0.5 + 0.5 * sin((p.y + r.y * 1.2 - prog * 3.0) * 7.0);
-    f = mix(f, f * (0.55 + 0.45 * bands), order * 0.65);
-  }
+  // Bolt path: a mostly-vertical line whose x forks via fbm down the height.
+  float boltX = (seed - 0.5) * 1.15;
+  float jag  = (fbm(vec2(p.y * 3.4 + widx * 11.0, widx)) - 0.5) * 0.46;
+  jag       += (fbm(vec2(p.y * 8.5 - widx * 5.0, widx)) - 0.5) * 0.16;
+  float dxb  = abs(p.x - (boltX + jag));
+  float core = exp(-dxb * 140.0);          // thin hot filament
+  float halo = exp(-dxb * 13.0) * 0.5;     // soft discharge glow
+  float lenFade = smoothstep(0.95, -0.25, p.y); // brightest up top, fades down
+  float bolt = (core + halo) * lenFade * flash;
 
-  // Hue journey: electric blue detours through cyan mid-page, ember at end.
-  float mid = smoothstep(0.2, 0.5, prog) * (1.0 - smoothstep(0.55, 0.9, prog));
-  vec3 acc = mix(ACCENT, vec3(0.15, 0.80, 1.00), mid * 0.7);
-
-  // Chromatic aberration: vein/crest thresholds split per channel while
-  // scrolling — edges fringe red/blue like a lens pushed too hard.
-  float shift = uVelocity * 0.30 * (0.25 + length(p));
-  vec3 vein = vec3(
-    smoothstep(0.48 - shift, 0.88 - shift, f),
-    smoothstep(0.48, 0.88, f),
-    smoothstep(0.48 + shift, 0.88 + shift, f)
-  ) * (0.34 + 0.55 * q.y) * (0.9 + uVelocity * 0.6);
-  vec3 crest = vec3(
-    smoothstep(0.78 - shift, 0.98 - shift, f),
-    smoothstep(0.78, 0.98, f),
-    smoothstep(0.78 + shift, 0.98 + shift, f)
-  ) * (0.55 + uVelocity * 0.35);
-
-  // Grade: base -> ink body -> electric veins -> white-blue crests.
-  // Scroll velocity lifts the whole field — the page "charges up".
+  // --- compose ------------------------------------------------------------
   vec3 col = BASE;
-
-  // Deep parallax layer: a second, finer field scrolling at a different
-  // rate — background gains depth instead of reading as one flat sheet.
-  float f2 = fbm(p * 2.6 + vec2(0.0, prog * 1.2 + t * 0.45) + q * 0.8);
-  col += INK * 0.8 * smoothstep(0.62, 0.95, f2);
-
-  col = mix(col, INK * 1.35, smoothstep(0.2, 0.68, f));
-  col = mix(col, acc, vein);
-  col = mix(col, GLOW, crest);
-
-  // Electric filaments where the two warp channels cross — thin live
-  // threads snaking through the field.
-  float fil = exp(-abs(r.x - r.y) * 60.0);
-  col += acc * fil * (0.22 + uVelocity * 0.45) * smoothstep(0.35, 0.65, f);
-
-  // Cheap bloom on the crests so highlights breathe.
-  col += GLOW * crest.g * crest.g * 0.45;
-
-  col += acc * pinf * 0.85 + GLOW * pinf * pinf * 0.6;
-  col += acc * trailGlow * 0.4 + GLOW * trailGlow * trailGlow * 0.25;
+  // Cloud body: dark ink volume, faint accent rim on the dense crowns.
+  col = mix(col, INK * 1.12, dens);
+  col += acc * smoothstep(0.62, 1.0, dens) * 0.22;
+  // Backlight: the strike floods the surrounding cloud from within.
+  col += acc * dens * flash * 0.85;
+  col += GLOW * dens * flash * flash * 0.45;
+  // The bolt itself + white-hot core.
+  col += (GLOW * 1.35 + acc * 0.55) * bolt;
+  col += vec3(1.1) * core * lenFade * flash;
+  // Faint ambient light where the cursor rests.
+  col += acc * pinf * 0.22;
 
   // ------------------------------------------------------------ sculpture
   vec2 lp = (p - uBlobPos) / uBlobScale;
@@ -331,7 +316,7 @@ void main() {
       float fres = pow(1.0 - max(dot(n, -rd), 0.0), 2.5);
       // Chromatic aberration on the reflection itself — R and B sample the
       // environment through slightly bent rays. Flares with scroll/click.
-      float caA = (uVelocity * 0.6 + uPulse * 0.5) * 0.16 + fres * 0.012;
+      float caA = (uVelocity * 0.6 + uPulse * 0.5) * 0.10 + fres * 0.010;
       vec3 env;
       env.r = envMap(normalize(e + vec3(caA, 0.0, 0.0)), warm).r;
       env.g = envMap(e, warm).g;
@@ -340,12 +325,12 @@ void main() {
       vec3 bcol = env * (0.30 + 0.70 * fres);
       // Thin-film iridescence riding the grazing angles — the "liquid" tell.
       vec3 irid = 0.5 + 0.5 * cos(6.2831 * (fres * 1.2 + uMorph * 0.15) + vec3(0.0, 2.1, 4.2));
-      bcol += irid * fres * 0.18;
+      bcol += irid * fres * 0.12;
       // Two lights: hard white key + soft halo, section-tinted rim.
       // Velocity juices the specular — the chrome flares while you scroll.
       float kd = max(dot(n, normalize(vec3(0.6, 0.7, -0.5))), 0.0);
       float s2 = pow(max(dot(n, normalize(vec3(-0.5, -0.3, -0.6))), 0.0), 32.0);
-      bcol += vec3(1.2) * pow(kd, 64.0) * (1.2 + uVelocity * 1.6 + uPulse * 2.0);
+      bcol += vec3(1.2) * pow(kd, 64.0) * (1.1 + uVelocity * 0.8 + uPulse * 1.2);
       bcol += GLOW * pow(kd, 10.0) * 0.35;
       bcol += mix(ACCENT, EMBER, warm) * s2 * 0.9;
       // Screen-glow rim from the copy side — ties the chrome to the layout.
