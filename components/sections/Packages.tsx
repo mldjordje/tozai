@@ -3,13 +3,14 @@
 import Reveal from "@/components/ui/Reveal";
 import KineticTitle from "@/components/ui/KineticTitle";
 import CTAButton from "@/components/ui/CTAButton";
-import { CLIP_PACKAGES } from "@/lib/content/offerings";
+import { CLIP_PACKAGES, type ClipPackage } from "@/lib/content/offerings";
 
 /**
- * #paketi — buy AI-clip packages. Data-driven from CLIP_PACKAGES so the
- * tiers/prices can later be fed from an admin panel without touching this UI.
+ * #paketi — buy AI-clip packages. Tiers/prices come from the admin panel via
+ * the `packages` table (passed as props by the server page); falls back to the
+ * static CLIP_PACKAGES placeholders when the DB has no active service rows.
  */
-export default function Packages() {
+export default function Packages({ packages = CLIP_PACKAGES }: { packages?: ClipPackage[] }) {
   return (
     <section
       id="paketi"
@@ -31,7 +32,7 @@ export default function Packages() {
         </Reveal>
 
         <div className="grid gap-5 md:grid-cols-3">
-          {CLIP_PACKAGES.map((pkg, i) => (
+          {packages.map((pkg, i) => (
             <Reveal key={pkg.id} delay={i * 0.08}>
               <div
                 className={`group relative flex h-full flex-col rounded-2xl border p-7 backdrop-blur-md transition-colors duration-300 ${

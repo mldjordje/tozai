@@ -3,15 +3,16 @@
 import Reveal from "@/components/ui/Reveal";
 import KineticTitle from "@/components/ui/KineticTitle";
 import CTAButton from "@/components/ui/CTAButton";
-import { HOUR_PACKS } from "@/lib/content/offerings";
+import { HOUR_PACKS, type HourPack } from "@/lib/content/offerings";
 
 const PILLS = ["1-na-1 mentorstvo", "Tvoj tempo", "Konkretno za tvoj biznis"];
 
 /**
- * #edukacija — 1-on-1 education sold as hour-packs. Buy hours, then book a
- * slot. Hour tiers come from HOUR_PACKS (admin-editable later).
+ * #edukacija — 1-on-1 education sold as hour-packs. Tiers come from the admin
+ * panel via the `packages` table (education rail, passed as props); falls back
+ * to the static HOUR_PACKS placeholders when the DB has no active edu rows.
  */
-export default function Education() {
+export default function Education({ packs = HOUR_PACKS }: { packs?: HourPack[] }) {
   return (
     <section
       id="edukacija"
@@ -43,7 +44,7 @@ export default function Education() {
         </Reveal>
 
         <div className="mt-14 grid gap-5 md:mt-20 md:grid-cols-3">
-          {HOUR_PACKS.map((pack, i) => (
+          {packs.map((pack, i) => (
             <Reveal key={pack.id} delay={i * 0.08}>
               <div
                 className={`group flex h-full flex-col rounded-2xl border p-7 backdrop-blur-md transition-colors duration-300 ${

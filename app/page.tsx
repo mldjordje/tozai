@@ -13,6 +13,12 @@ import Hero from "@/components/sections/Hero";
 import ResultsShowcase from "@/components/sections/ResultsShowcase";
 import Packages from "@/components/sections/Packages";
 import Education from "@/components/sections/Education";
+import { getPublicPackages } from "@/lib/packages";
+import { toClipPackage, toHourPack } from "@/lib/content/offerings";
+
+// Pricing is admin-driven (packages table). ISR keeps the landing fast; the
+// admin write routes revalidatePath("/") so edits go live within a click.
+export const revalidate = 60;
 
 const STATS = [
   { value: "16M+", label: "Monthly Views" },
@@ -21,7 +27,14 @@ const STATS = [
   { value: "2+", label: "Years Creating Content" },
 ];
 
-export default function Home() {
+export default async function Home() {
+  const [services, education] = await Promise.all([
+    getPublicPackages("services"),
+    getPublicPackages("education"),
+  ]);
+  const clipPackages = services.map(toClipPackage);
+  const hourPacks = education.map(toHourPack);
+
   return (
     <>
       <Preloader />
@@ -68,11 +81,11 @@ export default function Home() {
         {/* Proof — pinned horizontal showcase */}
         <ResultsShowcase />
 
-        {/* Paketi — buy AI clips */}
-        <Packages />
+        {/* Paketi — buy AI clips (admin-driven, static fallback) */}
+        <Packages packages={clipPackages.length ? clipPackages : undefined} />
 
-        {/* Edukacija — buy 1-on-1 hour packs */}
-        <Education />
+        {/* Edukacija — buy 1-on-1 hour packs (admin-driven, static fallback) */}
+        <Education packs={hourPacks.length ? hourPacks : undefined} />
 
         {/* Booking */}
         <section

@@ -81,6 +81,59 @@ export const CLIP_PACKAGES: ClipPackage[] = [
   },
 ];
 
+// --- admin/DB → section mappers -----------------------------------------
+// A pricing row as it comes from the `packages` table (admin panel). Kept as a
+// plain shape here so these mappers stay client-safe (no server-only imports).
+export type PackageRow = {
+  id: number;
+  name: string;
+  price: number | null;
+  currency: string;
+  unit: string | null;
+  description: string | null;
+  features: string[];
+  highlighted: boolean;
+  cta_label: string | null;
+};
+
+function formatPrice(price: number | null, currency: string): string {
+  if (price == null) return "€—";
+  const n = price.toLocaleString("sr-RS");
+  return currency === "EUR" ? `€${n}` : `${n} ${currency}`;
+}
+
+// services rail → AI-clip package card (#paketi).
+export function toClipPackage(p: PackageRow): ClipPackage {
+  return {
+    id: String(p.id),
+    name: p.name,
+    price: formatPrice(p.price, p.currency),
+    priceNote: p.unit ?? undefined,
+    headline: p.description ?? "",
+    features: p.features,
+    cta: p.cta_label ?? "Naruči",
+    featured: p.highlighted,
+  };
+}
+
+// education rail → 1-on-1 hour-pack card (#edukacija).
+export function toHourPack(p: PackageRow): HourPack {
+  const hours = Number((p.name.match(/\d+/) ?? p.unit?.match(/\d+/) ?? [])[0]) || 0;
+  const perHour =
+    hours > 0 && p.price != null && p.currency === "EUR"
+      ? `€${Math.round(p.price / hours)} / sat`
+      : undefined;
+  return {
+    id: String(p.id),
+    hours,
+    label: p.name,
+    price: formatPrice(p.price, p.currency),
+    perHour,
+    note: p.description ?? undefined,
+    featured: p.highlighted,
+  };
+}
+
 // --- 1-on-1 education hour-packs (section: #edukacija) -------------------
 export const HOUR_PACKS: HourPack[] = [
   {
