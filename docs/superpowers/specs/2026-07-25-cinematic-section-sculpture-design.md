@@ -37,7 +37,12 @@ The sculpture is a single object that evolves with the page story:
 
 ## Motion and Choreography
 
-- Keep the existing section-based scroll choreography and side-to-side layout.
+- Keep section-based scroll choreography, but use the page's clear upper-right
+  corridor instead of crossing dense copy and pricing cards. The booking form
+  resolves to center.
+- Bind each semantic form to the measured DOM position of its actual section
+  so sticky content, CMS changes, and responsive heights cannot desynchronize
+  the narrative.
 - Morph continuously between neighboring section shapes using eased progress;
   no hard swaps or visible collapse through a flat intermediate state.
 - Use slow multi-axis rotation with small shape-specific secondary motion.

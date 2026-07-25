@@ -36,17 +36,19 @@ export interface LatentOptions {
 // Sculpture choreography: [progress, x, y, scale, morph, shape]. Position is
 // in field coords (centered, /min-dim; x+ right, y+ up). The sculpture swaps
 // sides as sections alternate text alignment, re-seeds the orbit (morph), and
-// morphs into a distinct primitive per section (shape 0..5 — see shapeSDF):
-// 0 blob · 1 crystal · 2 ring · 3 cubes · 4 star · 5 sphere.
-// Scale column trimmed ~30% — the sculpture is a quieter accent now, so the
-// stormcloud field can breathe (cinematic negative space).
-const BLOB_KEYS: [number, number, number, number, number, number][] = [
-  [0.0, 0.32, 0.04, 0.29, 0.0, 0.0], // hero — liquid blob, right of headline
-  [0.16, -0.34, 0.02, 0.23, 1.2, 1.0], // stats — crystal, left
-  [0.36, 0.33, 0.06, 0.26, 2.3, 2.0], // proof — ring, right
-  [0.56, -0.31, 0.0, 0.25, 3.1, 3.0], // paketi — cubes, left
-  [0.76, 0.31, -0.02, 0.23, 3.9, 4.0], // edukacija — star, right
-  [1.0, 0.0, 0.1, 0.33, 4.6, 5.0], // booking — calm sphere, center
+// morphs into a narrative form per section (shape 0..5 — see shapeSDF):
+// AI core · data nodes · signal portal · modules · knowledge · resolved pearl.
+// Scale stays deliberately medium so the stormcloud and lightning keep equal
+// visual weight; small differences only normalize each silhouette.
+type SculptureKey = [number, number, number, number, number, number];
+
+const BLOB_KEYS: SculptureKey[] = [
+  [0.0, 0.32, 0.04, 0.29, 0.0, 0.0], // hero — organic AI core
+  [0.16, 0.38, 0.15, 0.25, 1.15, 1.0], // numbers — connected data nodes
+  [0.36, 0.35, 0.14, 0.27, 2.25, 2.0], // results — fluid signal portal
+  [0.56, 0.37, 0.16, 0.25, 3.15, 3.0], // packages — interlocked modules
+  [0.76, 0.36, 0.14, 0.24, 4.05, 4.0], // education — knowledge network
+  [1.0, 0.0, 0.08, 0.31, 4.85, 5.0], // booking — resolved pearl
 ];
 
 function smootherstep(t: number): number {
@@ -85,6 +87,7 @@ export class LatentEngine {
   private pointerTarget: [number, number] = [0.5, 0.5];
   private pointer: [number, number] = [0.5, 0.5];
   private energy = 0;
+  private blobKeys: SculptureKey[] = BLOB_KEYS.map((key) => [...key] as SculptureKey);
 
   // Scroll velocity envelope (fast attack, slow release) and the warped
   // clock it drives — hard scrolling accelerates the whole scene.
@@ -341,6 +344,24 @@ export class LatentEngine {
     this.progressTarget = Math.min(Math.max(p, 0), 1);
   }
 
+  /** Bind the six semantic forms to measured page-section anchors. This keeps
+   *  the shape story correct when sticky sections, CMS content, or responsive
+   *  layouts change the document height. */
+  setSectionAnchors(anchors: number[]) {
+    if (
+      anchors.length !== this.blobKeys.length ||
+      anchors.some((value) => !Number.isFinite(value))
+    ) {
+      return;
+    }
+    let previous = -0.001;
+    this.blobKeys = BLOB_KEYS.map((key, index) => {
+      const progress = Math.max(previous + 0.001, Math.min(1, Math.max(0, anchors[index])));
+      previous = progress;
+      return [progress, key[1], key[2], key[3], key[4], key[5]];
+    });
+  }
+
   setPointer(x: number, y: number) {
     const dx = x - this.pointerTarget[0];
     const dy = y - this.pointerTarget[1];
@@ -434,7 +455,7 @@ export class LatentEngine {
   /** Interpolate the sculpture keyframes at the current progress. Returns
    *  [x, y, scale, morph, shape]. */
   private blobAt(p: number): [number, number, number, number, number] {
-    const keys = BLOB_KEYS;
+    const keys = this.blobKeys;
     let k0 = keys[0];
     let k1 = keys[keys.length - 1];
     for (let i = 0; i < keys.length - 1; i++) {
@@ -463,12 +484,13 @@ export class LatentEngine {
     const canvas = this.canvas;
     if (!gl || !this.program || !canvas) return;
     let [bx, by, bs, morph, shape] = this.blobAt(this.progress);
-    // Portrait screens: a bold jewel floating over the copy. Bigger than
-    // before and centred; the user can drag it anywhere (touch).
+    // Portrait screens: keep the jewel medium and bias it into the upper-right
+    // breathing room. Centering it hid the most important part of the form
+    // directly behind the stacked hero headline.
     if (canvas.width / canvas.height < 0.85) {
-      bs *= 0.85;
-      by = by * 0.35 + 0.5;
-      bx = Math.max(-0.14, Math.min(0.14, bx)) * 0.5;
+      bs *= 0.82;
+      by = by * 0.25 + 0.58;
+      bx = Math.max(-0.22, Math.min(0.22, bx)) * 0.85;
     }
 
     // Apply the user's drag offset (eased in the loop).
@@ -484,10 +506,15 @@ export class LatentEngine {
     let lx = (pfx - bx) / bs;
     let ly = (pfy - by) / bs;
     const dist = Math.hypot(lx, ly);
-    const reach = Math.max(0, Math.min(1, (2.4 - dist) / 1.6));
-    if (dist > 1.05) {
-      lx *= 1.05 / dist;
-      ly *= 1.05 / dist;
+    const proximity = Math.max(0, Math.min(1, (2.4 - dist) / 1.6));
+    // Do not grow a detached satellite at the idle pointer position. The
+    // deformation wakes only after real pointer/click energy and stays close
+    // enough to read as one continuous liquid-metal body.
+    const interaction = Math.min(1, this.energy * 2.2 + this.pulseV * 0.7);
+    const reach = proximity * interaction;
+    if (dist > 0.9) {
+      lx *= 0.9 / dist;
+      ly *= 0.9 / dist;
     }
     this.grab[0] = lx;
     this.grab[1] = ly;

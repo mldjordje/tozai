@@ -14,6 +14,7 @@
 
 - `lib/latent/shader.ts`: semantic SDF geometry, shape-aware motion, raymarch material, lighting, and restrained bloom contribution.
 - `lib/latent/engine.ts`: scroll progress keyframes, normalized medium scale, shape phase, and portrait positioning.
+- `components/background/LatentBackground.tsx`: measure live section positions and synchronize semantic shape anchors.
 - `docs/superpowers/specs/2026-07-25-cinematic-section-sculpture-design.md`: approved design intent; no implementation changes.
 
 ### Task 1: Build Semantic Section Forms
@@ -131,11 +132,11 @@ only where silhouettes differ:
 ```ts
 const BLOB_KEYS: [number, number, number, number, number, number][] = [
   [0.0, 0.32, 0.04, 0.29, 0.0, 0.0],
-  [0.16, -0.34, 0.02, 0.25, 1.15, 1.0],
-  [0.36, 0.33, 0.06, 0.27, 2.25, 2.0],
-  [0.56, -0.31, 0.0, 0.25, 3.15, 3.0],
-  [0.76, 0.31, -0.02, 0.24, 4.05, 4.0],
-  [1.0, 0.0, 0.1, 0.31, 4.85, 5.0],
+  [0.16, 0.38, 0.15, 0.25, 1.15, 1.0],
+  [0.36, 0.35, 0.14, 0.27, 2.25, 2.0],
+  [0.56, 0.37, 0.16, 0.25, 3.15, 3.0],
+  [0.76, 0.36, 0.14, 0.24, 4.05, 4.0],
+  [1.0, 0.0, 0.08, 0.31, 4.85, 5.0],
 ];
 ```
 
@@ -144,10 +145,19 @@ shape is legible around each section.
 
 - [ ] **Step 2: Keep portrait scale medium and preserve text clearance**
 
-Retain the current portrait scale multiplier at or below `0.85`, keep the
-sculpture above the copy, and do not widen the horizontal clamp.
+Keep the portrait scale multiplier at or below `0.85` and bias the sculpture
+into the upper-right breathing room rather than centering it behind the stacked
+hero heading.
 
-- [ ] **Step 3: Run production build**
+- [ ] **Step 3: Bind morph keys to measured section positions**
+
+Add `setSectionAnchors()` to the engine and call it from
+`components/background/LatentBackground.tsx` using the live positions of
+`top`, `services`, `portfolio`, `paketi`, `edukacija`, and `booking`. Offset the
+sticky portfolio anchor by `0.72 * innerHeight` so the portal lands after the
+horizontal proof rail is established.
+
+- [ ] **Step 4: Run production build**
 
 Run:
 
@@ -203,4 +213,3 @@ git status --short
 
 Expected: build and diff checks exit `0`; status lists only the intended shader,
 engine, and plan changes before commit.
-

@@ -92,86 +92,147 @@ float smin(float a, float b, float k) {
   return mix(b, a, h) - k * h * (1.0 - h);
 }
 
-// --- shape primitives the sculpture morphs between per section ------------
-// Each returns an SDF centered at origin, sized to ~0.6 so silhouettes match
-// across a morph. uShape blends adjacent primitives so scrolling one section
-// to the next physically reshapes the chrome.
+// --- semantic forms the sculpture morphs between per section --------------
+// Every form is bounded to roughly the same radius. The object therefore
+// changes meaning without "popping" larger and stealing the storm's frame.
 
-// Shape 0 — liquid metaball cluster (hero). uMorph re-seeds the orbit.
-float sdBlob(vec3 q, float t) {
-  float d = length(q) - (0.55 + 0.05 * sin(t * 0.7) + uPulse * 0.12);
-  for (int i = 0; i < 5; i++) {
-    float fi = float(i);
-    vec3 o = vec3(
-      cos(t * (0.50 + 0.13 * fi) + fi * 2.4 + uMorph * 1.9),
-      sin(t * (0.60 + 0.11 * fi) + fi * 1.7 + uMorph * 1.3),
-      0.35 * sin(t * 0.5 + fi * 2.1 + uMorph)
-    ) * (0.30 + 0.17 * sin(uMorph + fi * 1.8));
-    d = smin(d, length(q - o) - (0.17 + 0.05 * sin(t + fi * 1.4)), 0.30);
-  }
-  return d;
+mat2 rot2(float a) {
+  float c = cos(a), s = sin(a);
+  return mat2(c, -s, s, c);
 }
 
-// Shape 1 — faceted crystal (stats).
-float sdOctahedron(vec3 p, float s) {
-  p = abs(p);
-  return (p.x + p.y + p.z - s) * 0.57735027;
-}
-
-// Shape 2 — ring / halo (proof).
 float sdTorus(vec3 p, vec2 tr) {
   vec2 q = vec2(length(p.xz) - tr.x, p.y);
   return length(q) - tr.y;
 }
 
-// Shape 3 — stacked rounded cubes (paketi). Two boxes bridged so it reads
-// as a little tower without a second full march branch.
 float sdRoundBox(vec3 p, vec3 b, float r) {
   vec3 q = abs(p) - b;
   return length(max(q, 0.0)) + min(max(q.x, max(q.y, q.z)), 0.0) - r;
 }
-float sdCubes(vec3 p, float t) {
-  float a = sdRoundBox(p - vec3(0.0, 0.22, 0.0), vec3(0.30), 0.06);
-  float b = sdRoundBox(p + vec3(0.0, 0.22, 0.0), vec3(0.40, 0.24, 0.40), 0.06);
-  return smin(a, b, 0.10);
+
+float sdCapsule(vec3 p, vec3 a, vec3 b, float r) {
+  vec3 pa = p - a;
+  vec3 ba = b - a;
+  float h = clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0);
+  return length(pa - ba * h) - r;
 }
 
-// Shape 4 — spiky star (edukacija). Radial displacement on a sphere.
-float sdStar(vec3 p, float t) {
-  vec3 n = normalize(p + 1e-4);
-  float sp = sin(5.0 * n.x + t) * sin(5.0 * n.y - t) * sin(5.0 * n.z + t * 0.5);
-  return length(p) - 0.5 - 0.16 * sp;
+// Hero — a directed liquid-intelligence core, not a random metaball cloud.
+float sdHeroCore(vec3 p, float t) {
+  float breath = 0.018 * sin(t * 0.8) + uPulse * 0.08;
+  float d = length(p) - (0.43 + breath);
+  for (int i = 0; i < 5; i++) {
+    float fi = float(i);
+    float a = fi * 1.256637 + t * (0.07 + fi * 0.004) + uMorph * 0.08;
+    vec3 axis = normalize(vec3(cos(a), sin(a), 0.55 * sin(a * 1.7 + fi)));
+    vec3 node = axis * (0.39 + 0.035 * sin(t * 0.32 + fi));
+    float lobe = length(p - node) - (0.175 + 0.012 * sin(t * 0.7 + fi));
+    d = smin(d, lobe, 0.19);
+  }
+  return d;
 }
 
-// Shape 5 — calm sphere (booking).
-float sdSphere(vec3 p, float r) {
-  return length(p) - r;
+// Brojevi — a central metric core feeding four connected growth nodes.
+float sdDataNodes(vec3 p, float t) {
+  float sway = 0.025 * sin(t * 0.35);
+  vec3 n0 = vec3(-0.44, -0.25 + sway, 0.05);
+  vec3 n1 = vec3(-0.23, 0.39, -0.14);
+  vec3 n2 = vec3(0.31, 0.35 - sway, 0.09);
+  vec3 n3 = vec3(0.46, -0.21, -0.08);
+  float d = length(p) - 0.235;
+  d = smin(d, sdCapsule(p, vec3(0.0), n0, 0.075), 0.10);
+  d = smin(d, sdCapsule(p, vec3(0.0), n1, 0.070), 0.10);
+  d = smin(d, sdCapsule(p, vec3(0.0), n2, 0.078), 0.10);
+  d = smin(d, sdCapsule(p, vec3(0.0), n3, 0.070), 0.10);
+  d = smin(d, length(p - n0) - 0.16, 0.09);
+  d = smin(d, length(p - n1) - 0.14, 0.09);
+  d = smin(d, length(p - n2) - 0.18, 0.09);
+  d = smin(d, length(p - n3) - 0.145, 0.09);
+  return d;
+}
+
+// Rezultati — a fluid reach portal with signal nodes riding the rim.
+float sdSignalPortal(vec3 p, float t) {
+  float a = atan(p.z, p.x);
+  float major = 0.405 + 0.032 * sin(a * 3.0 - t * 0.28);
+  float tube = 0.135 + 0.018 * sin(a * 5.0 + t * 0.4);
+  float d = sdTorus(p, vec2(major, tube));
+  for (int i = 0; i < 3; i++) {
+    float fi = float(i);
+    float na = fi * 2.094395 + t * 0.10;
+    vec3 node = vec3(cos(na) * major, 0.035 * sin(t + fi), sin(na) * major);
+    d = smin(d, length(p - node) - (0.15 - fi * 0.012), 0.105);
+  }
+  return d;
+}
+
+// Paketi — three interlocked deliverable modules with softened seams.
+float sdModules(vec3 p, float t) {
+  vec3 a = p - vec3(-0.22, 0.12, 0.02);
+  a.xy = rot2(0.18 + 0.025 * sin(t * 0.3)) * a.xy;
+  vec3 b = p - vec3(0.23, 0.08, -0.03);
+  b.xz = rot2(-0.22) * b.xz;
+  vec3 c = p - vec3(0.0, -0.27, 0.08);
+  c.yz = rot2(0.16) * c.yz;
+  float d = sdRoundBox(a, vec3(0.27, 0.31, 0.28), 0.10);
+  d = smin(d, sdRoundBox(b, vec3(0.28, 0.27, 0.30), 0.10), 0.105);
+  d = smin(d, sdRoundBox(c, vec3(0.34, 0.23, 0.27), 0.11), 0.09);
+  return d;
+}
+
+// Edukacija — a compact neural form: knowledge branches stay connected.
+float sdKnowledge(vec3 p, float t) {
+  float d = length(p) - 0.22;
+  for (int i = 0; i < 6; i++) {
+    float fi = float(i);
+    float a = fi * 1.047198 + 0.08 * sin(t * 0.25 + fi);
+    vec3 tip = vec3(
+      cos(a) * (0.43 + 0.035 * mod(fi, 2.0)),
+      sin(a) * 0.42,
+      0.19 * sin(fi * 2.35 + t * 0.12)
+    );
+    vec3 elbow = tip * 0.58 + vec3(0.0, 0.0, 0.07 * cos(fi));
+    d = smin(d, sdCapsule(p, vec3(0.0), elbow, 0.073), 0.09);
+    d = smin(d, sdCapsule(p, elbow, tip, 0.055), 0.075);
+    d = smin(d, length(p - tip) - (0.125 + 0.012 * mod(fi, 2.0)), 0.08);
+  }
+  return d;
+}
+
+// Booking — the journey resolves into a pearl with a precise equatorial fold.
+float sdResolved(vec3 p, float t) {
+  float sphere = length(p) - (0.525 + 0.015 * sin(t * 0.45) + uPulse * 0.07);
+  vec3 foldP = p;
+  foldP.xz = rot2(0.12 * sin(t * 0.12)) * foldP.xz;
+  float fold = sdTorus(foldP, vec2(0.51, 0.026));
+  return max(sphere, -fold);
 }
 
 float shapeSDF(vec3 q, float t, int k) {
-  if (k <= 0) return sdBlob(q, t);
-  if (k == 1) return sdOctahedron(q, 0.66);
-  if (k == 2) return sdTorus(q, vec2(0.40, 0.17));
-  if (k == 3) return sdCubes(q, t);
-  if (k == 4) return sdStar(q, t);
-  return sdSphere(q, 0.55 + 0.03 * sin(t * 0.7) + uPulse * 0.1);
+  if (k <= 0) return sdHeroCore(q, t);
+  if (k == 1) return sdDataNodes(q, t);
+  if (k == 2) return sdSignalPortal(q, t);
+  if (k == 3) return sdModules(q, t);
+  if (k == 4) return sdKnowledge(q, t);
+  return sdResolved(q, t);
 }
 
 // Sculpture SDF: tumble + velocity smear applied to all shapes, then blend
 // the two primitives around uShape so the form morphs across sections.
 float map(vec3 q, float t) {
   vec3 q0 = q; // pre-tumble space, where the grab cell lives
-  q.y /= 1.0 + uVelocity * 0.55;
-  // Slow tumble on two axes so facets/holes catch the light as it turns.
-  float ca = cos(t * 0.3), sa = sin(t * 0.3);
+  q.y /= 1.0 + uVelocity * 0.38;
+  // Weighted two-axis tumble: slow enough to feel machined, never decorative.
+  float ca = cos(t * 0.24), sa = sin(t * 0.24);
   q.xy = mat2(ca, -sa, sa, ca) * q.xy;
-  float cb = cos(t * 0.21), sb = sin(t * 0.21);
+  float cb = cos(t * 0.16), sb = sin(t * 0.16);
   q.yz = mat2(cb, -sb, sb, cb) * q.yz;
 
   float si = clamp(uShape, 0.0, 5.0);
   int i0 = int(floor(si));
   int i1 = min(i0 + 1, 5);
-  float fr = smoothstep(0.0, 1.0, fract(si));
+  float fr = smoothstep(0.08, 0.92, fract(si));
   float d = mix(shapeSDF(q, t, i0), shapeSDF(q, t, i1), fr);
 
   // Cursor grab: a cell reaches out toward the pointer and the wide smin
@@ -271,6 +332,8 @@ void main() {
   float after      = exp(-max(dtf - travel, 0.0) * 2.2) * step(travel, dtf);
   float boost = 1.25 + uVelocity * 1.5 + uPulse * 1.7;        // stronger overall
   float flash = (leaderGlow * 0.55 + retStroke + after * 0.5) * boost;
+  // Resolve the storm around the booking CTA without removing the channel.
+  flash *= mix(1.0, 0.48, order);
 
   // Bolt channel: mostly vertical, forks via fbm down the height.
   float boltX = (seed - 0.5) * 1.15;
@@ -344,36 +407,51 @@ void main() {
     }
 
     if (hit) {
-      vec3 n = sceneNormal(pos, st);
+      vec3 nGeo = sceneNormal(pos, st);
+      float micro = fbm(nGeo.xy * 3.5 + vec2(nGeo.z * 1.7, st * 0.08)) - 0.5;
+      vec3 n = normalize(nGeo + vec3(micro * 0.026, -micro * 0.018, micro * 0.022));
       vec3 e = reflect(rd, n);
-      float fres = pow(1.0 - max(dot(n, -rd), 0.0), 2.5);
+      float ndv = max(dot(n, -rd), 0.0);
+      float fres = pow(1.0 - ndv, 2.35);
       // Chromatic aberration on the reflection itself — R and B sample the
       // environment through slightly bent rays. Flares with scroll/click.
-      float caA = (uVelocity * 0.6 + uPulse * 0.5) * 0.10 + fres * 0.010;
+      float caA = (uVelocity * 0.4 + uPulse * 0.35) * 0.065 + fres * 0.008;
       vec3 env;
       env.r = envMap(normalize(e + vec3(caA, 0.0, 0.0)), warm).r;
       env.g = envMap(e, warm).g;
       env.b = envMap(normalize(e - vec3(caA, 0.0, 0.0)), warm).b;
 
-      vec3 bcol = env * (0.30 + 0.70 * fres);
+      vec3 bcol = mix(vec3(0.012, 0.018, 0.032), env, 0.34 + fres * 0.60);
+      vec3 wideEnv = envMap(normalize(mix(e, n, 0.22)), warm);
+      bcol += wideEnv * (0.08 + fres * 0.10);
       // Thin-film iridescence riding the grazing angles — the "liquid" tell.
-      vec3 irid = 0.5 + 0.5 * cos(6.2831 * (fres * 1.2 + uMorph * 0.15) + vec3(0.0, 2.1, 4.2));
-      bcol += irid * fres * 0.12;
+      vec3 irid = 0.5 + 0.5 * cos(
+        6.2831 * (fres * 1.15 + uMorph * 0.11 + micro * 0.08) +
+        vec3(0.0, 2.1, 4.2)
+      );
+      bcol += irid * fres * 0.105;
       // Two lights: hard white key + soft halo, section-tinted rim.
       // Velocity juices the specular — the chrome flares while you scroll.
-      float kd = max(dot(n, normalize(vec3(0.6, 0.7, -0.5))), 0.0);
-      float s2 = pow(max(dot(n, normalize(vec3(-0.5, -0.3, -0.6))), 0.0), 32.0);
-      bcol += vec3(1.2) * pow(kd, 64.0) * (1.1 + uVelocity * 0.8 + uPulse * 1.2);
-      bcol += GLOW * pow(kd, 10.0) * 0.35;
-      bcol += mix(ACCENT, EMBER, warm) * s2 * 0.9;
+      float keyDot = max(dot(n, normalize(vec3(0.58, 0.72, -0.46))), 0.0);
+      float key = pow(keyDot, 72.0);
+      float keyBloom = pow(keyDot, 12.0);
+      float coolRim = pow(1.0 - ndv, 4.0);
+      float warmRim = pow(
+        max(dot(n, normalize(vec3(-0.55, -0.2, -0.8))), 0.0),
+        28.0
+      );
+      bcol += vec3(1.28) * key * (1.0 + uVelocity * 0.55 + uPulse * 0.85);
+      bcol += GLOW * keyBloom * 0.22;
+      bcol += ACCENT * coolRim * (0.22 + 0.10 * (1.0 - warm));
+      bcol += EMBER * warmRim * (0.16 + warm * 0.58);
       // Screen-glow rim from the copy side — ties the chrome to the layout.
-      float rim = pow(max(dot(n, normalize(vec3(-0.8, 0.15, -0.4))), 0.0), 6.0);
-      bcol += ACCENT * rim * 0.45;
+      float rim = pow(max(dot(n, normalize(vec3(-0.8, 0.15, -0.4))), 0.0), 7.0);
+      bcol += mix(ACCENT, EMBER, warm) * rim * 0.32;
 
-      col = mix(col, bcol, 0.96);
+      col = mix(col, bcol, 0.965);
     } else {
       // Near-miss rim halo — softens the silhouette, no MSAA needed.
-      col += GLOW * exp(-minD * 34.0) * 0.35;
+      col += GLOW * exp(-minD * 34.0) * 0.32;
     }
   }
 

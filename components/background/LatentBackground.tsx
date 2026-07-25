@@ -53,11 +53,34 @@ export default function LatentBackground({
       return max > 0 ? Math.min(1, Math.max(0, window.scrollY / max)) : 0;
     };
 
+    const syncSectionAnchors = () => {
+      const max = document.documentElement.scrollHeight - window.innerHeight;
+      if (max <= 0) return;
+      const pageTop = (id: string) => {
+        const section = document.getElementById(id);
+        return section ? section.getBoundingClientRect().top + window.scrollY : 0;
+      };
+      // The proof section is intentionally 320svh and sticky. Its portal form
+      // lands once the horizontal showcase is established, rather than at the
+      // long section's leading edge.
+      engine.setSectionAnchors([
+        0,
+        pageTop("services") / max,
+        (pageTop("portfolio") + window.innerHeight * 0.72) / max,
+        pageTop("paketi") / max,
+        pageTop("edukacija") / max,
+        1,
+      ]);
+    };
+
+    syncSectionAnchors();
+
     if (reduce) {
       engine.setPointer(0.62, 0.6);
       engine.renderOnce(0.3);
       const onResize = () => {
         engine.resize();
+        syncSectionAnchors();
         engine.renderOnce(0.3);
       };
       window.addEventListener("resize", onResize);
@@ -71,7 +94,10 @@ export default function LatentBackground({
     const onPointer = (e: PointerEvent) =>
       engine.setPointer(e.clientX / window.innerWidth, 1 - e.clientY / window.innerHeight);
     const onDown = () => engine.pulse();
-    const onResize = () => engine.resize();
+    const onResize = () => {
+      engine.resize();
+      syncSectionAnchors();
+    };
     const onVisibility = () => (document.hidden ? engine.pause() : engine.resume());
 
     engine.setProgress(scrollProgress());
