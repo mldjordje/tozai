@@ -1,9 +1,10 @@
 import Image from "next/image";
-import ScrollVideoBackground from "@/components/background/ScrollVideoBackground";
+import LatentBackground from "@/components/background/LatentBackground";
 import Nav from "@/components/layout/Nav";
 import ScrollProgress from "@/components/ui/ScrollProgress";
 import GrainOverlay from "@/components/ui/GrainOverlay";
 import Reveal from "@/components/ui/Reveal";
+import Magnetic from "@/components/ui/Magnetic";
 import Hero from "@/components/sections/Hero";
 
 const STATS = [
@@ -16,7 +17,7 @@ const STATS = [
 export default function Home() {
   return (
     <>
-      <ScrollVideoBackground />
+      <LatentBackground />
       <GrainOverlay />
       <ScrollProgress />
       <Nav />
@@ -117,12 +118,14 @@ export default function Home() {
               <h2 className="text-4xl font-semibold tracking-tight md:text-6xl">
                 Hajde da napravimo <br /> tvoj sadržaj.
               </h2>
-              <a
-                href="#top"
-                className="mt-8 inline-block rounded-full bg-accent px-8 py-4 text-sm font-semibold text-white transition-transform duration-300 hover:-translate-y-0.5 hover:bg-accent-soft"
-              >
-                Book a Call
-              </a>
+              <Magnetic className="mt-8 inline-block">
+                <a
+                  href="#top"
+                  className="inline-block rounded-full bg-accent px-8 py-4 text-sm font-semibold text-white transition-colors duration-300 hover:bg-accent-soft"
+                >
+                  Book a Call
+                </a>
+              </Magnetic>
             </div>
           </Reveal>
         </section>

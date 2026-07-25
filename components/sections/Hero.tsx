@@ -1,6 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
+import Magnetic from "@/components/ui/Magnetic";
 
 const container = {
   hidden: {},
@@ -72,19 +73,23 @@ export default function Hero() {
         </motion.p>
 
         <motion.div variants={line} className="mt-10 flex flex-wrap gap-4">
-          <a
-            href="#booking"
-            className="group relative overflow-hidden rounded-full bg-accent px-7 py-3.5 text-sm font-semibold text-white transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-0.5"
-          >
-            <span className="relative z-10">Book a Call</span>
-            <span className="absolute inset-0 -translate-x-full bg-accent-soft transition-transform duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:translate-x-0" />
-          </a>
-          <a
-            href="#services"
-            className="rounded-full border border-line bg-bg-elev/40 px-7 py-3.5 text-sm font-semibold text-fg backdrop-blur-md transition-colors duration-300 hover:border-accent-soft"
-          >
-            Explore Services
-          </a>
+          <Magnetic>
+            <a
+              href="#booking"
+              className="group relative inline-block overflow-hidden rounded-full bg-accent px-7 py-3.5 text-sm font-semibold text-white"
+            >
+              <span className="relative z-10">Book a Call</span>
+              <span className="absolute inset-0 -translate-x-full bg-accent-soft transition-transform duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:translate-x-0" />
+            </a>
+          </Magnetic>
+          <Magnetic>
+            <a
+              href="#services"
+              className="inline-block rounded-full border border-line bg-bg-elev/40 px-7 py-3.5 text-sm font-semibold text-fg backdrop-blur-md transition-colors duration-300 hover:border-accent-soft"
+            >
+              Explore Services
+            </a>
+          </Magnetic>
         </motion.div>
       </motion.div>
 

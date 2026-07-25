@@ -1,6 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
+import Magnetic from "@/components/ui/Magnetic";
 
 const LINKS = [
   { href: "#services", label: "Usluge" },
@@ -37,12 +38,14 @@ export default function Nav() {
           ))}
         </div>
 
-        <a
-          href="#booking"
-          className="rounded-full border border-line bg-bg-elev/40 px-5 py-2 text-sm font-medium text-fg backdrop-blur-md transition-colors duration-300 hover:border-accent-soft hover:text-fg"
-        >
-          Book a Call
-        </a>
+        <Magnetic strength={0.25}>
+          <a
+            href="#booking"
+            className="inline-block rounded-full border border-line bg-bg-elev/40 px-5 py-2 text-sm font-medium text-fg backdrop-blur-md transition-colors duration-300 hover:border-accent-soft hover:text-fg"
+          >
+            Book a Call
+          </a>
+        </Magnetic>
       </nav>
     </motion.header>
   );

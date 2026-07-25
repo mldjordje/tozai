@@ -1,0 +1,101 @@
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+import { LatentEngine } from "@/lib/latent/engine";
+
+/**
+ * WebGL "latent field + liquid chrome" background — scroll renders the prompt.
+ *
+ * Top of page: raw latent noise (diffusion chaos). Scrolling denoises the
+ * field into ordered, laminar light; the booking CTA lands on a calm, warm
+ * grade. A raymarched liquid-metal sculpture travels across sections and
+ * morphs; scroll velocity smears it and accelerates the whole scene.
+ * Pointer movement bends the field locally and carries light.
+ *
+ * Fallbacks: static frame under prefers-reduced-motion, CSS gradient when
+ * WebGL2 is unavailable.
+ */
+export default function LatentBackground() {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const coarse = window.matchMedia("(pointer: coarse)").matches;
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    const engine = new LatentEngine();
+    const ok = engine.mount(canvas, {
+      octaves: coarse ? 3 : 5,
+      marchSteps: coarse ? 28 : 48,
+      maxDpr: coarse ? 1 : 1.5,
+    });
+    if (!ok) {
+      setFailed(true);
+      return;
+    }
+    if (process.env.NODE_ENV !== "production") {
+      (window as unknown as Record<string, unknown>).__latentEngine = engine;
+    }
+
+    const scrollProgress = () => {
+      const max = document.documentElement.scrollHeight - window.innerHeight;
+      return max > 0 ? Math.min(1, Math.max(0, window.scrollY / max)) : 0;
+    };
+
+    if (reduce) {
+      engine.setPointer(0.62, 0.6);
+      engine.renderOnce(0.3);
+      const onResize = () => {
+        engine.resize();
+        engine.renderOnce(0.3);
+      };
+      window.addEventListener("resize", onResize);
+      return () => {
+        window.removeEventListener("resize", onResize);
+        engine.dispose();
+      };
+    }
+
+    const onScroll = () => engine.setProgress(scrollProgress());
+    const onPointer = (e: PointerEvent) =>
+      engine.setPointer(e.clientX / window.innerWidth, 1 - e.clientY / window.innerHeight);
+    const onDown = () => engine.pulse();
+    const onResize = () => engine.resize();
+    const onVisibility = () => (document.hidden ? engine.pause() : engine.resume());
+
+    engine.setProgress(scrollProgress());
+    engine.start();
+
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("pointermove", onPointer, { passive: true });
+    window.addEventListener("pointerdown", onDown, { passive: true });
+    window.addEventListener("resize", onResize);
+    document.addEventListener("visibilitychange", onVisibility);
+
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("pointermove", onPointer);
+      window.removeEventListener("pointerdown", onDown);
+      window.removeEventListener("resize", onResize);
+      document.removeEventListener("visibilitychange", onVisibility);
+      engine.dispose();
+    };
+  }, []);
+
+  return (
+    <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden bg-bg">
+      {failed ? (
+        <div className="absolute inset-0 [background:radial-gradient(90%_70%_at_30%_20%,rgba(46,107,255,0.18)_0%,transparent_60%),radial-gradient(80%_60%_at_75%_80%,rgba(46,107,255,0.10)_0%,transparent_55%)]" />
+      ) : (
+        <canvas ref={canvasRef} className="absolute inset-0 h-full w-full" aria-hidden />
+      )}
+
+      {/* Legibility grade: nav scrim + vignette + bottom fade */}
+      <div className="absolute inset-0 bg-gradient-to-b from-bg/55 via-bg/15 to-bg/70" />
+      <div className="absolute inset-0 [background:radial-gradient(120%_80%_at_50%_40%,transparent_45%,rgba(11,11,11,0.6)_100%)]" />
+    </div>
+  );
+}
