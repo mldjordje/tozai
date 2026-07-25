@@ -47,3 +47,31 @@ body {
   background: var(--color-accent);
   color: #fff;
 }
+
+/* Proof marquee: seamless loop (track content duplicated, slide one half),
+   soft edge fade, pause on hover. */
+.marquee-track {
+  animation: marquee 55s linear infinite;
+}
+.marquee-mask {
+  mask-image: linear-gradient(
+    to right,
+    transparent,
+    black 8%,
+    black 92%,
+    transparent
+  );
+}
+.marquee-mask:hover .marquee-track {
+  animation-play-state: paused;
+}
+@keyframes marquee {
+  to {
+    transform: translateX(-50%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .marquee-track {
+    animation: none;
+  }
+}

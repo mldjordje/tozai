@@ -1,5 +1,5 @@
-import Image from "next/image";
 import LatentBackground from "@/components/background/LatentBackground";
+import ResultsMarquee from "@/components/sections/ResultsMarquee";
 import Nav from "@/components/layout/Nav";
 import ScrollProgress from "@/components/ui/ScrollProgress";
 import GrainOverlay from "@/components/ui/GrainOverlay";
@@ -51,40 +51,28 @@ export default function Home() {
           </div>
         </section>
 
-        {/* Proof — pravi screenshot analitike */}
+        {/* Proof — profili i analitika koje vodi TOZAI */}
         <section
           id="portfolio"
-          className="relative flex min-h-[100svh] items-center px-6 md:px-12"
+          className="relative flex min-h-[100svh] flex-col justify-center py-24"
         >
-          <div className="grid w-full max-w-6xl items-center gap-12 md:grid-cols-2">
+          <div className="mx-auto w-full max-w-6xl px-6 md:px-12">
             <Reveal>
-              <div>
-                <p className="mb-4 text-sm font-medium uppercase tracking-[0.25em] text-accent-soft">
-                  Real rezultati
-                </p>
-                <h2 className="text-3xl font-semibold tracking-tight md:text-5xl">
-                  Svaki kadar je AI. <br /> Svaki broj je stvaran.
-                </h2>
-                <p className="mt-6 max-w-md text-muted">
-                  Desetine hiljada lajkova po objavi. Sadržaj koji je 100%
-                  AI-generisan i i dalje postaje viralan.
-                </p>
-              </div>
-            </Reveal>
-            <Reveal delay={0.12}>
-              <div className="relative mx-auto w-full max-w-[320px]">
-                <div className="overflow-hidden rounded-[2rem] border border-line shadow-2xl shadow-black/60">
-                  <Image
-                    src="/media/rezultati.png"
-                    alt="TikTok Insights — viralni AI video rezultati"
-                    width={853}
-                    height={1600}
-                    className="h-auto w-full"
-                  />
-                </div>
-              </div>
+              <p className="mb-4 text-sm font-medium uppercase tracking-[0.25em] text-accent-soft">
+                Real rezultati
+              </p>
+              <h2 className="max-w-2xl text-3xl font-semibold tracking-tight md:text-5xl">
+                Svaki kadar je AI. <br /> Svaki broj je stvaran.
+              </h2>
+              <p className="mt-6 max-w-md text-muted">
+                300K+ pratilaca i 100+ miliona pregleda na profilima koje
+                vodimo. Sve osobe su 100% AI-generisane — brojevi nisu.
+              </p>
             </Reveal>
           </div>
+          <Reveal delay={0.12}>
+            <ResultsMarquee />
+          </Reveal>
         </section>
 
         {/* Edukacija (placeholder anchor) */}

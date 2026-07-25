@@ -93,9 +93,10 @@ export default function LatentBackground() {
         <canvas ref={canvasRef} className="absolute inset-0 h-full w-full" aria-hidden />
       )}
 
-      {/* Legibility grade: nav scrim + vignette + bottom fade */}
-      <div className="absolute inset-0 bg-gradient-to-b from-bg/55 via-bg/15 to-bg/70" />
-      <div className="absolute inset-0 [background:radial-gradient(120%_80%_at_50%_40%,transparent_45%,rgba(11,11,11,0.6)_100%)]" />
+      {/* Legibility grade: nav scrim + vignette + bottom fade — kept light so
+          the field itself stays visible */}
+      <div className="absolute inset-0 bg-gradient-to-b from-bg/35 via-transparent to-bg/45" />
+      <div className="absolute inset-0 [background:radial-gradient(120%_80%_at_50%_40%,transparent_55%,rgba(11,11,11,0.4)_100%)]" />
     </div>
   );
 }

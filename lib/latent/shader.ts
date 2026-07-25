@@ -182,22 +182,22 @@ void main() {
 
   // Chromatic aberration: vein/crest thresholds split per channel while
   // scrolling — edges fringe red/blue like a lens pushed too hard.
-  float shift = uVelocity * 0.10 * (0.3 + length(p));
+  float shift = uVelocity * 0.30 * (0.25 + length(p));
   vec3 vein = vec3(
-    smoothstep(0.58 - shift, 0.92 - shift, f),
-    smoothstep(0.58, 0.92, f),
-    smoothstep(0.58 + shift, 0.92 + shift, f)
-  ) * (0.28 + 0.55 * q.y) * (0.85 + uVelocity * 0.5);
+    smoothstep(0.48 - shift, 0.88 - shift, f),
+    smoothstep(0.48, 0.88, f),
+    smoothstep(0.48 + shift, 0.88 + shift, f)
+  ) * (0.34 + 0.55 * q.y) * (0.9 + uVelocity * 0.6);
   vec3 crest = vec3(
-    smoothstep(0.82 - shift, 0.99 - shift, f),
-    smoothstep(0.82, 0.99, f),
-    smoothstep(0.82 + shift, 0.99 + shift, f)
-  ) * (0.50 + uVelocity * 0.25);
+    smoothstep(0.78 - shift, 0.98 - shift, f),
+    smoothstep(0.78, 0.98, f),
+    smoothstep(0.78 + shift, 0.98 + shift, f)
+  ) * (0.55 + uVelocity * 0.35);
 
   // Grade: base -> ink body -> electric veins -> white-blue crests.
   // Scroll velocity lifts the whole field — the page "charges up".
   vec3 col = BASE;
-  col = mix(col, INK, smoothstep(0.25, 0.72, f));
+  col = mix(col, INK * 1.55, smoothstep(0.2, 0.68, f));
   col = mix(col, acc, vein);
   col = mix(col, GLOW, crest);
 
@@ -234,7 +234,7 @@ void main() {
       float fres = pow(1.0 - max(dot(n, -rd), 0.0), 2.5);
       // Chromatic aberration on the reflection itself — R and B sample the
       // environment through slightly bent rays. Flares with scroll/click.
-      float caA = (uVelocity * 0.6 + uPulse * 0.5) * 0.05 + fres * 0.008;
+      float caA = (uVelocity * 0.6 + uPulse * 0.5) * 0.16 + fres * 0.012;
       vec3 env;
       env.r = envMap(normalize(e + vec3(caA, 0.0, 0.0)), warm).r;
       env.g = envMap(e, warm).g;
@@ -267,7 +267,7 @@ void main() {
 
   // Vignette + slight lift; dither kills banding on the long dark ramps.
   float vig = smoothstep(1.35, 0.3, length(p));
-  col *= mix(0.5, 1.0, vig);
+  col *= mix(0.62, 1.0, vig);
   col = pow(col, vec3(0.92));
   float dn = fract(sin(dot(gl_FragCoord.xy + fract(uTime) * 61.0, vec2(12.9898, 78.233))) * 43758.5453);
   col += (dn - 0.5) * (2.0 / 255.0);
