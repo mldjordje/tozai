@@ -50,7 +50,7 @@ export default function Hero() {
           Build Your Business
           <br />
           With{" "}
-          <span className="bg-gradient-to-r from-accent to-accent-soft bg-clip-text text-transparent">
+          <span className="text-shimmer bg-gradient-to-r from-accent via-accent-soft to-accent bg-clip-text text-transparent">
             AI
           </span>
           .

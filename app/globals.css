@@ -75,3 +75,31 @@ body {
     animation: none;
   }
 }
+
+/* Hidden scrollbar for touch galleries */
+.no-scrollbar {
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Slow gradient shimmer for headline accents */
+.text-shimmer {
+  background-size: 220% 100%;
+  animation: shimmer 5s ease-in-out infinite alternate;
+}
+@keyframes shimmer {
+  from {
+    background-position: 0% 50%;
+  }
+  to {
+    background-position: 100% 50%;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .text-shimmer {
+    animation: none;
+  }
+}

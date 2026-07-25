@@ -3,6 +3,7 @@ import ResultsMarquee from "@/components/sections/ResultsMarquee";
 import Nav from "@/components/layout/Nav";
 import ScrollProgress from "@/components/ui/ScrollProgress";
 import GrainOverlay from "@/components/ui/GrainOverlay";
+import CursorGlow from "@/components/ui/CursorGlow";
 import Reveal from "@/components/ui/Reveal";
 import Magnetic from "@/components/ui/Magnetic";
 import Hero from "@/components/sections/Hero";
@@ -19,6 +20,7 @@ export default function Home() {
     <>
       <LatentBackground />
       <GrainOverlay />
+      <CursorGlow />
       <ScrollProgress />
       <Nav />
 

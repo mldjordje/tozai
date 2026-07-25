@@ -36,6 +36,7 @@ uniform float uBlobScale;     // sculpture radius in field coords
 uniform float uMorph;         // sculpture shape phase, grows with progress
 uniform vec3  uGrab;          // xy: pointer in sculpture-local coords, z: strength
 uniform float uPulse;         // 0..1 click pulse, decays upstream
+uniform vec3  uTrail[4];      // pointer trail lenses: xy pos (0..1), z energy
 uniform sampler2D uWordmark;  // "TOZAI" band reflected by the chrome
 
 out vec4 outColor;
@@ -156,6 +157,17 @@ void main() {
   vec2 P = p * 1.35 + flow;
   vec2 q = vec2(fbm(P + vec2(0.0, t)), fbm(P + vec2(5.2, 1.3) - t * 0.7));
   q += toPtr * pinf * 0.6;
+
+  // Pointer trail: decaying lenses along the recent cursor path drag the
+  // field like a finger through ink — the fluid-sim feel without an FBO sim.
+  float trailGlow = 0.0;
+  for (int i = 0; i < 4; i++) {
+    vec2 tp = (uTrail[i].xy - 0.5) * uResolution / mn;
+    vec2 tv = p - tp;
+    float tinf = exp(-dot(tv, tv) * 11.0) * uTrail[i].z;
+    q += tv * tinf * 0.55;
+    trailGlow += tinf;
+  }
   vec2 r = vec2(
     fbm(P + 2.4 * q + vec2(1.7, 9.2) + t * 1.4),
     fbm(P + 2.4 * q + vec2(8.3, 2.8) - t)
@@ -197,11 +209,26 @@ void main() {
   // Grade: base -> ink body -> electric veins -> white-blue crests.
   // Scroll velocity lifts the whole field — the page "charges up".
   vec3 col = BASE;
-  col = mix(col, INK * 1.55, smoothstep(0.2, 0.68, f));
+
+  // Deep parallax layer: a second, finer field scrolling at a different
+  // rate — background gains depth instead of reading as one flat sheet.
+  float f2 = fbm(p * 2.6 + vec2(0.0, prog * 1.2 + t * 0.45) + q * 0.8);
+  col += INK * 0.8 * smoothstep(0.62, 0.95, f2);
+
+  col = mix(col, INK * 1.35, smoothstep(0.2, 0.68, f));
   col = mix(col, acc, vein);
   col = mix(col, GLOW, crest);
 
+  // Electric filaments where the two warp channels cross — thin live
+  // threads snaking through the field.
+  float fil = exp(-abs(r.x - r.y) * 60.0);
+  col += acc * fil * (0.22 + uVelocity * 0.45) * smoothstep(0.35, 0.65, f);
+
+  // Cheap bloom on the crests so highlights breathe.
+  col += GLOW * crest.g * crest.g * 0.45;
+
   col += acc * pinf * 0.85 + GLOW * pinf * pinf * 0.6;
+  col += acc * trailGlow * 0.4 + GLOW * trailGlow * trailGlow * 0.25;
 
   // ------------------------------------------------------------ sculpture
   vec2 lp = (p - uBlobPos) / uBlobScale;

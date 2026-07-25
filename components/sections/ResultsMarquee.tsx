@@ -1,8 +1,10 @@
 import Image from "next/image";
 
 /**
- * Proof marquee — client-run AI personas with real audience numbers.
- * Infinite CSS marquee (track duplicated, translateX loop), pauses on hover.
+ * Proof gallery — client-run AI personas with real audience numbers.
+ * Mobile: native horizontal scroll with snap (thumb-driven).
+ * Desktop: infinite CSS marquee (track duplicated), pauses on hover,
+ * cards slightly tilted and straightening on hover.
  */
 const SHOTS = [
   {
@@ -49,12 +51,12 @@ const SHOTS = [
   },
 ];
 
-function Card({ shot }: { shot: (typeof SHOTS)[number] }) {
+function Card({ shot, tilt = 0 }: { shot: (typeof SHOTS)[number]; tilt?: number }) {
   return (
     <figure
-      className={`group relative mr-6 shrink-0 overflow-hidden rounded-2xl border border-line bg-bg-elev/60 shadow-xl shadow-black/50 backdrop-blur-sm transition-transform duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-2 ${
-        shot.wide ? "w-[320px]" : "w-[240px]"
-      }`}
+      className={`group relative shrink-0 snap-center overflow-hidden rounded-2xl border border-line bg-bg-elev/60 shadow-xl shadow-black/50 backdrop-blur-sm transition-transform duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-2 hover:rotate-0 md:mr-6 ${
+        shot.wide ? "w-[280px] md:w-[320px]" : "w-[220px] md:w-[240px]"
+      } ${tilt > 0 ? "md:rotate-[1.5deg]" : tilt < 0 ? "md:rotate-[-1.5deg]" : ""}`}
     >
       <Image
         src={shot.src}
@@ -74,12 +76,23 @@ function Card({ shot }: { shot: (typeof SHOTS)[number] }) {
 
 export default function ResultsMarquee() {
   return (
-    <div className="marquee-mask relative mt-14 w-full overflow-hidden">
-      <div className="marquee-track flex w-max items-start">
-        {[...SHOTS, ...SHOTS].map((shot, i) => (
-          <Card key={`${shot.src}-${i}`} shot={shot} />
+    <>
+      {/* Mobile: swipe-through gallery, edges peek so scrollability is obvious */}
+      <div className="no-scrollbar mt-10 flex w-full snap-x snap-mandatory gap-4 overflow-x-auto px-6 pb-4 md:hidden">
+        {SHOTS.map((shot) => (
+          <Card key={shot.src} shot={shot} />
         ))}
+        <div className="w-2 shrink-0" aria-hidden />
       </div>
-    </div>
+
+      {/* Desktop: infinite marquee */}
+      <div className="marquee-mask relative mt-14 hidden w-full overflow-hidden md:block">
+        <div className="marquee-track flex w-max items-start">
+          {[...SHOTS, ...SHOTS].map((shot, i) => (
+            <Card key={`${shot.src}-${i}`} shot={shot} tilt={i % 2 === 0 ? 1 : -1} />
+          ))}
+        </div>
+      </div>
+    </>
   );
 }

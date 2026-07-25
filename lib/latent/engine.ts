@@ -79,6 +79,12 @@ export class LatentEngine {
   private grab: [number, number, number] = [0, 0, 0];
   private pulseV = 0;
 
+  // Pointer trail ring buffer: 4 decaying lenses along the recent cursor
+  // path give the field its ink-drag feel.
+  private trail = new Float32Array([0.5, 0.5, 0, 0.5, 0.5, 0, 0.5, 0.5, 0, 0.5, 0.5, 0]);
+  private trailIdx = 0;
+  private lastTrailAt = 0;
+
   private uTime: WebGLUniformLocation | null = null;
   private uResolution: WebGLUniformLocation | null = null;
   private uProgress: WebGLUniformLocation | null = null;
@@ -90,6 +96,7 @@ export class LatentEngine {
   private uMorph: WebGLUniformLocation | null = null;
   private uGrab: WebGLUniformLocation | null = null;
   private uPulse: WebGLUniformLocation | null = null;
+  private uTrail: WebGLUniformLocation | null = null;
   private wordmarkTex: WebGLTexture | null = null;
 
   mount(canvas: HTMLCanvasElement, options: LatentOptions = {}): boolean {
@@ -133,6 +140,7 @@ export class LatentEngine {
     this.uMorph = gl.getUniformLocation(program, "uMorph");
     this.uGrab = gl.getUniformLocation(program, "uGrab");
     this.uPulse = gl.getUniformLocation(program, "uPulse");
+    this.uTrail = gl.getUniformLocation(program, "uTrail");
 
     // Wordmark texture the chrome reflects: repeats horizontally around the
     // sculpture, black padding above/below (T is clamped, so edges stay dark).
@@ -183,10 +191,22 @@ export class LatentEngine {
   setPointer(x: number, y: number) {
     const dx = x - this.pointerTarget[0];
     const dy = y - this.pointerTarget[1];
+    const speed = Math.hypot(dx, dy);
     // Movement feeds the energy envelope; it decays every frame, so the
     // light dies down when the cursor rests.
-    this.energy = Math.min(1, this.energy + Math.hypot(dx, dy) * 4);
+    this.energy = Math.min(1, this.energy + speed * 4);
     this.pointerTarget = [x, y];
+
+    // Drop a trail lens every ~90ms of movement.
+    const now = performance.now();
+    if (speed > 0.001 && now - this.lastTrailAt > 90) {
+      this.lastTrailAt = now;
+      const i = this.trailIdx * 3;
+      this.trail[i] = x;
+      this.trail[i + 1] = y;
+      this.trail[i + 2] = Math.min(1, 0.35 + speed * 6);
+      this.trailIdx = (this.trailIdx + 1) % 4;
+    }
   }
 
   /** Click/tap pulse — the sculpture swells and flares, then relaxes. */
@@ -269,8 +289,13 @@ export class LatentEngine {
     const canvas = this.canvas;
     if (!gl || !this.program || !canvas) return;
     let [bx, by, bs, morph] = this.blobAt(this.progress);
-    // Portrait screens: shrink the sculpture so it doesn't swallow the copy.
-    if (canvas.width / canvas.height < 0.85) bs *= 0.72;
+    // Portrait screens: shrink the sculpture and float it high, above the
+    // copy — a jewel over the headline instead of a wall behind the text.
+    if (canvas.width / canvas.height < 0.85) {
+      bs *= 0.55;
+      by = by * 0.4 + 0.68;
+      bx = Math.max(-0.1, Math.min(0.1, bx));
+    }
 
     // Cursor grab: pointer position in sculpture-local coords. Strength
     // ramps as the cursor approaches; the target is clamped near the rim so
@@ -302,6 +327,7 @@ export class LatentEngine {
     gl.uniform1f(this.uMorph, morph);
     gl.uniform3f(this.uGrab, this.grab[0], this.grab[1], this.grab[2]);
     gl.uniform1f(this.uPulse, this.pulseV);
+    gl.uniform3fv(this.uTrail, this.trail);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   }
 
@@ -327,6 +353,8 @@ export class LatentEngine {
     // Warped clock: scrolling hard makes the whole scene surge forward.
     this.animTime += dt * (1 + this.velocity * 2.6);
     this.pulseV *= Math.exp(-dt * 2.8);
+    const trailDecay = Math.exp(-dt * 1.9);
+    for (let i = 2; i < 12; i += 3) this.trail[i] *= trailDecay;
 
     this.draw();
     this.raf = requestAnimationFrame(this.loop);
