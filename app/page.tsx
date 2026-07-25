@@ -1,12 +1,15 @@
 import LatentBackground from "@/components/background/LatentBackground";
-import ResultsMarquee from "@/components/sections/ResultsMarquee";
 import Nav from "@/components/layout/Nav";
 import ScrollProgress from "@/components/ui/ScrollProgress";
 import GrainOverlay from "@/components/ui/GrainOverlay";
 import CursorGlow from "@/components/ui/CursorGlow";
 import Reveal from "@/components/ui/Reveal";
-import Magnetic from "@/components/ui/Magnetic";
+import KineticTitle from "@/components/ui/KineticTitle";
+import CountUp from "@/components/ui/CountUp";
+import CTAButton from "@/components/ui/CTAButton";
+import TextStrip from "@/components/ui/TextStrip";
 import Hero from "@/components/sections/Hero";
+import ResultsShowcase from "@/components/sections/ResultsShowcase";
 
 const STATS = [
   { value: "16M+", label: "Monthly Views" },
@@ -14,6 +17,8 @@ const STATS = [
   { value: "100+", label: "Clients" },
   { value: "2+", label: "Years Creating Content" },
 ];
+
+const EDU_PILLS = ["1-na-1 mentorstvo", "Tvoj tempo", "Konkretno za tvoj biznis"];
 
 export default function Home() {
   return (
@@ -30,21 +35,24 @@ export default function Home() {
         {/* Brojevi */}
         <section
           id="services"
-          className="relative flex min-h-[100svh] items-center px-6 md:px-12"
+          className="relative flex min-h-[100svh] items-center px-6 py-28 md:px-12"
         >
           <div className="w-full max-w-6xl">
-            <Reveal>
-              <h2 className="mb-14 max-w-2xl text-3xl font-semibold tracking-tight md:text-5xl">
-                Brojevi koji <span className="text-accent">rade</span> za sebe.
-              </h2>
-            </Reveal>
-            <div className="grid grid-cols-2 gap-x-8 gap-y-12 md:grid-cols-4">
+            <p className="mb-3 text-sm font-medium uppercase tracking-[0.25em] text-accent-soft">
+              01 — Brojevi
+            </p>
+            <KineticTitle
+              text="Brojevi koji rade za sebe."
+              className="mb-16 max-w-2xl text-3xl font-semibold tracking-tighter md:mb-24 md:text-6xl"
+            />
+            <div className="grid grid-cols-2 gap-x-8 gap-y-14 md:grid-cols-4">
               {STATS.map((s, i) => (
-                <Reveal key={s.label} delay={i * 0.08}>
-                  <div className="text-4xl font-semibold tracking-tight md:text-6xl">
-                    {s.value}
-                  </div>
-                  <div className="mt-2 text-sm text-muted md:text-base">
+                <Reveal key={s.label} delay={i * 0.09}>
+                  <CountUp
+                    value={s.value}
+                    className="text-5xl font-semibold tracking-tighter tabular-nums md:text-7xl"
+                  />
+                  <div className="mt-3 border-t border-line pt-3 text-sm text-muted md:text-base">
                     {s.label}
                   </div>
                 </Reveal>
@@ -53,71 +61,70 @@ export default function Home() {
           </div>
         </section>
 
-        {/* Proof — profili i analitika koje vodi TOZAI */}
-        <section
-          id="portfolio"
-          className="relative flex min-h-[100svh] flex-col justify-center py-24"
-        >
-          <div className="mx-auto w-full max-w-6xl px-6 md:px-12">
-            <Reveal>
-              <p className="mb-4 text-sm font-medium uppercase tracking-[0.25em] text-accent-soft">
-                Real rezultati
-              </p>
-              <h2 className="max-w-2xl text-3xl font-semibold tracking-tight md:text-5xl">
-                Svaki kadar je AI. <br /> Svaki broj je stvaran.
-              </h2>
-              <p className="mt-6 max-w-md text-muted">
-                300K+ pratilaca i 100+ miliona pregleda na profilima koje
-                vodimo. Sve osobe su 100% AI-generisane — brojevi nisu.
-              </p>
-            </Reveal>
-          </div>
-          <Reveal delay={0.12}>
-            <ResultsMarquee />
-          </Reveal>
-        </section>
+        <TextStrip />
 
-        {/* Edukacija (placeholder anchor) */}
+        {/* Proof — pinned horizontal showcase */}
+        <ResultsShowcase />
+
+        {/* Edukacija */}
         <section
           id="edukacija"
-          className="relative flex min-h-[80svh] items-center px-6 md:px-12"
+          className="relative flex min-h-[90svh] items-center px-6 py-28 md:px-12"
         >
-          <Reveal>
-            <div className="max-w-2xl">
-              <p className="mb-4 text-sm font-medium uppercase tracking-[0.25em] text-accent-soft">
-                Privatna edukacija
-              </p>
-              <h2 className="text-3xl font-semibold tracking-tight md:text-5xl">
-                Nauči da praviš sadržaj koji prodaje.
-              </h2>
-              <p className="mt-6 text-muted">
+          <div className="max-w-3xl">
+            <p className="mb-3 text-sm font-medium uppercase tracking-[0.25em] text-accent-soft">
+              02 — Privatna edukacija
+            </p>
+            <KineticTitle
+              text="Nauči da praviš sadržaj koji prodaje."
+              className="text-3xl font-semibold tracking-tighter md:text-6xl"
+            />
+            <Reveal delay={0.15}>
+              <p className="mt-7 max-w-xl text-muted md:text-lg">
                 1-na-1 mentorstvo. Kupuješ sate, rezervišeš termin, učiš tačno
                 ono što tvom biznisu treba.
               </p>
-            </div>
-          </Reveal>
+              <div className="mt-8 flex flex-wrap gap-3">
+                {EDU_PILLS.map((pill) => (
+                  <span
+                    key={pill}
+                    className="rounded-full border border-line bg-bg-elev/40 px-4 py-2 text-sm text-fg/90 backdrop-blur-md"
+                  >
+                    {pill}
+                  </span>
+                ))}
+              </div>
+            </Reveal>
+          </div>
         </section>
 
-        {/* Booking anchor */}
+        {/* Booking */}
         <section
           id="booking"
-          className="relative flex min-h-[85svh] items-center justify-center px-6 text-center"
+          className="relative flex min-h-[90svh] items-center justify-center px-6 py-28 text-center"
         >
-          <Reveal>
-            <div>
-              <h2 className="text-4xl font-semibold tracking-tight md:text-6xl">
-                Hajde da napravimo <br /> tvoj sadržaj.
-              </h2>
-              <Magnetic className="mt-8 inline-block">
-                <a
-                  href="#top"
-                  className="inline-block rounded-full bg-accent px-8 py-4 text-sm font-semibold text-white transition-colors duration-300 hover:bg-accent-soft"
-                >
+          <div>
+            <Reveal>
+              <p className="mb-5 inline-flex items-center gap-2 rounded-full border border-line bg-bg-elev/40 px-4 py-2 text-xs uppercase tracking-[0.2em] text-muted backdrop-blur-md">
+                <span className="relative flex h-2 w-2">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
+                  <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400" />
+                </span>
+                Odgovaramo u roku od 24h
+              </p>
+            </Reveal>
+            <KineticTitle
+              text="Hajde da napravimo tvoj sadržaj."
+              className="mx-auto max-w-4xl text-4xl font-semibold tracking-tighter md:text-7xl"
+            />
+            <Reveal delay={0.25}>
+              <div className="mt-10">
+                <CTAButton href="#top" size="lg">
                   Book a Call
-                </a>
-              </Magnetic>
-            </div>
-          </Reveal>
+                </CTAButton>
+              </div>
+            </Reveal>
+          </div>
         </section>
       </main>
     </>

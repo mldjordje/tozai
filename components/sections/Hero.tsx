@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import Magnetic from "@/components/ui/Magnetic";
+import CTAButton from "@/components/ui/CTAButton";
 
 const container = {
   hidden: {},
@@ -16,6 +16,26 @@ const line = {
     transition: { duration: 0.95, ease: [0.16, 1, 0.3, 1] as const },
   },
 };
+
+const headWord = {
+  hidden: { y: "115%", rotate: 4 },
+  show: {
+    y: "0%",
+    rotate: 0,
+    transition: { duration: 1, ease: [0.16, 1, 0.3, 1] as const },
+  },
+};
+
+// Word wrapped in an overflow mask so it rises out of a clean edge.
+function Word({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="-mb-[0.12em] inline-block overflow-hidden pb-[0.12em] align-bottom">
+      <motion.span variants={headWord} className="inline-block will-change-transform">
+        {children}
+      </motion.span>
+    </span>
+  );
+}
 
 export default function Hero() {
   return (
@@ -43,18 +63,25 @@ export default function Hero() {
           AI Video Studio
         </motion.p>
 
-        <motion.h1
-          variants={line}
-          className="text-balance text-5xl font-semibold leading-[1.0] tracking-tight md:text-7xl lg:text-[5.5rem]"
-        >
-          Build Your Business
-          <br />
-          With{" "}
-          <span className="text-shimmer bg-gradient-to-r from-accent via-accent-soft to-accent bg-clip-text text-transparent">
-            AI
+        <h1 className="text-balance text-5xl font-semibold leading-[1.02] tracking-tighter md:text-7xl lg:text-[5.5rem]">
+          <span className="mr-[0.28em]">
+            <Word>Build</Word>
           </span>
-          .
-        </motion.h1>
+          <span className="mr-[0.28em]">
+            <Word>Your</Word>
+          </span>
+          <Word>Business</Word>
+          <br />
+          <span className="mr-[0.28em]">
+            <Word>With</Word>
+          </span>
+          <Word>
+            <span className="text-shimmer bg-gradient-to-r from-accent via-accent-soft to-accent bg-clip-text text-transparent">
+              AI
+            </span>
+            .
+          </Word>
+        </h1>
 
         <motion.div
           variants={line}
@@ -73,23 +100,10 @@ export default function Hero() {
         </motion.p>
 
         <motion.div variants={line} className="mt-10 flex flex-wrap gap-4">
-          <Magnetic>
-            <a
-              href="#booking"
-              className="group relative inline-block overflow-hidden rounded-full bg-accent px-7 py-3.5 text-sm font-semibold text-white"
-            >
-              <span className="relative z-10">Book a Call</span>
-              <span className="absolute inset-0 -translate-x-full bg-accent-soft transition-transform duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:translate-x-0" />
-            </a>
-          </Magnetic>
-          <Magnetic>
-            <a
-              href="#services"
-              className="inline-block rounded-full border border-line bg-bg-elev/40 px-7 py-3.5 text-sm font-semibold text-fg backdrop-blur-md transition-colors duration-300 hover:border-accent-soft"
-            >
-              Explore Services
-            </a>
-          </Magnetic>
+          <CTAButton href="#booking">Book a Call</CTAButton>
+          <CTAButton href="#services" variant="ghost">
+            Explore Services
+          </CTAButton>
         </motion.div>
       </motion.div>
 

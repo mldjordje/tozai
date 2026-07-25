@@ -76,6 +76,18 @@ body {
   }
 }
 
+/* Outlined text strip (section divider marquee) */
+.text-strip {
+  display: inline-block;
+  padding-right: 0.35em;
+  font-size: clamp(2.5rem, 9vw, 7rem);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  color: transparent;
+  -webkit-text-stroke: 1px var(--color-faint);
+}
+
 /* Hidden scrollbar for touch galleries */
 .no-scrollbar {
   scrollbar-width: none;
