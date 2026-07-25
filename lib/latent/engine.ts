@@ -89,6 +89,7 @@ export class LatentEngine {
   // Scroll velocity envelope (fast attack, slow release) and the warped
   // clock it drives — hard scrolling accelerates the whole scene.
   private velocity = 0;
+  private scrollFlow = 0;
   private animTime = 0;
   private lastNow = 0;
 
@@ -113,6 +114,7 @@ export class LatentEngine {
   private uPointer: WebGLUniformLocation | null = null;
   private uPointerEnergy: WebGLUniformLocation | null = null;
   private uVelocity: WebGLUniformLocation | null = null;
+  private uScrollFlow: WebGLUniformLocation | null = null;
   private uBlobPos: WebGLUniformLocation | null = null;
   private uBlobScale: WebGLUniformLocation | null = null;
   private uMorph: WebGLUniformLocation | null = null;
@@ -184,6 +186,7 @@ export class LatentEngine {
     this.uPointer = gl.getUniformLocation(program, "uPointer");
     this.uPointerEnergy = gl.getUniformLocation(program, "uPointerEnergy");
     this.uVelocity = gl.getUniformLocation(program, "uVelocity");
+    this.uScrollFlow = gl.getUniformLocation(program, "uScrollFlow");
     this.uBlobPos = gl.getUniformLocation(program, "uBlobPos");
     this.uBlobScale = gl.getUniformLocation(program, "uBlobScale");
     this.uMorph = gl.getUniformLocation(program, "uMorph");
@@ -510,6 +513,7 @@ export class LatentEngine {
     gl.uniform2f(this.uPointer, this.pointer[0], this.pointer[1]);
     gl.uniform1f(this.uPointerEnergy, this.energy);
     gl.uniform1f(this.uVelocity, this.velocity);
+    gl.uniform1f(this.uScrollFlow, this.scrollFlow);
     gl.uniform2f(this.uBlobPos, bx, by);
     gl.uniform1f(this.uBlobScale, bs);
     gl.uniform1f(this.uMorph, morph);
@@ -597,10 +601,23 @@ export class LatentEngine {
     // Velocity envelope: attack fast on scroll, release slow — the smear
     // lingers for a beat after the wheel stops. Rates are per-second so the
     // envelope behaves the same at any frame rate (or after rAF pauses).
-    const rawVel = Math.min(1, (Math.abs(this.progress - this.prevProgress) / Math.max(dt, 1e-3)) * 9);
+    const progressDelta = this.progress - this.prevProgress;
+    const rawFlow = Math.max(-1, Math.min(1, (progressDelta / Math.max(dt, 1e-3)) * 9));
+    const rawVel = Math.abs(rawFlow);
     this.prevProgress = this.progress;
     const rate = rawVel > this.velocity ? 18 : 2.2;
     this.velocity += (rawVel - this.velocity) * Math.min(1, dt * rate);
+
+    // Preserve scroll direction separately from the magnitude envelope so
+    // short cloud discharges can travel down/up with the user's gesture.
+    // Direction reversals react quickly; the charge then coasts to rest.
+    const flowRate =
+      Math.sign(rawFlow) !== Math.sign(this.scrollFlow)
+        ? 24
+        : rawVel > Math.abs(this.scrollFlow)
+          ? 18
+          : 3.2;
+    this.scrollFlow += (rawFlow - this.scrollFlow) * Math.min(1, dt * flowRate);
 
     // Warped clock: scrolling hard makes the whole scene surge forward.
     this.animTime += dt * (1 + this.velocity * 2.6);

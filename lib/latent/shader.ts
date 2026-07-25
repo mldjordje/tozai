@@ -31,6 +31,7 @@ uniform float uProgress;      // page scroll 0..1, eased upstream
 uniform vec2  uPointer;       // normalized 0..1, y up
 uniform float uPointerEnergy; // 0..1, recent pointer movement
 uniform float uVelocity;      // 0..1, smoothed |scroll speed|
+uniform float uScrollFlow;    // -1..1, signed scroll impulse (+ down, - up)
 uniform vec2  uBlobPos;       // sculpture center, field coords (centered, /min-dim)
 uniform float uBlobScale;     // sculpture radius in field coords
 uniform float uMorph;         // sculpture shape phase, grows with progress
@@ -218,70 +219,102 @@ void main() {
   float warm = smoothstep(0.78, 1.0, prog);
 
   // ------------------------------------------------------------- stormcloud
-  // Cinematic stormcloud: soft billowing fbm density lit from within by
-  // lightning. Deliberately clean — deep charcoal-ink base, one electric hue,
-  // lots of negative space so the layout breathes. No veins / static / bands /
-  // chromatic fringing (that read as clutter); the drama is the strike.
+  // Cinematic stormcloud: DENSE volumetric fbm lit from within by slow,
+  // powerful lightning. Clean — deep ink base, one electric hue; the drama is
+  // the strike, which travels slowly through the cloud then flares on landing.
 
-  // Slow drift; scroll nudges the whole cloudscape upward.
+  // Slow drift; scroll nudges the whole cloudscape along its flow.
   vec2 drift = vec2(t * 0.05, -t * 0.03 - prog * 0.55);
-  vec2 cp = p * 1.15 + drift;
+  vec2 cp = p * 1.12 + drift;
 
-  // Two-scale fbm = billowing cumulonimbus. Domain-warp the detail octave a
-  // touch so the body churns instead of sliding as one flat sheet.
-  float baseN = fbm(cp * 1.35);
-  float detail = fbm(cp * 3.0 + baseN * 0.8 + vec2(t * 0.04, 0.0));
-  float dens = smoothstep(0.34, 0.96, baseN * 0.62 + detail * 0.46);
-  // Storm eases toward the booking CTA — the clouds thin as the page resolves.
-  float order = smoothstep(0.55, 1.0, prog);
-  dens *= mix(1.0, 0.82, order);
+  // Two-scale fbm cumulonimbus — denser than before (lower threshold, heavier
+  // weight) so the sky reads thick and heavy, not wispy.
+  float baseN = fbm(cp * 1.3);
+  float detail = fbm(cp * 2.85 + baseN * 0.85 + vec2(t * 0.04, 0.0));
+  float dens = smoothstep(0.16, 0.84, baseN * 0.72 + detail * 0.5);
+  // Storm barely eases toward booking — clouds stay heavy.
+  float order = smoothstep(0.6, 1.0, prog);
+  dens *= mix(1.0, 0.9, order);
 
   // Pointer parts the clouds a little where the cursor rests.
   vec2 pc = (uPointer - 0.5) * uResolution / mn;
   vec2 toPtr = p - pc;
   float pinf = exp(-dot(toPtr, toPtr) * 7.0) * uPointerEnergy;
-  dens *= 1.0 - pinf * 0.3;
+  dens *= 1.0 - pinf * 0.25;
 
   float f = dens; // downstream warm grade reads cloud density
 
   // Hue: electric blue, warming to ember as the finale approaches.
   vec3 acc = mix(ACCENT, EMBER, warm);
 
-  // --- lightning ----------------------------------------------------------
-  // One quick strike per ~2.6s window at a random moment/column; scroll and
-  // clicks make strikes brighter and more frequent (warped clock upstream).
-  float period = 2.6;
+  // --- main lightning: frequent, powerful, SLOW-traveling leader ----------
+  // Each window a leader descends slowly from the crown; when it lands the
+  // whole channel flares (return stroke) and lingers — cinematic, not a blink.
+  float period = 1.6;                        // frequent, with room to breathe
   float widx = floor(uTime / period);
   float local = fract(uTime / period);
-  float rt   = 0.12 + 0.55 * fract(sin(widx * 91.7) * 4390.1); // strike moment
+  float rt   = 0.08 + 0.28 * fract(sin(widx * 91.7) * 4390.1); // strike moment
   float seed = fract(sin(widx * 57.3) * 1000.3);               // strike column
-  float dtf  = local - rt;
-  // Sharp flash: fast attack/decay plus a shorter afterflicker.
-  float env = exp(-dtf * dtf * 240.0) + 0.3 * exp(-dtf * dtf * 1600.0);
-  float boost = 0.55 + uVelocity * 1.1 + uPulse * 1.4;
-  float flash = clamp(env, 0.0, 1.6) * boost;
+  float dtf  = local - rt;                    // cycle time since leader begins
 
-  // Bolt path: a mostly-vertical line whose x forks via fbm down the height.
+  // Slow descent of the leader front (top -> bottom). Bigger travel = slower.
+  float travel = 0.6;
+  float fprog = clamp(dtf / travel, 0.0, 1.0);
+  float frontY = mix(0.98, -0.98, fprog);
+  // Lit only above the descending front — the strike physically travels down.
+  float revealed = smoothstep(-0.05, 0.05, p.y - frontY);
+
+  // Energy: dim leader glow while descending, bright return stroke on landing,
+  // long afterglow. Slow time constants = the light lingers (cinematic).
+  float leaderGlow = exp(-max(dtf, 0.0) * 4.0) * step(0.0, dtf);
+  float retStroke  = exp(-(dtf - travel) * (dtf - travel) * 55.0);
+  float after      = exp(-max(dtf - travel, 0.0) * 2.2) * step(travel, dtf);
+  float boost = 1.25 + uVelocity * 1.5 + uPulse * 1.7;        // stronger overall
+  float flash = (leaderGlow * 0.55 + retStroke + after * 0.5) * boost;
+
+  // Bolt channel: mostly vertical, forks via fbm down the height.
   float boltX = (seed - 0.5) * 1.15;
-  float jag  = (fbm(vec2(p.y * 3.4 + widx * 11.0, widx)) - 0.5) * 0.46;
-  jag       += (fbm(vec2(p.y * 8.5 - widx * 5.0, widx)) - 0.5) * 0.16;
+  float jag  = (fbm(vec2(p.y * 3.2 + widx * 11.0, widx)) - 0.5) * 0.5;
+  jag       += (fbm(vec2(p.y * 8.0 - widx * 5.0, widx)) - 0.5) * 0.18;
   float dxb  = abs(p.x - (boltX + jag));
-  float core = exp(-dxb * 140.0);          // thin hot filament
-  float halo = exp(-dxb * 13.0) * 0.5;     // soft discharge glow
-  float lenFade = smoothstep(0.95, -0.25, p.y); // brightest up top, fades down
-  float bolt = (core + halo) * lenFade * flash;
+  float core = exp(-dxb * 150.0) * revealed;   // hot filament, travels down
+  float halo = exp(-dxb * 12.0) * 0.55 * revealed; // discharge glow follows leader
+  float bolt = (core * 1.2 + halo) * flash;
+  float strikeField = exp(-abs(p.x - boltX) * 2.4);
+
+  // --- scroll sparks: small bolts streaking along the scroll flow ---------
+  // Only while scrolling. Short vertical discharges ride the signed flow,
+  // threaded through the cloud — the page feels alive in either direction.
+  float sparks = 0.0;
+  if (abs(uScrollFlow) > 0.015) {
+    for (int i = 0; i < 3; i++) {
+      float fi = float(i);
+      float lane = floor(uTime * 2.2) + fi * 17.0;
+      float sx = (fract(sin(lane * 47.1) * 913.0) - 0.5) * 1.6;
+      // Positive flow (scroll down) sweeps crown -> floor; negative reverses.
+      float phase = fract(uTime * 0.65 * sign(uScrollFlow) + fi * 0.37);
+      float sy = mix(1.05, -1.05, phase);
+      float sjag = (fbm(vec2(p.y * 9.0, lane)) - 0.5) * 0.12;
+      float horiz = exp(-abs(p.x - sx - sjag) * 42.0);
+      float vert  = exp(-abs(p.y - sy) * 7.5);     // compact travelling discharge
+      sparks += (horiz + exp(-abs(p.x - sx - sjag - 0.045) * 22.0) * 0.24) * vert;
+    }
+    sparks *= abs(uScrollFlow) * 1.65;
+  }
 
   // --- compose ------------------------------------------------------------
   vec3 col = BASE;
-  // Cloud body: dark ink volume, faint accent rim on the dense crowns.
-  col = mix(col, INK * 1.12, dens);
-  col += acc * smoothstep(0.62, 1.0, dens) * 0.22;
+  // Cloud body: heavier ink volume, accent rim on the dense crowns.
+  col = mix(col, INK * 1.25, dens);
+  col += acc * smoothstep(0.55, 1.0, dens) * 0.24;
   // Backlight: the strike floods the surrounding cloud from within.
-  col += acc * dens * flash * 0.85;
-  col += GLOW * dens * flash * flash * 0.45;
-  // The bolt itself + white-hot core.
-  col += (GLOW * 1.35 + acc * 0.55) * bolt;
-  col += vec3(1.1) * core * lenFade * flash;
+  col += acc * dens * flash * strikeField * 0.82;
+  col += GLOW * dens * flash * flash * strikeField * 0.42;
+  // The channel + white-hot core.
+  col += (GLOW * 1.5 + acc * 0.6) * bolt;
+  col += vec3(1.15) * core * flash;
+  // Scroll sparks (electric blue-white).
+  col += (acc * 1.2 + GLOW * 0.5) * sparks;
   // Faint ambient light where the cursor rests.
   col += acc * pinf * 0.22;
 
