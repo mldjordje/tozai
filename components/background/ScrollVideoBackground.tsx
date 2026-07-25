@@ -18,7 +18,6 @@ const SCENE_A_DUR = 8; // scene1.web.mp4
 const SCENE_B_DUR = 6; // scene2.web.mp4
 const TOTAL = SCENE_A_DUR + SCENE_B_DUR;
 const FADE = 0.7; // seconds of crossfade around the seam
-const LERP = 0.18; // ease toward target (Lenis already smooths the input)
 
 /**
  * Control points: [scrollProgress 0..1, filmTime seconds].
@@ -66,20 +65,46 @@ export default function ScrollVideoBackground() {
     ).matches;
     if (reduce) return; // poster frames stay; no scrubbing
 
+    // Touch devices: video currentTime seeking is expensive, so ease harder
+    // toward target (fewer, larger steps) and only actually seek when the
+    // change is big enough to matter. This kills the momentum-scroll stutter.
+    const coarse = window.matchMedia("(pointer: coarse)").matches;
+    const LERP = coarse ? 0.24 : 0.18;
+    const SEEK_EPS = coarse ? 0.05 : 0.02; // min film-time delta before we seek
+
     let displayed = 0; // eased film time (s)
     let running = true;
+    let lastA = -1;
+    let lastB = -1;
+    let lastScale = -1;
+    let unlocked = false;
 
     const scrollProgress = () => {
       const max = document.documentElement.scrollHeight - window.innerHeight;
       return max > 0 ? Math.min(1, Math.max(0, window.scrollY / max)) : 0;
     };
 
-    const safeSeek = (v: HTMLVideoElement, t: number) => {
-      if (v.readyState >= 1 && Number.isFinite(t)) {
-        const d = v.duration || t;
-        v.currentTime = Math.min(Math.max(t, 0), Math.max(d - 0.05, 0));
-      }
+    const safeSeek = (
+      v: HTMLVideoElement,
+      t: number,
+      last: number,
+    ): number => {
+      if (v.readyState < 1 || !Number.isFinite(t)) return last;
+      if (Math.abs(t - last) < SEEK_EPS) return last; // throttle tiny seeks
+      const d = v.duration || t;
+      v.currentTime = Math.min(Math.max(t, 0), Math.max(d - 0.05, 0));
+      return t;
     };
+
+    // iOS won't let us set currentTime until the media is "activated". A muted
+    // play()+pause() on first user interaction unlocks seeking.
+    const unlock = () => {
+      if (unlocked) return;
+      unlocked = true;
+      [a, b].forEach((v) => v.play().then(() => v.pause()).catch(() => {}));
+    };
+    window.addEventListener("touchstart", unlock, { once: true, passive: true });
+    window.addEventListener("pointerdown", unlock, { once: true });
 
     const tick = () => {
       if (!running) return;
@@ -87,8 +112,12 @@ export default function ScrollVideoBackground() {
       const target = mapScrollToTime(p);
       displayed += (target - displayed) * LERP;
 
-      safeSeek(a, Math.min(displayed, SCENE_A_DUR));
-      safeSeek(b, Math.min(Math.max(displayed - SCENE_A_DUR, 0), SCENE_B_DUR));
+      lastA = safeSeek(a, Math.min(displayed, SCENE_A_DUR), lastA);
+      lastB = safeSeek(
+        b,
+        Math.min(Math.max(displayed - SCENE_A_DUR, 0), SCENE_B_DUR),
+        lastB,
+      );
 
       // Crossfade scene B in across the seam
       const seam = SCENE_A_DUR;
@@ -99,9 +128,13 @@ export default function ScrollVideoBackground() {
       b.style.opacity = String(bOpacity);
       a.style.opacity = String(1 - bOpacity * 0.9);
 
-      // Slow cinematic breathing zoom so holds never feel frozen
+      // Slow cinematic breathing zoom — only touch the DOM when it changes
+      // enough, so we don't thrash the compositor on mobile.
       const scale = 1.04 + Math.sin(p * Math.PI) * 0.05;
-      wrap.style.transform = `scale(${scale.toFixed(4)})`;
+      if (Math.abs(scale - lastScale) > 0.002) {
+        wrap.style.transform = `scale(${scale.toFixed(4)})`;
+        lastScale = scale;
+      }
 
       rafRef.current = requestAnimationFrame(tick);
     };
@@ -120,6 +153,8 @@ export default function ScrollVideoBackground() {
       running = false;
       cancelAnimationFrame(rafRef.current);
       document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("touchstart", unlock);
+      window.removeEventListener("pointerdown", unlock);
     };
   }, []);
 

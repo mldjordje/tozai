@@ -21,8 +21,12 @@ export default function SmoothScroll({ children }: { children: ReactNode }) {
         lerp: prefersReduced ? 1 : 0.09,
         duration: 1.2,
         smoothWheel: !prefersReduced,
+        // Leave touch native: the OS momentum scroll is already smooth, and
+        // Lenis' experimental touch sync adds lag/jank on iOS. Mobile scrub
+        // smoothness comes from throttling video seeks, not from hijacking
+        // touch. (syncTouch stays off.)
         wheelMultiplier: 1,
-        touchMultiplier: 1.4,
+        touchMultiplier: 1,
       }}
     >
       {children}
