@@ -6,6 +6,7 @@ import Magnetic from "@/components/ui/Magnetic";
 const LINKS = [
   { href: "#services", label: "Usluge" },
   { href: "#portfolio", label: "Portfolio" },
+  { href: "#paketi", label: "Paketi" },
   { href: "#edukacija", label: "Edukacija" },
   { href: "#booking", label: "Kontakt" },
 ];

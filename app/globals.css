@@ -34,6 +34,20 @@ body {
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
   overflow-x: hidden;
+  /* Premium one-pager: dragging the sphere must never trigger native text
+     selection, the iOS long-press callout, or the grey tap-flash. */
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Re-enable selection where reading/copying is expected (forms, long copy). */
+input,
+textarea,
+[contenteditable="true"] {
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 /* Respect users who ask for less motion */

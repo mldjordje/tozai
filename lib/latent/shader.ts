@@ -34,6 +34,8 @@ uniform float uVelocity;      // 0..1, smoothed |scroll speed|
 uniform vec2  uBlobPos;       // sculpture center, field coords (centered, /min-dim)
 uniform float uBlobScale;     // sculpture radius in field coords
 uniform float uMorph;         // sculpture shape phase, grows with progress
+uniform float uShape;         // sculpture primitive index 0..5, morphs per section
+uniform float uPost;          // 1 when an HDR post chain grades downstream, else 0
 uniform vec3  uGrab;          // xy: pointer in sculpture-local coords, z: strength
 uniform float uPulse;         // 0..1 click pulse, decays upstream
 uniform vec3  uTrail[4];      // pointer trail lenses: xy pos (0..1), z energy
@@ -47,6 +49,11 @@ const vec3 INK    = vec3(0.055, 0.090, 0.200);
 const vec3 ACCENT = vec3(0.180, 0.420, 1.000);
 const vec3 GLOW   = vec3(0.620, 0.720, 1.000);
 const vec3 EMBER  = vec3(1.000, 0.640, 0.340);
+
+// Filmic ACES approximation — rolls highlights off instead of clipping.
+vec3 aces(vec3 x) {
+  return clamp((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14), 0.0, 1.0);
+}
 
 vec2 hash2(vec2 p) {
   p = vec2(dot(p, vec2(127.1, 311.7)), dot(p, vec2(269.5, 183.3)));
@@ -84,15 +91,13 @@ float smin(float a, float b, float k) {
   return mix(b, a, h) - k * h * (1.0 - h);
 }
 
-// Metaball cluster: one core + 5 orbiting cells. uMorph re-seeds every orbit,
-// so each section meets a different creature. Scroll velocity compresses the
-// SDF vertically — the chrome smears when you scroll hard.
-float map(vec3 q, float t) {
-  vec3 q0 = q; // pre-tumble space, where the grab cell lives
-  q.y /= 1.0 + uVelocity * 0.55;
-  // Slow tumble so the cluster never sits still.
-  float ca = cos(t * 0.3), sa = sin(t * 0.3);
-  q.xy = mat2(ca, -sa, sa, ca) * q.xy;
+// --- shape primitives the sculpture morphs between per section ------------
+// Each returns an SDF centered at origin, sized to ~0.6 so silhouettes match
+// across a morph. uShape blends adjacent primitives so scrolling one section
+// to the next physically reshapes the chrome.
+
+// Shape 0 — liquid metaball cluster (hero). uMorph re-seeds the orbit.
+float sdBlob(vec3 q, float t) {
   float d = length(q) - (0.55 + 0.05 * sin(t * 0.7) + uPulse * 0.12);
   for (int i = 0; i < 5; i++) {
     float fi = float(i);
@@ -103,13 +108,78 @@ float map(vec3 q, float t) {
     ) * (0.30 + 0.17 * sin(uMorph + fi * 1.8));
     d = smin(d, length(q - o) - (0.17 + 0.05 * sin(t + fi * 1.4)), 0.30);
   }
+  return d;
+}
+
+// Shape 1 — faceted crystal (stats).
+float sdOctahedron(vec3 p, float s) {
+  p = abs(p);
+  return (p.x + p.y + p.z - s) * 0.57735027;
+}
+
+// Shape 2 — ring / halo (proof).
+float sdTorus(vec3 p, vec2 tr) {
+  vec2 q = vec2(length(p.xz) - tr.x, p.y);
+  return length(q) - tr.y;
+}
+
+// Shape 3 — stacked rounded cubes (paketi). Two boxes bridged so it reads
+// as a little tower without a second full march branch.
+float sdRoundBox(vec3 p, vec3 b, float r) {
+  vec3 q = abs(p) - b;
+  return length(max(q, 0.0)) + min(max(q.x, max(q.y, q.z)), 0.0) - r;
+}
+float sdCubes(vec3 p, float t) {
+  float a = sdRoundBox(p - vec3(0.0, 0.22, 0.0), vec3(0.30), 0.06);
+  float b = sdRoundBox(p + vec3(0.0, 0.22, 0.0), vec3(0.40, 0.24, 0.40), 0.06);
+  return smin(a, b, 0.10);
+}
+
+// Shape 4 — spiky star (edukacija). Radial displacement on a sphere.
+float sdStar(vec3 p, float t) {
+  vec3 n = normalize(p + 1e-4);
+  float sp = sin(5.0 * n.x + t) * sin(5.0 * n.y - t) * sin(5.0 * n.z + t * 0.5);
+  return length(p) - 0.5 - 0.16 * sp;
+}
+
+// Shape 5 — calm sphere (booking).
+float sdSphere(vec3 p, float r) {
+  return length(p) - r;
+}
+
+float shapeSDF(vec3 q, float t, int k) {
+  if (k <= 0) return sdBlob(q, t);
+  if (k == 1) return sdOctahedron(q, 0.66);
+  if (k == 2) return sdTorus(q, vec2(0.40, 0.17));
+  if (k == 3) return sdCubes(q, t);
+  if (k == 4) return sdStar(q, t);
+  return sdSphere(q, 0.55 + 0.03 * sin(t * 0.7) + uPulse * 0.1);
+}
+
+// Sculpture SDF: tumble + velocity smear applied to all shapes, then blend
+// the two primitives around uShape so the form morphs across sections.
+float map(vec3 q, float t) {
+  vec3 q0 = q; // pre-tumble space, where the grab cell lives
+  q.y /= 1.0 + uVelocity * 0.55;
+  // Slow tumble on two axes so facets/holes catch the light as it turns.
+  float ca = cos(t * 0.3), sa = sin(t * 0.3);
+  q.xy = mat2(ca, -sa, sa, ca) * q.xy;
+  float cb = cos(t * 0.21), sb = sin(t * 0.21);
+  q.yz = mat2(cb, -sb, sb, cb) * q.yz;
+
+  float si = clamp(uShape, 0.0, 5.0);
+  int i0 = int(floor(si));
+  int i1 = min(i0 + 1, 5);
+  float fr = smoothstep(0.0, 1.0, fract(si));
+  float d = mix(shapeSDF(q, t, i0), shapeSDF(q, t, i1), fr);
+
   // Cursor grab: a cell reaches out toward the pointer and the wide smin
   // bridges it back to the body — the chrome "licks" at the cursor.
   if (uGrab.z > 0.001) {
     float dg = length(q0 - vec3(uGrab.xy, -0.15)) - 0.20 * uGrab.z;
     d = smin(d, dg, 0.38);
   }
-  return d * 0.75; // distortion safety factor
+  return d * 0.7; // distortion safety factor (shapes blend + displace)
 }
 
 vec3 sceneNormal(vec3 p, float t) {
@@ -292,10 +362,23 @@ void main() {
   // Warmth rises for the booking CTA — cold render finishes warm.
   col = mix(col, col * vec3(1.06, 0.97, 0.88) + EMBER * 0.10 * smoothstep(0.5, 0.95, f), warm);
 
-  // Vignette + slight lift; dither kills banding on the long dark ramps.
+  if (uPost > 0.5) {
+    // HDR out: the bloom + grade passes downstream do the cinematic finish.
+    // Only a gentle field-shaped vignette here so bloom respects the edges;
+    // highlights stay >1 so they bleed in the bloom prefilter.
+    float vig = smoothstep(1.55, 0.32, length(p));
+    col *= mix(0.74, 1.06, vig);
+    outColor = vec4(max(col, 0.0), 1.0);
+    return;
+  }
+
+  // Fallback path (no float FBO): tonemap + grade inline so it still reads
+  // filmic without the post chain.
   float vig = smoothstep(1.35, 0.3, length(p));
   col *= mix(0.62, 1.0, vig);
-  col = pow(col, vec3(0.92));
+  col = aces(col * 1.05);
+  float luma = dot(col, vec3(0.299, 0.587, 0.114));
+  col = mix(vec3(luma), col, 0.92 + 0.12 * smoothstep(0.0, 0.5, luma));
   float dn = fract(sin(dot(gl_FragCoord.xy + fract(uTime) * 61.0, vec2(12.9898, 78.233))) * 43758.5453);
   col += (dn - 0.5) * (2.0 / 255.0);
 
@@ -303,3 +386,96 @@ void main() {
 }
 `;
 }
+
+// --- HDR post chain (bloom + filmic display) -------------------------------
+// Fullscreen-triangle passes sharing the scene vertex shader (gl_VertexID, no
+// attributes). Each derives uv from gl_FragCoord / target resolution.
+
+// Bright-pass with soft knee — isolates what should bloom.
+export const bloomPrefilterShader = /* glsl */ `#version 300 es
+precision highp float;
+uniform sampler2D uScene;
+uniform vec2 uTexSize;
+uniform float uThreshold;
+uniform float uSoftKnee;
+out vec4 outColor;
+void main() {
+  vec2 uv = gl_FragCoord.xy / uTexSize;
+  vec3 c = texture(uScene, uv).rgb;
+  float br = max(c.r, max(c.g, c.b));
+  float knee = uThreshold * uSoftKnee + 1e-4;
+  float soft = clamp(br - uThreshold + knee, 0.0, 2.0 * knee);
+  soft = soft * soft / (4.0 * knee + 1e-4);
+  float contrib = max(soft, br - uThreshold) / max(br, 1e-4);
+  outColor = vec4(c * contrib, 1.0);
+}
+`;
+
+// Separable 9-tap gaussian. uDir carries the step (x or y) in texels; the
+// horizontal pass is fed a wider step for a subtle anamorphic wide-glow.
+export const bloomBlurShader = /* glsl */ `#version 300 es
+precision highp float;
+uniform sampler2D uTex;
+uniform vec2 uTexSize;
+uniform vec2 uDir;
+out vec4 outColor;
+void main() {
+  vec2 uv = gl_FragCoord.xy / uTexSize;
+  vec2 o = uDir / uTexSize;
+  vec3 sum = texture(uTex, uv).rgb * 0.2270270270;
+  sum += texture(uTex, uv + o * 1.3846153846).rgb * 0.3162162162;
+  sum += texture(uTex, uv - o * 1.3846153846).rgb * 0.3162162162;
+  sum += texture(uTex, uv + o * 3.2307692308).rgb * 0.0702702703;
+  sum += texture(uTex, uv - o * 3.2307692308).rgb * 0.0702702703;
+  outColor = vec4(sum, 1.0);
+}
+`;
+
+// Final grade: add bloom, ACES tonemap, luma-weighted saturation (deep,
+// desaturated shadows; rich cores), animated film grain, soft vignette.
+export const displayShader = /* glsl */ `#version 300 es
+precision highp float;
+uniform sampler2D uScene;
+uniform sampler2D uBloom;
+uniform vec2 uTexSize;
+uniform float uTime;
+uniform float uBloomAmt;
+uniform float uVelocity;
+out vec4 outColor;
+
+vec3 aces(vec3 x) {
+  return clamp((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14), 0.0, 1.0);
+}
+float hash(vec2 p) {
+  return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453);
+}
+
+void main() {
+  vec2 uv = gl_FragCoord.xy / uTexSize;
+  vec3 c = texture(uScene, uv).rgb;
+  vec3 bloom = texture(uBloom, uv).rgb;
+
+  // Bloom flares a touch harder while scrolling — the field "charges up".
+  c += bloom * (uBloomAmt * (1.0 + uVelocity * 0.8));
+
+  // Filmic tonemap — the single biggest cinematic lift over the raw sum.
+  c = aces(c * 1.08);
+
+  // Luma-weighted saturation: crush colour out of the near-black field so it
+  // reads as deep charcoal-ink, let highlights keep full electric blue.
+  float luma = dot(c, vec3(0.299, 0.587, 0.114));
+  float sat = 0.80 + 0.35 * smoothstep(0.03, 0.45, luma);
+  c = mix(vec3(luma), c, sat);
+
+  // Gentle S-curve contrast for that graded look.
+  c = c * c * (3.0 - 2.0 * c) * 0.35 + c * 0.65;
+
+  // Animated film grain + cinematic vignette.
+  float grain = hash(uv * uTexSize + mod(uTime, 64.0));
+  c += (grain - 0.5) * 0.035;
+  vec2 q = uv - 0.5;
+  c *= 1.0 - dot(q, q) * 0.65;
+
+  outColor = vec4(max(c, 0.0), 1.0);
+}
+`;

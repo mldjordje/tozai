@@ -11,6 +11,8 @@ import CTAButton from "@/components/ui/CTAButton";
 import TextStrip from "@/components/ui/TextStrip";
 import Hero from "@/components/sections/Hero";
 import ResultsShowcase from "@/components/sections/ResultsShowcase";
+import Packages from "@/components/sections/Packages";
+import Education from "@/components/sections/Education";
 
 const STATS = [
   { value: "16M+", label: "Monthly Views" },
@@ -18,8 +20,6 @@ const STATS = [
   { value: "100+", label: "Clients" },
   { value: "2+", label: "Years Creating Content" },
 ];
-
-const EDU_PILLS = ["1-na-1 mentorstvo", "Tvoj tempo", "Konkretno za tvoj biznis"];
 
 export default function Home() {
   return (
@@ -68,37 +68,11 @@ export default function Home() {
         {/* Proof — pinned horizontal showcase */}
         <ResultsShowcase />
 
-        {/* Edukacija */}
-        <section
-          id="edukacija"
-          className="relative flex min-h-[90svh] items-center px-6 py-28 md:px-12"
-        >
-          <div className="max-w-3xl">
-            <p className="mb-3 text-sm font-medium uppercase tracking-[0.25em] text-accent-soft">
-              02 — Privatna edukacija
-            </p>
-            <KineticTitle
-              text="Nauči da praviš sadržaj koji prodaje."
-              className="text-3xl font-semibold tracking-tighter md:text-6xl"
-            />
-            <Reveal delay={0.15}>
-              <p className="mt-7 max-w-xl text-muted md:text-lg">
-                1-na-1 mentorstvo. Kupuješ sate, rezervišeš termin, učiš tačno
-                ono što tvom biznisu treba.
-              </p>
-              <div className="mt-8 flex flex-wrap gap-3">
-                {EDU_PILLS.map((pill) => (
-                  <span
-                    key={pill}
-                    className="rounded-full border border-line bg-bg-elev/40 px-4 py-2 text-sm text-fg/90 backdrop-blur-md"
-                  >
-                    {pill}
-                  </span>
-                ))}
-              </div>
-            </Reveal>
-          </div>
-        </section>
+        {/* Paketi — buy AI clips */}
+        <Packages />
+
+        {/* Edukacija — buy 1-on-1 hour packs */}
+        <Education />
 
         {/* Booking */}
         <section
