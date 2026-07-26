@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { LatentEngine } from "@/lib/latent/engine";
+import { selectLatentProfile } from "@/lib/latent/quality";
 
 /**
  * WebGL2 particle field — scroll resolves the latent field.
@@ -20,22 +21,44 @@ export default function LatentBackground({ onReady }: { onReady?: () => void }) 
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (!canvas || failed) return;
 
     const coarse = window.matchMedia("(pointer: coarse)").matches;
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const nav = navigator as Navigator & {
+      deviceMemory?: number;
+      connection?: { saveData?: boolean };
+    };
+    const profile = selectLatentProfile({
+      viewportWidth: window.innerWidth,
+      viewportHeight: window.innerHeight,
+      deviceMemory: nav.deviceMemory,
+      hardwareConcurrency: nav.hardwareConcurrency,
+      // Reduced motion renders one settled frame, but even that should not
+      // synchronously simulate a quarter-million particles 220 times.
+      saveData: coarse || reduce || nav.connection?.saveData,
+    });
 
     const engine = new LatentEngine();
-    // Mobile GPUs cannot push 262k points; a quarter of the particles at a
-    // lower DPR keeps the same read at a fraction of the fill cost.
+    const onContextLost = (event: Event) => {
+      event.preventDefault();
+      engine.pause();
+      setFailed(true);
+    };
+    canvas.addEventListener("webglcontextlost", onContextLost);
+
     const ok = engine.mount(canvas, {
-      texDim: coarse ? 256 : 512,
-      maxDpr: coarse ? 1 : 1.5,
+      texDim: profile.texDim,
+      maxDpr: profile.maxDpr,
+      maxRenderPixels: profile.maxRenderPixels,
     });
     if (!ok) {
       setFailed(true);
       onReady?.();
-      return;
+      return () => {
+        canvas.removeEventListener("webglcontextlost", onContextLost);
+        engine.dispose();
+      };
     }
     onReady?.();
     if (process.env.NODE_ENV !== "production") {
@@ -140,13 +163,17 @@ export default function LatentBackground({ onReady }: { onReady?: () => void }) 
       syncCopyRect();
       engine.renderOnce(0.05);
       const onResize = () => {
-        engine.resize();
+        if (!engine.resize()) {
+          setFailed(true);
+          return;
+        }
         syncSectionRanges();
         engine.renderOnce(0.05);
       };
       window.addEventListener("resize", onResize);
       return () => {
         window.removeEventListener("resize", onResize);
+        canvas.removeEventListener("webglcontextlost", onContextLost);
         engine.dispose();
       };
     }
@@ -156,7 +183,10 @@ export default function LatentBackground({ onReady }: { onReady?: () => void }) 
       syncCopyRect();
     };
     const onResize = () => {
-      engine.resize();
+      if (!engine.resize()) {
+        setFailed(true);
+        return;
+      }
       syncSectionRanges();
       syncCopyRect();
     };
@@ -258,14 +288,15 @@ export default function LatentBackground({ onReady }: { onReady?: () => void }) 
       window.removeEventListener("touchend", onTouchEnd);
       window.removeEventListener("resize", onResize);
       document.removeEventListener("visibilitychange", onVisibility);
+      canvas.removeEventListener("webglcontextlost", onContextLost);
       engine.dispose();
     };
-  }, []);
+  }, [failed]);
 
   return (
     <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden bg-bg">
       {failed ? (
-        <div className="absolute inset-0 [background:radial-gradient(70%_55%_at_72%_38%,rgba(46,107,255,0.10)_0%,transparent_65%)]" />
+        <div className="latent-fallback absolute inset-0" aria-hidden />
       ) : (
         <canvas ref={canvasRef} className="absolute inset-0 h-full w-full" aria-hidden />
       )}

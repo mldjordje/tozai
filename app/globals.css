@@ -67,6 +67,80 @@ textarea,
   color: #fff;
 }
 
+/* Visual continuity when WebGL2, float framebuffers, or the GPU context are
+   unavailable. Transform-only motion keeps this inexpensive even on the
+   machines that could not run the particle simulation. */
+.latent-fallback {
+  overflow: hidden;
+  background:
+    radial-gradient(42% 48% at 76% 42%, rgb(74 118 216 / 0.16), transparent 72%),
+    radial-gradient(28% 34% at 68% 48%, rgb(242 242 244 / 0.09), transparent 70%),
+    radial-gradient(65% 80% at 100% 50%, rgb(25 31 48 / 0.32), transparent 76%);
+}
+
+.latent-fallback::before,
+.latent-fallback::after {
+  content: "";
+  position: absolute;
+  right: -8vmax;
+  top: 4%;
+  width: min(74vmax, 960px);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  will-change: transform, opacity;
+}
+
+.latent-fallback::before {
+  background-image:
+    radial-gradient(circle, rgb(242 242 244 / 0.62) 0 0.7px, transparent 1.25px),
+    radial-gradient(circle, rgb(74 118 216 / 0.48) 0 0.8px, transparent 1.4px);
+  background-position: 0 0, 7px 11px;
+  background-size: 17px 17px, 23px 23px;
+  mask-image: radial-gradient(
+    ellipse 46% 35% at 50% 50%,
+    black 0 18%,
+    rgb(0 0 0 / 0.9) 34%,
+    transparent 72%
+  );
+  opacity: 0.72;
+  animation: latent-fallback-drift 18s ease-in-out infinite alternate;
+}
+
+.latent-fallback::after {
+  background:
+    radial-gradient(circle at 48% 46%, rgb(242 242 244 / 0.12), transparent 9%),
+    repeating-radial-gradient(
+      ellipse at 48% 46%,
+      transparent 0 8%,
+      rgb(139 164 224 / 0.12) 8.2% 8.45%,
+      transparent 8.7% 13%
+    );
+  opacity: 0.65;
+  animation: latent-fallback-orbit 24s ease-in-out infinite alternate;
+}
+
+@keyframes latent-fallback-drift {
+  to {
+    transform: translate3d(-4%, 3%, 0) rotate(7deg) scale(1.04);
+    opacity: 0.86;
+  }
+}
+
+@keyframes latent-fallback-orbit {
+  to {
+    transform: translate3d(2%, -2%, 0) rotate(-9deg) scale(0.96);
+  }
+}
+
+@media (max-width: 767px), (orientation: portrait) {
+  .latent-fallback::before,
+  .latent-fallback::after {
+    top: 35%;
+    right: -22vmax;
+    width: 92vmax;
+  }
+}
+
 /* Proof marquee: seamless loop (track content duplicated, slide one half),
    soft edge fade, pause on hover. */
 .marquee-track {
@@ -91,6 +165,11 @@ textarea,
 }
 @media (prefers-reduced-motion: reduce) {
   .marquee-track {
+    animation: none;
+  }
+
+  .latent-fallback::before,
+  .latent-fallback::after {
     animation: none;
   }
 }

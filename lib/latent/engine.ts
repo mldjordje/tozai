@@ -21,12 +21,15 @@ import {
   pointFragmentShader,
   displayShader,
 } from "./shader";
+import { getSafeCanvasSize } from "./quality";
 
 export interface LatentOptions {
   /** Particle texture edge — 512 = 262k particles (desktop), 256 = 65k (mobile). */
   texDim?: number;
   /** Device-pixel-ratio cap. */
   maxDpr?: number;
+  /** Maximum pixels in the full-screen HDR accumulation texture. */
+  maxRenderPixels?: number;
 }
 
 // Camera constants, mirrored from pointVertexShader. Used to convert pointer
@@ -83,6 +86,9 @@ export class LatentEngine {
   private raf = 0;
   private running = false;
   private maxDpr = 1.5;
+  private maxRenderPixels = 5_000_000;
+  private maxTextureSize = 4096;
+  private renderDpr = 1;
 
   private dim = 512;
   private count = 512 * 512;
@@ -163,6 +169,9 @@ export class LatentEngine {
     this.dim = options.texDim ?? 512;
     this.count = this.dim * this.dim;
     this.maxDpr = options.maxDpr ?? 1.5;
+    this.maxRenderPixels = options.maxRenderPixels ?? 5_000_000;
+    this.maxTextureSize = gl.getParameter(gl.MAX_TEXTURE_SIZE) as number;
+    if (this.dim > this.maxTextureSize) return false;
 
     const link = (vsSrc: string, fsSrc: string): WebGLProgram | null => {
       const vs = compile(gl, gl.VERTEX_SHADER, vsSrc);
@@ -213,7 +222,10 @@ export class LatentEngine {
     this.posB = this.dataTex(gl, this.dim, this.dim, null);
     this.velA = this.dataTex(gl, this.dim, this.dim, new Float32Array(this.count * 4));
     this.velB = this.dataTex(gl, this.dim, this.dim, null);
-    if (!this.posA || !this.posB || !this.velA || !this.velB) return false;
+    if (!this.posA || !this.posB || !this.velA || !this.velB || !this.simulationTargetReady()) {
+      this.dispose();
+      return false;
+    }
 
     this.buildWordmark();
     // The display face almost never wins the race with mount, so rebuild once
@@ -222,7 +234,10 @@ export class LatentEngine {
       if (this.gl) this.buildWordmark();
     });
 
-    this.resize();
+    if (!this.resize()) {
+      this.dispose();
+      return false;
+    }
     this.lastNow = performance.now();
     this.bootStart = this.lastNow;
     return true;
@@ -305,12 +320,31 @@ export class LatentEngine {
     const t = gl.createTexture();
     if (!t) return null;
     gl.bindTexture(gl.TEXTURE_2D, t);
+    // Discard a stale error so the allocation check describes this texture.
+    gl.getError();
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, w, h, 0, gl.RGBA, gl.FLOAT, data);
+    if (gl.getError() !== gl.NO_ERROR) {
+      gl.deleteTexture(t);
+      return null;
+    }
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
     return t;
+  }
+
+  /** Verify the exact two-target float layout, not only the advertised extension. */
+  private simulationTargetReady(): boolean {
+    const gl = this.gl;
+    if (!gl || !this.simFbo || !this.posB || !this.velB) return false;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, this.simFbo);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, this.posB, 0);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT1, gl.TEXTURE_2D, this.velB, 0);
+    gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1]);
+    const ready = gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    return ready;
   }
 
   start() {
@@ -409,28 +443,57 @@ export class LatentEngine {
     this.draw();
   }
 
-  resize() {
+  resize(): boolean {
     const canvas = this.canvas;
     const gl = this.gl;
-    if (!canvas || !gl) return;
-    const dpr = Math.min(window.devicePixelRatio || 1, this.maxDpr);
-    const width = Math.max(1, Math.floor(canvas.clientWidth * dpr));
-    const height = Math.max(1, Math.floor(canvas.clientHeight * dpr));
-    if (canvas.width === width && canvas.height === height && this.sceneTex) return;
+    if (!canvas || !gl || !this.sceneFbo) return false;
+    const { width, height, dpr } = getSafeCanvasSize({
+      cssWidth: canvas.clientWidth,
+      cssHeight: canvas.clientHeight,
+      devicePixelRatio: window.devicePixelRatio || 1,
+      maxDpr: this.maxDpr,
+      maxTextureSize: this.maxTextureSize,
+      maxRenderPixels: this.maxRenderPixels,
+    });
+    this.renderDpr = dpr;
+    if (canvas.width === width && canvas.height === height && this.sceneTex) return true;
+
+    const previous = this.sceneTex;
     canvas.width = width;
     canvas.height = height;
-    if (this.sceneTex) gl.deleteTexture(this.sceneTex);
     const t = gl.createTexture();
+    if (!t) return false;
     gl.bindTexture(gl.TEXTURE_2D, t);
+    gl.getError();
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, width, height, 0, gl.RGBA, gl.HALF_FLOAT, null);
+    if (gl.getError() !== gl.NO_ERROR) {
+      gl.deleteTexture(t);
+      return false;
+    }
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-    this.sceneTex = t;
     gl.bindFramebuffer(gl.FRAMEBUFFER, this.sceneFbo);
     gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, t, 0);
+    gl.drawBuffers([gl.COLOR_ATTACHMENT0]);
+    const ready = gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE;
+    if (!ready) {
+      gl.framebufferTexture2D(
+        gl.FRAMEBUFFER,
+        gl.COLOR_ATTACHMENT0,
+        gl.TEXTURE_2D,
+        previous,
+        0,
+      );
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      gl.deleteTexture(t);
+      return false;
+    }
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    this.sceneTex = t;
+    if (previous) gl.deleteTexture(previous);
+    return true;
   }
 
   pause() {
@@ -614,8 +677,7 @@ export class LatentEngine {
     gl.uniform1i(gl.getUniformLocation(this.pointProg, "uVel"), 1);
     gl.uniform2f(gl.getUniformLocation(this.pointProg, "uDim"), this.dim, this.dim);
     gl.uniform1f(gl.getUniformLocation(this.pointProg, "uAspect"), canvas.width / canvas.height);
-    const dpr = Math.min(window.devicePixelRatio || 1, this.maxDpr);
-    gl.uniform1f(gl.getUniformLocation(this.pointProg, "uPxScale"), 1.35 * dpr);
+    gl.uniform1f(gl.getUniformLocation(this.pointProg, "uPxScale"), 1.35 * this.renderDpr);
     // Exposure was calibrated against 512x512 particles; keep the HDR buffer
     // receiving the same total light when mobile drops to 256x256.
     gl.uniform1f(gl.getUniformLocation(this.pointProg, "uGain"), (512 * 512) / this.count);
