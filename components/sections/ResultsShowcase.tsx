@@ -124,7 +124,7 @@ export default function ResultsShowcase() {
           </p>
           <KineticTitle
             text="Svaki kadar je AI. Svaki broj je stvaran."
-            className="max-w-3xl text-3xl font-semibold tracking-tighter md:text-6xl"
+            className="display max-w-3xl text-4xl md:text-7xl"
           />
           <p className="mt-4 max-w-md text-sm text-muted md:mt-6 md:text-base">
             300K+ pratilaca i 100+ miliona pregleda na profilima koje vodimo —

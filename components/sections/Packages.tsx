@@ -22,7 +22,7 @@ export default function Packages({ packages = CLIP_PACKAGES }: { packages?: Clip
         </p>
         <KineticTitle
           text="Kupi AI klipove. Bez čekanja."
-          className="mb-5 max-w-2xl text-3xl font-semibold tracking-tighter md:text-6xl"
+          className="display mb-5 max-w-2xl text-4xl md:text-7xl"
         />
         <Reveal delay={0.1}>
           <p className="mb-16 max-w-xl text-muted md:mb-20 md:text-lg">

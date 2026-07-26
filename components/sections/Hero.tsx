@@ -43,12 +43,6 @@ export default function Hero() {
       id="top"
       className="relative flex min-h-[100svh] flex-col justify-center px-6 md:px-12"
     >
-      {/* Accent glow behind the headline */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute left-[-10%] top-1/3 h-[38rem] w-[38rem] rounded-full bg-accent/20 blur-[140px]"
-      />
-
       <motion.div
         variants={container}
         initial="hidden"
@@ -63,23 +57,26 @@ export default function Hero() {
           AI Video Studio
         </motion.p>
 
-        <h1 className="text-balance text-5xl font-semibold leading-[1.02] tracking-tighter md:text-7xl lg:text-[5.5rem]">
-          <span className="mr-[0.28em]">
+        {/* The words are spaced with margins, not whitespace text nodes, so the
+            accessible name has to be supplied explicitly — otherwise assistive
+            tech and copy-paste both read "BuildYourBusiness WithAI." */}
+        <h1
+          aria-label="Build Your Business With AI."
+          className="display text-balance text-6xl md:text-8xl lg:text-[6.5rem]"
+        >
+          <span className="mr-[0.24em]">
             <Word>Build</Word>
           </span>
-          <span className="mr-[0.28em]">
+          <span className="mr-[0.24em]">
             <Word>Your</Word>
           </span>
           <Word>Business</Word>
           <br />
-          <span className="mr-[0.28em]">
+          <span className="mr-[0.24em]">
             <Word>With</Word>
           </span>
           <Word>
-            <span className="text-shimmer bg-gradient-to-r from-accent via-accent-soft to-accent bg-clip-text text-transparent">
-              AI
-            </span>
-            .
+            <em>AI</em>.
           </Word>
         </h1>
 

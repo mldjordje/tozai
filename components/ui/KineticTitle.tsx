@@ -33,10 +33,13 @@ export default function KineticTitle({
   const words = text.split(" ");
 
   return (
-    <h2 ref={ref} className={className}>
+    // Words are separated by margin, not whitespace, so the split-up spans are
+    // hidden from assistive tech and the real string is given as the label.
+    <h2 ref={ref} className={className} aria-label={text}>
       {words.map((w, i) => (
         <span
           key={`${w}-${i}`}
+          aria-hidden
           className="-mb-[0.14em] mr-[0.24em] inline-block overflow-hidden pb-[0.14em] align-bottom"
         >
           <motion.span

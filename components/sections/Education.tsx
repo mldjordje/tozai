@@ -24,7 +24,7 @@ export default function Education({ packs = HOUR_PACKS }: { packs?: HourPack[] }
         </p>
         <KineticTitle
           text="Nauči da praviš sadržaj koji prodaje."
-          className="max-w-3xl text-3xl font-semibold tracking-tighter md:text-6xl"
+          className="display max-w-3xl text-4xl md:text-7xl"
         />
         <Reveal delay={0.12}>
           <p className="mt-7 max-w-xl text-muted md:text-lg">

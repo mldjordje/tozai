@@ -1,7 +1,6 @@
 "use client";
 
 import { motion } from "framer-motion";
-import Magnetic from "@/components/ui/Magnetic";
 
 const LINKS = [
   { href: "#services", label: "Usluge" },
@@ -39,14 +38,22 @@ export default function Nav() {
           ))}
         </div>
 
-        <Magnetic strength={0.25}>
+        <div className="flex items-center gap-4">
+          {/* No session check here — /nalog is gated by middleware, which sends
+              signed-out visitors to /prijava. Keeps the nav a static component. */}
+          <a
+            href="/nalog"
+            className="hidden text-sm text-muted transition-colors duration-300 hover:text-fg sm:inline"
+          >
+            Nalog
+          </a>
           <a
             href="#booking"
-            className="inline-block rounded-full border border-line bg-bg-elev/40 px-5 py-2 text-sm font-medium text-fg backdrop-blur-md transition-colors duration-300 hover:border-accent-soft hover:text-fg"
+            className="inline-block rounded-full border border-line bg-bg-elev/40 px-5 py-2 text-sm font-medium text-fg backdrop-blur-md transition-colors duration-300 hover:border-accent-soft"
           >
             Book a Call
           </a>
-        </Magnetic>
+        </div>
       </nav>
     </motion.header>
   );

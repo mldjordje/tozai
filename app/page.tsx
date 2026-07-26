@@ -1,8 +1,5 @@
 import LatentBackground from "@/components/background/LatentBackground";
 import Nav from "@/components/layout/Nav";
-import ScrollProgress from "@/components/ui/ScrollProgress";
-import GrainOverlay from "@/components/ui/GrainOverlay";
-import CursorGlow from "@/components/ui/CursorGlow";
 import Preloader from "@/components/ui/Preloader";
 import Reveal from "@/components/ui/Reveal";
 import KineticTitle from "@/components/ui/KineticTitle";
@@ -39,9 +36,6 @@ export default async function Home() {
     <>
       <Preloader />
       <LatentBackground />
-      <GrainOverlay />
-      <CursorGlow />
-      <ScrollProgress />
       <Nav />
 
       <main className="relative">
@@ -58,7 +52,7 @@ export default async function Home() {
             </p>
             <KineticTitle
               text="Brojevi koji rade za sebe."
-              className="mb-16 max-w-2xl text-3xl font-semibold tracking-tighter md:mb-24 md:text-6xl"
+              className="display mb-16 max-w-2xl text-4xl md:mb-24 md:text-7xl"
             />
             <div className="grid grid-cols-2 gap-x-8 gap-y-14 md:grid-cols-4">
               {STATS.map((s, i) => (
@@ -104,7 +98,7 @@ export default async function Home() {
             </Reveal>
             <KineticTitle
               text="Hajde da napravimo tvoj sadržaj."
-              className="mx-auto max-w-4xl text-4xl font-semibold tracking-tighter md:text-7xl"
+              className="display mx-auto max-w-4xl text-5xl md:text-8xl"
             />
             <Reveal delay={0.25}>
               <div className="mt-10">

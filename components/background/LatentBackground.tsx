@@ -4,22 +4,17 @@ import { useEffect, useRef, useState } from "react";
 import { LatentEngine } from "@/lib/latent/engine";
 
 /**
- * WebGL "latent field + liquid chrome" background — scroll renders the prompt.
+ * WebGL2 particle field — scroll resolves the latent field.
  *
- * Top of page: raw latent noise (diffusion chaos). Scrolling denoises the
- * field into ordered, laminar light; the booking CTA lands on a calm, warm
- * grade. A raymarched liquid-metal sculpture travels across sections and
- * morphs; scroll velocity smears it and accelerates the whole scene.
- * Pointer movement bends the field locally and carries light.
+ * A quarter-million point masses spring toward a per-section formation:
+ * latent core, lattice, stream, clusters, network, singularity. Scrolling
+ * injects turbulence and the field re-settles into the next form; the cursor
+ * pushes it aside and it springs back. Everything else is deliberately still.
  *
- * Fallbacks: static frame under prefers-reduced-motion, CSS gradient when
- * WebGL2 is unavailable.
+ * Fallbacks: one settled frame under prefers-reduced-motion, a CSS gradient
+ * when WebGL2 or float render targets are unavailable.
  */
-export default function LatentBackground({
-  onReady,
-}: {
-  onReady?: () => void;
-}) {
+export default function LatentBackground({ onReady }: { onReady?: () => void }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [failed, setFailed] = useState(false);
 
@@ -31,12 +26,11 @@ export default function LatentBackground({
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
     const engine = new LatentEngine();
-    // Mobile GPUs are fill-rate bound on the raymarch, so cut DPR and steps
-    // hard there — smoothness matters more than crispness on the backdrop.
+    // Mobile GPUs cannot push 262k points; a quarter of the particles at a
+    // lower DPR keeps the same read at a fraction of the fill cost.
     const ok = engine.mount(canvas, {
-      octaves: coarse ? 3 : 5,
-      marchSteps: coarse ? 20 : 48,
-      maxDpr: coarse ? 0.8 : 1.5,
+      texDim: coarse ? 256 : 512,
+      maxDpr: coarse ? 1 : 1.5,
     });
     if (!ok) {
       setFailed(true);
@@ -60,8 +54,8 @@ export default function LatentBackground({
         const section = document.getElementById(id);
         return section ? section.getBoundingClientRect().top + window.scrollY : 0;
       };
-      // The proof section is intentionally 320svh and sticky. Its portal form
-      // lands once the horizontal showcase is established, rather than at the
+      // The proof section is intentionally 320svh and sticky, so its formation
+      // lands once the horizontal showcase is established rather than at the
       // long section's leading edge.
       engine.setSectionAnchors([
         0,
@@ -77,11 +71,11 @@ export default function LatentBackground({
 
     if (reduce) {
       engine.setPointer(0.62, 0.6);
-      engine.renderOnce(0.3);
+      engine.renderOnce(0.05);
       const onResize = () => {
         engine.resize();
         syncSectionAnchors();
-        engine.renderOnce(0.3);
+        engine.renderOnce(0.05);
       };
       window.addEventListener("resize", onResize);
       return () => {
@@ -109,61 +103,12 @@ export default function LatentBackground({
     window.addEventListener("resize", onResize);
     document.addEventListener("visibilitychange", onVisibility);
 
-    // Touch drag to reposition the sculpture. A gesture that starts mostly
-    // horizontal locks into "drag the sphere" (2D from then on); a mostly
-    // vertical start stays a normal page scroll — no hijack.
-    let tracking = false;
-    let decided = false;
-    let dragging = false;
-    let sx = 0;
-    let sy = 0;
-    let lx = 0;
-    let ly = 0;
-
-    const onTouchStart = (e: TouchEvent) => {
-      if (e.touches.length !== 1) return;
-      tracking = true;
-      decided = false;
-      dragging = false;
-      const t = e.touches[0];
-      sx = lx = t.clientX;
-      sy = ly = t.clientY;
-    };
-    const onTouchMove = (e: TouchEvent) => {
-      if (!tracking) return;
-      const t = e.touches[0];
-      if (!decided) {
-        const adx = Math.abs(t.clientX - sx);
-        const ady = Math.abs(t.clientY - sy);
-        if (adx > 8 || ady > 8) {
-          decided = true;
-          dragging = adx > ady * 1.2;
-        }
-      }
-      if (decided && dragging) {
-        e.preventDefault();
-        const min = Math.min(window.innerWidth, window.innerHeight);
-        engine.dragBy((t.clientX - lx) / min, -(t.clientY - ly) / min);
-      }
-      lx = t.clientX;
-      ly = t.clientY;
-    };
-    const onTouchEnd = () => {
-      tracking = false;
-    };
-    window.addEventListener("touchstart", onTouchStart, { passive: true });
-    window.addEventListener("touchmove", onTouchMove, { passive: false });
-    window.addEventListener("touchend", onTouchEnd, { passive: true });
-
     return () => {
       window.removeEventListener("scroll", onScroll);
       window.removeEventListener("pointermove", onPointer);
       window.removeEventListener("pointerdown", onDown);
       window.removeEventListener("resize", onResize);
       document.removeEventListener("visibilitychange", onVisibility);
-      window.removeEventListener("touchstart", onTouchStart);
-      window.removeEventListener("touchmove", onTouchMove);
-      window.removeEventListener("touchend", onTouchEnd);
       engine.dispose();
     };
   }, []);
@@ -171,15 +116,15 @@ export default function LatentBackground({
   return (
     <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden bg-bg">
       {failed ? (
-        <div className="absolute inset-0 [background:radial-gradient(90%_70%_at_30%_20%,rgba(46,107,255,0.18)_0%,transparent_60%),radial-gradient(80%_60%_at_75%_80%,rgba(46,107,255,0.10)_0%,transparent_55%)]" />
+        <div className="absolute inset-0 [background:radial-gradient(70%_55%_at_72%_38%,rgba(46,107,255,0.10)_0%,transparent_65%)]" />
       ) : (
         <canvas ref={canvasRef} className="absolute inset-0 h-full w-full" aria-hidden />
       )}
 
-      {/* Legibility grade: nav scrim + vignette + bottom fade — kept light so
-          the field itself stays visible */}
-      <div className="absolute inset-0 bg-gradient-to-b from-bg/35 via-transparent to-bg/45" />
-      <div className="absolute inset-0 [background:radial-gradient(120%_80%_at_50%_40%,transparent_55%,rgba(11,11,11,0.4)_100%)]" />
+      {/* Legibility scrim. Desktop copy sits in the left column so the scrim
+          runs left-to-right; portrait copy is full-width with the field below
+          it, so there it runs top-to-bottom instead. */}
+      <div className="absolute inset-0 bg-gradient-to-b from-bg/85 via-bg/30 to-bg/5 md:bg-gradient-to-r md:from-bg/70 md:via-bg/10 md:to-transparent" />
     </div>
   );
 }
