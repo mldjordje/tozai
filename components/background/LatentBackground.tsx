@@ -79,20 +79,65 @@ export default function LatentBackground({ onReady }: { onReady?: () => void }) 
         }
         return [top / max, (top + pinned) / max];
       };
+      // Booking's pin carries two formations: the field first collapses to a
+      // point, then spells the wordmark. Splitting one hold in two with a gap
+      // between them gives the collapse a beat before the reveal.
+      const booking = range("booking");
+      const span = booking[1] - booking[0];
       engine.setSectionRanges([
         range("top"),
         range("services"),
         range("portfolio"),
         range("paketi"),
         range("edukacija"),
-        range("booking"),
+        [booking[0], booking[0] + span * 0.26],
+        [booking[0] + span * 0.62, booking[1]],
       ]);
+    };
+
+    // Keep the field clear of whatever copy is currently on screen. Measured
+    // from the live heading rather than hard-coded, since the copy is a left
+    // column on most sections and centred on the booking CTA.
+    const headings = Array.from(
+      document.querySelectorAll<HTMLElement>("h1, h2[aria-label]"),
+    );
+    const syncCopyRect = () => {
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+      let best: DOMRect | null = null;
+      let bestArea = 0;
+      for (const el of headings) {
+        const r = el.getBoundingClientRect();
+        const visible = Math.min(r.bottom, vh) - Math.max(r.top, 0);
+        if (visible > bestArea) {
+          bestArea = visible;
+          best = r;
+        }
+      }
+      if (!best || bestArea <= 0) {
+        engine.setCopyRect(0, 0, 0, 0, 0);
+        return;
+      }
+      // Pad the box so particles bend around the type rather than grazing it,
+      // and fade the effect out as the heading leaves the viewport.
+      const padX = vw * 0.03;
+      const padY = vh * 0.05;
+      engine.setCopyRect(
+        Math.max(0, (best.left - padX) / vw),
+        Math.max(0, 1 - (best.bottom + padY) / vh),
+        Math.min(1, (best.right + padX) / vw),
+        Math.min(1, 1 - (best.top - padY) / vh),
+        // Capped well below 1: this is meant to open a gap around the type,
+        // not to evacuate half the viewport.
+        Math.min(0.6, bestArea / (vh * 0.4)),
+      );
     };
 
     syncSectionRanges();
 
     if (reduce) {
       engine.setPointer(0.62, 0.6);
+      syncCopyRect();
       engine.renderOnce(0.05);
       const onResize = () => {
         engine.resize();
@@ -106,10 +151,14 @@ export default function LatentBackground({ onReady }: { onReady?: () => void }) 
       };
     }
 
-    const onScroll = () => engine.setProgress(scrollProgress());
+    const onScroll = () => {
+      engine.setProgress(scrollProgress());
+      syncCopyRect();
+    };
     const onResize = () => {
       engine.resize();
       syncSectionRanges();
+      syncCopyRect();
     };
     const onVisibility = () => (document.hidden ? engine.pause() : engine.resume());
 
@@ -184,6 +233,7 @@ export default function LatentBackground({ onReady }: { onReady?: () => void }) 
     };
 
     engine.setProgress(scrollProgress());
+    syncCopyRect();
     engine.start();
 
     window.addEventListener("scroll", onScroll, { passive: true });

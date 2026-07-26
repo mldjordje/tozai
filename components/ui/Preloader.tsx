@@ -77,8 +77,10 @@ export default function Preloader() {
           leaving ? "opacity-0" : "opacity-100"
         }`}
       >
-        <div className="text-3xl font-semibold tracking-tighter md:text-4xl">
-          TOZ<span className="text-accent">AI</span>
+        {/* Set in the display face: the panels part onto a field that is still
+            resolving, and it spells this same wordmark again at the finale. */}
+        <div className="display text-5xl md:text-6xl">
+          TOZ<em>AI</em>
         </div>
         <div className="mt-6 h-px w-40 overflow-hidden bg-line md:w-52">
           <div

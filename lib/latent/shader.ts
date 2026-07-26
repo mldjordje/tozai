@@ -44,6 +44,10 @@ uniform float uTurb;        // transient turbulence (scroll / morph / click)
 uniform float uSettle;      // 0..1, rises while the field is undisturbed
 uniform float uPulse;       // 0..1 click shockwave, decays upstream
 uniform vec3  uPtr;         // xy in VIEW units, z = cursor strength
+uniform sampler2D uWord;    // per-particle wordmark target, xyz
+uniform float uBoot;        // 0..1 first-load ramp: chaos resolving into form
+uniform vec4  uCopy;        // copy column in VIEW units: (minX, minY, maxX, maxY)
+uniform float uCopyAmt;     // how hard the field is pushed clear of the copy
 
 layout(location = 0) out vec4 oPos;
 layout(location = 1) out vec4 oVel;
@@ -166,6 +170,8 @@ vec3 fSingularity(float i, vec3 h) {
   return d * (0.40 + pow(h.x, 7.0) * 1.45);
 }
 
+/** Index 6 is not procedural: its targets are rasterised from the TOZAI
+ *  wordmark on the CPU and uploaded as a texture, one texel per particle. */
 vec3 formation(float i, vec3 h, int k) {
   if (k <= 0) return fCore(i, h);
   if (k == 1) return fLattice(i, h);
@@ -194,13 +200,14 @@ void main() {
   vec3 p = texelFetch(uPos, c, 0).xyz;
   vec3 v = texelFetch(uVel, c, 0).xyz;
 
-  float s = clamp(uShape, 0.0, 5.0);
+  float s = clamp(uShape, 0.0, 6.0);
   int i0 = int(floor(s));
-  int i1 = min(i0 + 1, 5);
+  int i1 = min(i0 + 1, 6);
   float fr = smoothstep(0.0, 1.0, fract(s));
 
-  vec3 t0 = formation(i, h, i0);
-  vec3 t1 = formation(i, h, i1);
+  vec3 word = texelFetch(uWord, c, 0).xyz;
+  vec3 t0 = i0 >= 6 ? word : formation(i, h, i0);
+  vec3 t1 = i1 >= 6 ? word : formation(i, h, i1);
 
   // Staggered assembly. A straight cross-fade moves every particle at once,
   // which looks like a dissolve; delaying each one by a left-to-right sweep
@@ -215,16 +222,22 @@ void main() {
   // camera looks straight down z, so without this the particle planes sit
   // exactly parallel to the pixel rows and alias into a hard seam across the
   // equator. The tilt also makes the forms read as solids rather than rings.
-  const float TILT = 0.21;
-  tgt.yz = mat2(cos(TILT), -sin(TILT), sin(TILT), cos(TILT)) * tgt.yz;
+  //
+  // Released as the wordmark arrives: letterforms are only legible face-on, so
+  // the finale trades the anti-aliasing tilt for readability.
+  float tilt = 0.21 * (1.0 - smoothstep(5.15, 6.0, s));
+  tgt.yz = mat2(cos(tilt), -sin(tilt), sin(tilt), cos(tilt)) * tgt.yz;
 
   // 1. Spring to target. Stiffness rises as the field settles so the arrival
-  //    is crisp rather than soggy.
-  vec3 f = (tgt - p) * (2.4 + uSettle * 3.4);
+  //    is crisp rather than soggy. On first load the spring is near zero and
+  //    ramps in, so the page opens on latent chaos that visibly RESOLVES as
+  //    the preloader lifts, rather than on an already-finished picture.
+  vec3 f = (tgt - p) * (2.4 + uSettle * 3.4) * (0.04 + 0.96 * uBoot);
 
   // 2. Curl flow. Peaks mid-morph, plus a permanent trace so a settled field
-  //    still shimmers instead of freezing into a dead diagram.
-  float turb = uTurb + 4.0 * fr * (1.0 - fr) + 0.035;
+  //    still shimmers instead of freezing into a dead diagram. The boot ramp
+  //    adds the initial churn.
+  float turb = uTurb + 4.0 * fr * (1.0 - fr) + 0.035 + (1.0 - uBoot) * 1.35;
   f += curl(p * 0.62, uTime * 0.10) * turb * 2.4;
 
   // 3. Cursor vortex, in VIEW space — the user aims at what they can see, and
@@ -241,6 +254,26 @@ void main() {
 
   // 4. Click: an outward shockwave from the field centre.
   f += normalize(p + 1e-5) * uPulse * 4.2 * exp(-length(p) * 0.55);
+
+  // 5. Keep clear of the copy. The text column is fed in as a box in view
+  //    space and the field is pushed out of it, so the type never has to fight
+  //    the particles for legibility and the field looks like it is making room
+  //    rather than sitting behind the words. Soft-edged: a hard boundary would
+  //    read as a rectangular hole punched in the cloud.
+  if (uCopyAmt > 0.001) {
+    vec2 mid = (uCopy.xy + uCopy.zw) * 0.5;
+    vec2 ext = (uCopy.zw - uCopy.xy) * 0.5;
+    vec2 q = abs(pv.xy - mid) - ext;
+    // Signed distance to the box: positive outside, negative within.
+    float sd = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0);
+    // Tight falloff and a gentle force. The spring is ~5.8, so anything
+    // stronger than this stops nudging the field and starts bulldozing it into
+    // a pile beside the text.
+    float push = smoothstep(0.22, -0.06, sd) * uCopyAmt;
+    if (push > 0.001) {
+      f += transpose(uRot) * vec3(normalize(pv.xy - mid + 1e-5) * push * 2.2, 0.0);
+    }
+  }
 
   // Damping raised to dt so the feel is identical at 60 / 120 / 144 Hz and
   // after a tab-switch stall.

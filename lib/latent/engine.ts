@@ -3,8 +3,9 @@
 //   const engine = new LatentEngine();
 //   engine.mount(canvas, { texDim, maxDpr })  -> false if unsupported
 //   engine.setProgress(p)          // page scroll 0..1 (eased internally)
-//   engine.setSectionAnchors([..]) // 6 progress values, one per formation
+//   engine.setSectionRanges([..])  // one [holdStart, holdEnd] per formation
 //   engine.setPointer(x, y)        // normalized 0..1, y up (eased internally)
+//   engine.setCopyRect(...)        // screen box the field should keep clear of
 //   engine.pulse()                 // click shockwave
 //   engine.renderOnce(p)           // single settled frame (reduced motion)
 //   engine.resize(); engine.pause(); engine.resume(); engine.dispose();
@@ -47,6 +48,7 @@ const FIELD_KEYS: FieldKey[] = [
   [0.28, 0.04, 1.0, 0.92], // paketi — three clusters
   [0.3, 0.06, 1.04, 0.5], // edukacija — network (widest footprint)
   [0.0, 0.06, 0.92, 1.05], // booking — singularity, centered
+  [0.0, 0.04, 1.1, 0.62], // finale — the field spells TOZAI
 ];
 
 // Scroll window each formation OWNS, as [holdStart, holdEnd] in page progress.
@@ -93,6 +95,7 @@ export class LatentEngine {
   private posB: WebGLTexture | null = null;
   private velA: WebGLTexture | null = null;
   private velB: WebGLTexture | null = null;
+  private wordTex: WebGLTexture | null = null;
   private simFbo: WebGLFramebuffer | null = null;
   private sceneFbo: WebGLFramebuffer | null = null;
   private sceneTex: WebGLTexture | null = null;
@@ -109,12 +112,22 @@ export class LatentEngine {
   // holds, i.e. the old cross-fade behaviour.
   private ranges: HoldRange[] = [
     [0, 0],
-    [0.16, 0.16],
-    [0.36, 0.36],
-    [0.56, 0.56],
-    [0.76, 0.76],
+    [0.14, 0.14],
+    [0.32, 0.32],
+    [0.5, 0.5],
+    [0.68, 0.68],
+    [0.86, 0.86],
     [1, 1],
   ];
+
+  // Copy column to keep clear, in normalized screen coords (0..1, y up).
+  private copyRect: [number, number, number, number] = [0, 0, 0, 0];
+  private copyAmt = 0;
+
+  // First-load ramp: the field opens as chaos and resolves into the hero core
+  // as the preloader lifts, instead of appearing already finished.
+  private bootStart = 0;
+  private boot = 0;
 
   private shape = 0;
   private prevShape = 0;
@@ -131,6 +144,7 @@ export class LatentEngine {
   private pitch = 0;
   private yawVel = 0;
   private pitchVel = 0;
+  private faceOn = 0;
   private rot = new Float32Array(9);
 
   mount(canvas: HTMLCanvasElement, options: LatentOptions = {}): boolean {
@@ -188,7 +202,7 @@ export class LatentEngine {
     for (let i = 0; i < this.count; i++) {
       const u = Math.random() * 2 - 1;
       const t = Math.random() * Math.PI * 2;
-      const r = Math.cbrt(Math.random()) * 2.6;
+      const r = Math.cbrt(Math.random()) * 1.9;
       const s = Math.sqrt(1 - u * u);
       seed[i * 4] = s * Math.cos(t) * r;
       seed[i * 4 + 1] = s * Math.sin(t) * r;
@@ -201,9 +215,84 @@ export class LatentEngine {
     this.velB = this.dataTex(gl, this.dim, this.dim, null);
     if (!this.posA || !this.posB || !this.velA || !this.velB) return false;
 
+    this.buildWordmark();
+    // The display face almost never wins the race with mount, so rebuild once
+    // it lands — otherwise the finale is set in the fallback serif.
+    document.fonts?.ready.then(() => {
+      if (this.gl) this.buildWordmark();
+    });
+
     this.resize();
     this.lastNow = performance.now();
+    this.bootStart = this.lastNow;
     return true;
+  }
+
+  /** Copy column to keep the field clear of, in normalized screen coords
+   *  (0..1, y up). Strength 0 disables it. */
+  setCopyRect(x0: number, y0: number, x1: number, y1: number, strength = 1) {
+    this.copyRect = [x0, y0, x1, y1];
+    this.copyAmt = strength;
+  }
+
+  /**
+   * Rasterise the wordmark and turn its lit pixels into one target position
+   * per particle. Drawing type to a 2D canvas and sampling it is far simpler
+   * than describing letterforms as SDFs, and it means the finale is literally
+   * set in the site's own display face.
+   *
+   * Safe to call again once webfonts finish loading — the first call may hit
+   * the fallback serif, the second replaces it with Instrument Serif.
+   */
+  private buildWordmark() {
+    const gl = this.gl;
+    if (!gl) return;
+
+    const W = 1024;
+    const H = 256;
+    const canvas = document.createElement("canvas");
+    canvas.width = W;
+    canvas.height = H;
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    if (!ctx) return;
+
+    ctx.fillStyle = "#000";
+    ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = "#fff";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    const family = getComputedStyle(document.documentElement)
+      .getPropertyValue("--font-instrument")
+      .trim();
+    ctx.font = `400 ${Math.round(H * 0.78)}px ${family || "Georgia"}, Georgia, serif`;
+    ctx.fillText("TOZAI", W / 2, H * 0.54);
+
+    // Collect the lit pixels once, then draw particles from that pool.
+    const px = ctx.getImageData(0, 0, W, H).data;
+    const lit: number[] = [];
+    for (let i = 0; i < W * H; i++) {
+      if (px[i * 4] > 110) lit.push(i);
+    }
+    if (lit.length === 0) return;
+
+    // Field extents chosen to match the other formations' footprint, so the
+    // morph into the wordmark does not jump in scale.
+    const spanX = 5.0;
+    const spanY = (spanX * H) / W;
+    const data = new Float32Array(this.count * 4);
+    for (let i = 0; i < this.count; i++) {
+      const hit = lit[(Math.random() * lit.length) | 0];
+      const x = hit % W;
+      const y = (hit / W) | 0;
+      data[i * 4] = ((x + Math.random()) / W - 0.5) * spanX;
+      // Canvas y runs down, the field's runs up.
+      data[i * 4 + 1] = -((y + Math.random()) / H - 0.5) * spanY;
+      data[i * 4 + 2] = (Math.random() - 0.5) * 0.11; // a thin slab, not a plane
+      data[i * 4 + 3] = 1;
+    }
+
+    if (this.wordTex) gl.deleteTexture(this.wordTex);
+    this.wordTex = this.dataTex(gl, this.dim, this.dim, data);
   }
 
   /** RGBA32F texture, NEAREST — simulation state, never filtered. */
@@ -277,8 +366,9 @@ export class LatentEngine {
   /** Rotation for the current orbit, as a column-major mat3. Pointer parallax
    *  is added here rather than accumulated, so it leans and returns. */
   private buildRot() {
-    const yaw = this.yaw + (this.pointer[0] - 0.5) * 0.22;
-    const pitch = this.pitch + (this.pointer[1] - 0.5) * 0.14;
+    const lean = 1 - this.faceOn;
+    const yaw = this.yaw + (this.pointer[0] - 0.5) * 0.22 * lean;
+    const pitch = this.pitch + (this.pointer[1] - 0.5) * 0.14 * lean;
     const cy = Math.cos(yaw);
     const sy = Math.sin(yaw);
     const cp = Math.cos(pitch);
@@ -303,6 +393,12 @@ export class LatentEngine {
     this.prevProgress = this.progress;
     this.shape = this.prevShape = this.shapeAt(this.progress);
     this.settle = 1;
+    this.boot = 1;
+    if (this.shape > 5.15) {
+      this.yaw = 0;
+      this.pitch = 0;
+      this.faceOn = 1;
+    }
     this.animTime = 12;
     // Run the simulation forward so the particles have actually arrived at
     // their formation before the single frame is drawn.
@@ -357,7 +453,7 @@ export class LatentEngine {
       for (const p of [this.simProg, this.pointProg, this.showProg]) {
         if (p) gl.deleteProgram(p);
       }
-      for (const t of [this.posA, this.posB, this.velA, this.velB, this.sceneTex]) {
+      for (const t of [this.posA, this.posB, this.velA, this.velB, this.sceneTex, this.wordTex]) {
         if (t) gl.deleteTexture(t);
       }
       if (this.simFbo) gl.deleteFramebuffer(this.simFbo);
@@ -365,7 +461,7 @@ export class LatentEngine {
       if (this.vao) gl.deleteVertexArray(this.vao);
     }
     this.simProg = this.pointProg = this.showProg = null;
-    this.posA = this.posB = this.velA = this.velB = this.sceneTex = null;
+    this.posA = this.posB = this.velA = this.velB = this.sceneTex = this.wordTex = null;
     this.simFbo = this.sceneFbo = null;
     this.vao = null;
     this.gl = null;
@@ -445,6 +541,23 @@ export class LatentEngine {
     gl.uniform1f(gl.getUniformLocation(this.simProg, "uPulse"), this.pulseV);
     gl.uniform3f(gl.getUniformLocation(this.simProg, "uPtr"), ptrX, ptrY, this.energy);
     gl.uniformMatrix3fv(gl.getUniformLocation(this.simProg, "uRot"), false, this.buildRot());
+    gl.uniform1f(gl.getUniformLocation(this.simProg, "uBoot"), this.boot);
+
+    gl.activeTexture(gl.TEXTURE2);
+    gl.bindTexture(gl.TEXTURE_2D, this.wordTex ?? this.posA);
+    gl.uniform1i(gl.getUniformLocation(this.simProg, "uWord"), 2);
+
+    // Copy column -> the same view units the shader compares against uRot*p.
+    const toViewX = (n: number) => ((n * 2 - 1 - cx) * aspect) / PLANE / scale;
+    const toViewY = (n: number) => (n * 2 - 1 - cy) / PLANE / scale;
+    gl.uniform4f(
+      gl.getUniformLocation(this.simProg, "uCopy"),
+      toViewX(this.copyRect[0]),
+      toViewY(this.copyRect[1]),
+      toViewX(this.copyRect[2]),
+      toViewY(this.copyRect[3]),
+    );
+    gl.uniform1f(gl.getUniformLocation(this.simProg, "uCopyAmt"), this.copyAmt);
 
     gl.bindVertexArray(this.vao);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
@@ -524,7 +637,19 @@ export class LatentEngine {
     gl.uniform1f(gl.getUniformLocation(this.showProg, "uTime"), this.animTime);
     // 1.75 is the calibrated base; the per-formation factor compensates for
     // how tightly each one packs its particles.
-    gl.uniform1f(gl.getUniformLocation(this.showProg, "uExposure"), 1.75 * exposure);
+    //
+    // Exposure also rides the boot ramp. Scattered across the whole viewport
+    // the particles cover far more area than any settled formation, so at full
+    // exposure the opening is a white blizzard that buries the hero copy. Dim
+    // at first, brightening as the field gathers: the page resolves out of the
+    // dark instead of flashing.
+    gl.uniform1f(
+      gl.getUniformLocation(this.showProg, "uExposure"),
+      // Squared, with a very low floor: scattered over the viewport the cloud
+      // covers roughly three times the area of any settled formation, so a
+      // linear fade still opens brighter than the finished hero.
+      1.75 * exposure * (0.06 + 0.94 * this.boot * this.boot),
+    );
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   }
 
@@ -540,6 +665,11 @@ export class LatentEngine {
     this.energy *= Math.exp(-dt * 2.4);
 
     // Scroll velocity envelope: fast attack, slow release.
+    // Boot ramp. Eased so the resolve decelerates into place rather than
+    // arriving at constant speed.
+    const bootAge = (now - this.bootStart) / 1600;
+    this.boot = smootherstep(Math.min(1, Math.max(0, bootAge)));
+
     const rawVel = Math.min(
       1,
       (Math.abs(this.progress - this.prevProgress) / Math.max(dt, 1e-3)) * 9,
@@ -557,7 +687,22 @@ export class LatentEngine {
     this.pitchVel *= decay;
     this.pitch = Math.max(-0.6, Math.min(0.6, this.pitch));
     const steering = Math.min(1, Math.abs(this.yawVel) + Math.abs(this.pitchVel));
-    this.yaw += dt * 0.06 * (1 - steering);
+
+    // The wordmark only reads face-on, so as it arrives the orbit is eased
+    // back to square and the idle drift is suspended. Yaw is returned to the
+    // NEAREST full turn rather than to zero — after a few minutes of drift the
+    // absolute angle is large, and unwinding it would spin the field.
+    const faceOn = Math.min(1, Math.max(0, (this.shape - 5.15) / 0.85));
+    this.yaw += dt * 0.06 * (1 - steering) * (1 - faceOn);
+    if (faceOn > 0) {
+      const k = Math.min(1, dt * 3 * faceOn);
+      const square = Math.round(this.yaw / (Math.PI * 2)) * Math.PI * 2;
+      this.yaw += (square - this.yaw) * k;
+      this.pitch += -this.pitch * k;
+      this.yawVel *= 1 - k;
+      this.pitchVel *= 1 - k;
+    }
+    this.faceOn = faceOn;
 
     this.shape = this.shapeAt(this.progress);
     const shapeRate = Math.abs(this.shape - this.prevShape) / Math.max(dt, 1e-3);
