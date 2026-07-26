@@ -13,15 +13,34 @@ import { selectLatentProfile } from "@/lib/latent/quality";
  * pushes it aside and it springs back. Everything else is deliberately still.
  *
  * Fallbacks: one settled frame under prefers-reduced-motion, a CSS gradient
- * when WebGL2 or float render targets are unavailable.
+ * when WebGL2 or float render targets are unavailable, and the same gradient
+ * when the GPU turns out to be a software rasteriser or simply cannot hold a
+ * watchable frame rate at the cheapest quality step.
+ *
+ * Append `?latent=debug` to the URL for an on-page readout of the GPU, the
+ * chosen profile and the live frame rate — the only practical way to diagnose a
+ * machine you do not have in front of you.
  */
 export default function LatentBackground({ onReady }: { onReady?: () => void }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [failed, setFailed] = useState(false);
+  const [diag, setDiag] = useState<string | null>(null);
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || failed) return;
+
+    // A context that cannot be created at all reports its reason here and
+    // nowhere else; without this the failure is a silent `null`.
+    const onCreationError = (event: Event) => {
+      if (process.env.NODE_ENV !== "production") {
+        console.warn(
+          "[latent] WebGL2 context creation failed:",
+          (event as Event & { statusMessage?: string }).statusMessage || "no reason given",
+        );
+      }
+    };
+    canvas.addEventListener("webglcontextcreationerror", onCreationError);
 
     const coarse = window.matchMedia("(pointer: coarse)").matches;
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -48,14 +67,16 @@ export default function LatentBackground({ onReady }: { onReady?: () => void }) 
     canvas.addEventListener("webglcontextlost", onContextLost);
 
     const ok = engine.mount(canvas, {
-      texDim: profile.texDim,
-      maxDpr: profile.maxDpr,
-      maxRenderPixels: profile.maxRenderPixels,
+      profile,
+      // The governor has walked to the bottom of the ladder and still cannot
+      // hold a watchable rate. A gradient is a better answer than a slideshow.
+      onGiveUp: () => setFailed(true),
     });
     if (!ok) {
       setFailed(true);
       onReady?.();
       return () => {
+        canvas.removeEventListener("webglcontextcreationerror", onCreationError);
         canvas.removeEventListener("webglcontextlost", onContextLost);
         engine.dispose();
       };
@@ -63,6 +84,25 @@ export default function LatentBackground({ onReady }: { onReady?: () => void }) 
     onReady?.();
     if (process.env.NODE_ENV !== "production") {
       (window as unknown as Record<string, unknown>).__latentEngine = engine;
+    }
+
+    // Debug readout. Opt-in via ?latent=debug so it costs nothing in normal use
+    // but can be read off any machine, including one on the other end of a call.
+    let diagTimer = 0;
+    if (new URLSearchParams(window.location.search).get("latent") === "debug") {
+      const tick = () => {
+        const d = engine.getDiagnostics();
+        setDiag(
+          [
+            `profile ${d.profile} · step ${d.step}`,
+            `${d.particles.toLocaleString()} particles · ${d.bufferW}x${d.bufferH}`,
+            `scale ${d.renderScale} · cap ${d.fpsCap} · ${d.fps} fps`,
+            `${d.rendererClass}: ${d.renderer || "unknown"}`,
+          ].join("\n"),
+        );
+      };
+      tick();
+      diagTimer = window.setInterval(tick, 500);
     }
 
     const scrollProgress = () => {
@@ -172,7 +212,9 @@ export default function LatentBackground({ onReady }: { onReady?: () => void }) 
       };
       window.addEventListener("resize", onResize);
       return () => {
+        window.clearInterval(diagTimer);
         window.removeEventListener("resize", onResize);
+        canvas.removeEventListener("webglcontextcreationerror", onCreationError);
         canvas.removeEventListener("webglcontextlost", onContextLost);
         engine.dispose();
       };
@@ -278,6 +320,7 @@ export default function LatentBackground({ onReady }: { onReady?: () => void }) 
     document.addEventListener("visibilitychange", onVisibility);
 
     return () => {
+      window.clearInterval(diagTimer);
       window.removeEventListener("scroll", onScroll);
       window.removeEventListener("pointermove", onPointerMove);
       window.removeEventListener("pointerdown", onPointerDown);
@@ -288,6 +331,7 @@ export default function LatentBackground({ onReady }: { onReady?: () => void }) 
       window.removeEventListener("touchend", onTouchEnd);
       window.removeEventListener("resize", onResize);
       document.removeEventListener("visibilitychange", onVisibility);
+      canvas.removeEventListener("webglcontextcreationerror", onCreationError);
       canvas.removeEventListener("webglcontextlost", onContextLost);
       engine.dispose();
     };
@@ -300,6 +344,12 @@ export default function LatentBackground({ onReady }: { onReady?: () => void }) 
       ) : (
         <canvas ref={canvasRef} className="absolute inset-0 h-full w-full" aria-hidden />
       )}
+
+      {diag ? (
+        <pre className="pointer-events-none absolute left-3 top-3 z-50 max-w-[min(92vw,34rem)] whitespace-pre-wrap rounded-md bg-black/75 p-3 font-mono text-[10px] leading-relaxed text-emerald-300">
+          {diag}
+        </pre>
+      ) : null}
 
       {/* Legibility scrim. Desktop copy sits in the left column so the scrim
           runs left-to-right; portrait copy is full-width with the field below

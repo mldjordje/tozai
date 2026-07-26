@@ -26,6 +26,18 @@ const headWord = {
   },
 };
 
+// The headline resolves out of focus as its words rise. One blur animation on
+// the h1 — never one per word — because a filter per element is a compositing
+// layer per element, and this page already has a GPU budget to protect.
+const headFocus = {
+  hidden: { filter: "blur(16px)", opacity: 0.4 },
+  show: {
+    filter: "blur(0px)",
+    opacity: 1,
+    transition: { duration: 1.5, ease: [0.16, 1, 0.3, 1] as const },
+  },
+};
+
 // Word wrapped in an overflow mask so it rises out of a clean edge.
 function Word({ children }: { children: React.ReactNode }) {
   return (
@@ -57,7 +69,8 @@ export default function Hero() {
         {/* The words are spaced with margins, not whitespace text nodes, so the
             accessible name has to be supplied explicitly — otherwise assistive
             tech and copy-paste both read "BuildYourBusiness WithAI." */}
-        <h1
+        <motion.h1
+          variants={headFocus}
           aria-label="Build Your Business With AI."
           className="display text-balance text-6xl md:text-8xl lg:text-[6.5rem]"
         >
@@ -73,9 +86,19 @@ export default function Hero() {
             <Word>With</Word>
           </span>
           <Word>
-            <em>AI</em>.
+            {/* The sheen goes on a span INSIDE the em, not on the em itself:
+                `.display em` sets the accent colour at higher specificity than
+                `.sheen` can, so a clip applied to the em would be overridden and
+                the gradient would never show. Last word of the headline, so the
+                sweep waits for the whole line to arrive rather than racing it. */}
+            <em>
+              <span className="sheen sheen-run" style={{ animationDelay: "1.35s" }}>
+                AI
+              </span>
+            </em>
+            .
           </Word>
-        </h1>
+        </motion.h1>
 
         <motion.div
           variants={line}
