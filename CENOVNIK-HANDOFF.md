@@ -37,6 +37,9 @@ const education = await getPublicPackages("education");   // hour packs 2/5/10/2
 
 ## Rules
 
+- Za `flow='project'` (AI video) javna kartica **nikada ne renderuje `price`**,
+  čak i kada admin interno čuva referentnu cenu. CTA vodi na privatni upit.
+- `price` se javno prikazuje samo za `flow='hours'` proizvode, poput edukacije.
 - **Server component** reads `getPublicPackages()` — it's `server-only`, never
   import into a client component. Pass the result down as props.
 - The helper already filters `active` and orders by `sort`. Don't re-sort.

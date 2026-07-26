@@ -30,8 +30,11 @@ export default async function Home() {
     getPublicPackages("services"),
     getPublicPackages("education"),
   ]);
-  const clipPackages = services.map(toClipPackage);
-  const hourPacks = education.map(toHourPack);
+  const clipPackages = services.filter((item) => item.flow === "project").map(toClipPackage);
+  const hourPacks = [
+    ...education,
+    ...services.filter((item) => item.flow === "hours"),
+  ].map(toHourPack);
 
   return (
     <>

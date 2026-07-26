@@ -14,11 +14,23 @@ export type OrderForPayment = {
   amount: number;
   currency: string;
   buyerEmail: string;
+  buyer?: {
+    name?: string | null;
+    phone?: string | null;
+    address?: string | null;
+    city?: string | null;
+  };
 };
 
 export type PaymentIntent =
   /** Hand the buyer to a hosted payment page. */
   | { kind: "redirect"; provider: string; redirectUrl: string }
+  | {
+      kind: "form";
+      provider: "monri";
+      action: string;
+      fields: Record<string, string>;
+    }
   /** Settle out of band — bank transfer against a proforma. */
   | {
       kind: "manual";

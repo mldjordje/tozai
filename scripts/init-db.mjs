@@ -184,6 +184,7 @@ const templates = [
   { key: "reminder", name: "Podsetnik", subject: "Podsetnik: termin {{datum}} u {{vreme}}", body: "Zdravo {{ime}},\n\nPodsećamo te na zakazan termin {{datum}} u {{vreme}}.\nMeet link: {{link}}\n\nTOZA AI" },
   { key: "project_status", name: "Status projekta", subject: "Update na tvom projektu", body: "Zdravo {{ime}},\n\nStatus tvog projekta: {{status}}.\n\nTOZA AI" },
   { key: "project_done", name: "Završetak projekta", subject: "Tvoj projekat je gotov 🎉", body: "Zdravo {{ime}},\n\nProjekat je završen. Materijali su ti dostupni na dashboardu.\n\nTOZA AI" },
+  { key: "video_quote", name: "Procena za AI video", subject: "Stigla je procena za {{projekat}}", body: "Zdravo {{ime}},\n\nTvoja procena je spremna: {{cena}}, vreme izrade {{vreme}} dana. Ponuda važi do {{vazi_do}}.\n\nOtvori svoj TOZA AI nalog da pregledaš i potvrdiš ponudu.\n\n{{link}}\n\nTOZA AI" },
 ];
 for (const t of templates) {
   await sql`
@@ -385,6 +386,75 @@ await sql`
   )
 `;
 await sql`CREATE INDEX IF NOT EXISTS project_deliverables_project ON project_deliverables (project_id)`;
+
+/* ------------------------------------------------------- video requests --- */
+// AI video services are sold through a private quote, never a public fixed
+// price. The client sends a brief, the admin replies with price + delivery
+// deadline, and only an accepted quote becomes a payable order.
+await sql`
+  CREATE TABLE IF NOT EXISTS video_requests (
+    id SERIAL PRIMARY KEY,
+    user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    package_id INT REFERENCES packages(id) ON DELETE SET NULL,
+    service_name TEXT NOT NULL,
+    project_title TEXT NOT NULL,
+    brief JSONB NOT NULL,
+    buyer_type TEXT NOT NULL DEFAULT 'individual',
+    clip_count INT NOT NULL DEFAULT 1,
+    business_name TEXT NOT NULL DEFAULT '',
+    business_description TEXT NOT NULL DEFAULT '',
+    budget_eur NUMERIC,
+    status TEXT NOT NULL DEFAULT 'submitted',
+    quoted_amount NUMERIC,
+    currency TEXT NOT NULL DEFAULT 'EUR',
+    turnaround_days INT,
+    quote_valid_until DATE,
+    admin_note TEXT,
+    revisions INT NOT NULL DEFAULT 2,
+    quoted_at TIMESTAMPTZ,
+    responded_at TIMESTAMPTZ,
+    order_id INT UNIQUE REFERENCES orders(id) ON DELETE SET NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  )
+`;
+await sql`CREATE INDEX IF NOT EXISTS video_requests_user ON video_requests (user_id, created_at DESC)`;
+await sql`CREATE INDEX IF NOT EXISTS video_requests_status ON video_requests (status, created_at DESC)`;
+await sql`ALTER TABLE video_requests ADD COLUMN IF NOT EXISTS buyer_type TEXT NOT NULL DEFAULT 'individual'`;
+await sql`ALTER TABLE video_requests ADD COLUMN IF NOT EXISTS clip_count INT NOT NULL DEFAULT 1`;
+await sql`ALTER TABLE video_requests ADD COLUMN IF NOT EXISTS business_name TEXT NOT NULL DEFAULT ''`;
+await sql`ALTER TABLE video_requests ADD COLUMN IF NOT EXISTS business_description TEXT NOT NULL DEFAULT ''`;
+await sql`ALTER TABLE video_requests ADD COLUMN IF NOT EXISTS budget_eur NUMERIC`;
+await sql`ALTER TABLE video_requests ADD COLUMN IF NOT EXISTS turnaround_days INT`;
+await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS quote_request_id INT REFERENCES video_requests(id) ON DELETE SET NULL`;
+await sql`CREATE UNIQUE INDEX IF NOT EXISTS orders_quote_request ON orders (quote_request_id) WHERE quote_request_id IS NOT NULL`;
+
+// Materials arrive only after payment. We store the chosen hand-off channel
+// separately from the creative brief so "brief sent" and "files received" are
+// unambiguous states in both dashboards.
+await sql`ALTER TABLE projects ADD COLUMN IF NOT EXISTS materials_method TEXT`;
+await sql`ALTER TABLE projects ADD COLUMN IF NOT EXISTS materials_value TEXT`;
+await sql`ALTER TABLE projects ADD COLUMN IF NOT EXISTS materials_received_at TIMESTAMPTZ`;
+
+/* --------------------------------------------------------- email outbox --- */
+// Transactional email is durable: if the provider is missing or temporarily
+// down, the message remains queued instead of silently disappearing.
+await sql`
+  CREATE TABLE IF NOT EXISTS email_outbox (
+    id SERIAL PRIMARY KEY,
+    user_id INT REFERENCES users(id) ON DELETE SET NULL,
+    recipient TEXT NOT NULL,
+    template_key TEXT NOT NULL,
+    subject TEXT NOT NULL,
+    body TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending',
+    provider_ref TEXT,
+    error TEXT,
+    sent_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  )
+`;
+await sql`CREATE INDEX IF NOT EXISTS email_outbox_status ON email_outbox (status, created_at)`;
 
 /* -------------------------------------------------------------- bookings --- */
 // A session booked against the hour wallet. `booking_slots` carries one row per

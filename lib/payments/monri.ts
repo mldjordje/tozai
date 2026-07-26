@@ -1,34 +1,50 @@
 import "server-only";
+import { createHash } from "node:crypto";
 import type { PaymentProvider } from "./provider";
 
 /**
- * Monri card payment — NOT IMPLEMENTED.
- *
- * The integration is blocked on credentials from Monri. This module exists so
- * the shape of the work is visible and the switch-over is a single file, but it
- * deliberately throws rather than pretending to work: getPaymentProvider() only
- * selects it when MONRI_MERCHANT_KEY and MONRI_AUTH_TOKEN are both set, so
- * reaching this code means someone configured the env vars before the code
- * landed, and a loud failure beats a buyer stranded on a broken payment page.
- *
- * To finish it:
- *   1. POST the order to Monri's payment-form endpoint, signing the digest with
- *      the merchant key (order number, amount in minor units, currency).
- *   2. Return { kind: "redirect", provider: "monri", redirectUrl }.
- *   3. Add app/api/payments/monri/webhook/route.ts — verify the signature, then
- *      call fulfillPaidOrder(orderId). It is idempotent, so replays are safe.
- *   4. Record orders.provider = 'monri' and orders.provider_ref = the Monri id.
- *
- * Amounts are stored in EUR as NUMERIC; Monri expects minor units, so convert
- * with Math.round(amount * 100) and never with floating-point truncation.
+ * Hosted Monri WebPay form. The browser posts signed order fields directly to
+ * Monri, so card data never passes through the TOZA AI server.
  */
 export const monriProvider: PaymentProvider = {
   id: "monri",
 
-  async createCheckout() {
-    throw new Error(
-      "[payments] Monri credentials are set but the integration is not implemented yet. " +
-        "Unset MONRI_MERCHANT_KEY / MONRI_AUTH_TOKEN to fall back to bank transfer.",
-    );
+  async createCheckout(order) {
+    const key = process.env.MONRI_MERCHANT_KEY;
+    const authenticityToken = process.env.MONRI_AUTH_TOKEN;
+    if (!key || !authenticityToken) {
+      throw new Error("[payments] Monri credentials are missing.");
+    }
+
+    const amount = String(Math.round(order.amount * 100));
+    const currency = order.currency.toUpperCase();
+    const orderNumber = `TZ-${String(order.id).padStart(5, "0")}`;
+    const digest = createHash("sha512")
+      .update(`${key}${orderNumber}${amount}${currency}`)
+      .digest("hex");
+    const test = process.env.MONRI_ENV !== "production";
+    const fields: Record<string, string> = {
+      amount,
+      currency,
+      order_number: orderNumber,
+      order_info: order.item.slice(0, 100),
+      transaction_type: "purchase",
+      authenticity_token: authenticityToken,
+      digest,
+      language: "hr",
+      ch_email: order.buyerEmail.slice(0, 100),
+      ch_country: "RS",
+    };
+    if (order.buyer?.name) fields.ch_full_name = order.buyer.name.slice(0, 30);
+    if (order.buyer?.phone) fields.ch_phone = order.buyer.phone.slice(0, 30);
+    if (order.buyer?.address) fields.ch_address = order.buyer.address.slice(0, 100);
+    if (order.buyer?.city) fields.ch_city = order.buyer.city.slice(0, 30);
+
+    return {
+      kind: "form",
+      provider: "monri",
+      action: test ? "https://ipgtest.monri.com/v2/form" : "https://ipg.monri.com/v2/form",
+      fields,
+    };
   },
 };

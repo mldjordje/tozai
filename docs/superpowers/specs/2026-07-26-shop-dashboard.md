@@ -25,28 +25,33 @@ funkcionalno 1‑na‑1 → `flow='hours'`, `hours=1`, `kind='consulting'`.
 Sati se ne mešaju sa edukacijom (različita cena po satu) — razdvojeni su
 `hour_entries.kind`.
 
-## 2. Flow A — projekat (AI klipovi)
+## 2. Flow A — projekat (AI klipovi, privatna procena)
 
-1. Kartica na `#paketi` → `/porudzbina/[slug]`
-2. **Prijava** — Google OAuth obavezna. Projekat mora imati vlasnika koji ga
-   prati u dashboardu.
-3. **Podaci za račun** — fizičko / pravno lice. Pravno: naziv, PIB, MB, adresa,
-   grad. Snima se na `users` i snapshot-uje u `orders.billing` (podaci na
-   fakturi se ne smeju menjati kad korisnik kasnije edituje profil).
-4. **Pregled + saglasnost** (Uslovi korišćenja) → plaćanje
-5. **Webhook `paid`** (jedna funkcija, `lib/payments/fulfill.ts`) radi
+> Konačna odluka klijenta 26.07.2026: AI video nema javnu niti fiksnu cenu.
+> Direktni checkout iz stare verzije ovog dokumenta više nije važeći.
+
+1. Kartica na `#paketi` nema cenu → `/porudzbina/[slug]`.
+2. **Prijava** — Google OAuth obavezna.
+3. **Upit** — fizičko/pravno lice, ideja, broj klipova, naziv biznisa, kratak
+   opis biznisa i okvirni budžet u EUR.
+4. Admin u `/admin/video-zahtevi` pregleda upit i dodeljuje privatnu cenu,
+   potrebno vreme izrade, broj revizija, važenje ponude i napomenu.
+5. Sistem trajno redi email u `email_outbox` i šalje ga odmah kada je email
+   provider podešen. Kupac procenu vidi u `/nalog/zahtevi`.
+6. Kupac prihvata ili odbija procenu. Prihvatanje idempotentno kreira jednu
+   `orders` porudžbinu i otvara Monri hosted payment form.
+7. **Monri callback `paid`** poziva `lib/payments/fulfill.ts`, koji radi
    transakciono:
    - `orders.status='paid'`, `paid_at`
    - faktura: broj `TZ-<godina>-<redni>`, PDF u blob storage, red u `invoices`
-   - `projects` red, `status='onboarding'`
-   - email: zahvalnica + faktura + onboarding link
-6. Redirect na `/nalog/projekti/[id]` → **onboarding forma**: opis projekta,
-   ciljna publika, ton, referentni linkovi, materijali (WeTransfer link ili
-   WhatsApp/Viber kontakt). Submit → `status='u_izradi'`.
-7. **Timeline** vidljiv klijentu: `onboarding → u_izradi → na_reviziji →
+   - `projects` red sa originalnim upitom, dogovorenim rokom i revizijama,
+     `status='onboarding'`.
+8. Kupac u `/nalog/projekti/[id]` bira samo predaju materijala: WeTransfer link
+   ili WhatsApp kontakt. Submit → `status='u_izradi'`.
+9. **Timeline** vidljiv klijentu: `onboarding → u_izradi → na_reviziji →
    isporuceno`. Svaka promena → red u `project_updates` + email
    (`project_status` šablon).
-8. **Isporuka**: admin dodaje `project_deliverables` (link/fajl). Klijent skida
+10. **Isporuka**: admin dodaje `project_deliverables` (link/fajl). Klijent skida
    i može tražiti reviziju — broj rundi je limit iz paketa
    (`projects.revisions_left`).
 
@@ -83,7 +88,23 @@ potrošeno") nisu izvodljivi. Zamenjuje je `hour_entries` (± redovi) plus **vie
 
 ## 4. Plaćanje
 
-Monri kredencijali još ne postoje. Checkout se gradi na pluggable provideru:
+Monri kredencijali još ne postoje. Hosted WebPay forma je implementirana, ali
+se aktivira tek kada postoje:
+
+```
+MONRI_MERCHANT_KEY
+MONRI_AUTH_TOKEN
+MONRI_ENV=test|production
+```
+
+U Monri merchant podešavanjima Success URL mora biti
+`https://<domen>/api/payments/monri/success`, a Cancel URL
+`https://<domen>/nalog/porudzbine?placanje=otkazano`.
+
+Email procene se šalje preko Resend kada postoje `RESEND_API_KEY` i
+`EMAIL_FROM`; bez njih ostaje u `email_outbox` za retry.
+
+Checkout je na pluggable provideru:
 
 ```
 lib/payments/provider.ts   interface: createCheckout(order) -> {redirectUrl}

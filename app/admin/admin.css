@@ -529,3 +529,27 @@ button.adm__chip:disabled{opacity:.3;cursor:default;text-decoration:line-through
 .adm__scal-swatch--override{border-color:var(--neon);background:rgba(46,107,255,.3)}
 .adm__scal-editor{margin-top:20px}
 @media(max-width:560px){.adm__scal-day{min-height:50px;border-radius:6px}.adm__scal-hours{font-size:9px}}
+/* ---- AI video quote inbox ---- */
+.adm__video{display:flex;flex-direction:column;gap:20px}
+.adm__video h1{margin:0;font-size:20px;text-transform:uppercase;letter-spacing:.06em}
+.adm__video-row{display:block}
+.adm__video-main{min-width:0}
+.adm__video-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}
+.adm__video-head>div{display:flex;flex-direction:column;gap:4px}
+.adm__video-head strong{font-size:16px}
+.adm__video-head span{color:var(--muted);font-size:12px}
+.adm__video-meta{display:flex;flex-wrap:wrap;gap:8px 16px;margin-top:12px;color:var(--muted);font-size:11px}
+.adm__video-meta a{color:var(--neon)}
+.adm__video-brief{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:16px 0}
+.adm__video-brief p{margin:0;padding:14px;border:1px solid var(--line);border-radius:6px;background:rgba(255,255,255,.02);color:#ddd;font-size:13px;line-height:1.55;white-space:pre-line}
+.adm__video-brief b{display:block;margin-bottom:7px;color:var(--muted);font-size:9px;letter-spacing:.14em;text-transform:uppercase}
+.adm__video-quote-summary{margin:10px 0;color:var(--neon);font-size:12px}
+.adm__video-editor{margin-top:16px;padding:16px;border:1px solid rgba(108,148,255,.4);border-radius:8px;background:rgba(46,107,255,.06)}
+.adm__video-fields{display:grid;grid-template-columns:repeat(4,minmax(120px,1fr));gap:12px}
+.adm__video-fields label,.adm__video-note{display:flex;flex-direction:column;gap:6px;color:var(--muted);font-size:9px;letter-spacing:.12em;text-transform:uppercase}
+.adm__video-fields input,.adm__video-note textarea{padding:10px;border:1px solid var(--line);border-radius:5px;background:rgba(255,255,255,.04);color:#fff;font:inherit;font-size:13px;letter-spacing:normal;text-transform:none;color-scheme:dark}
+.adm__video-note{margin-top:12px}
+.adm__video-note textarea{resize:vertical}
+.adm__video-editor .adm__resched-confirm{margin-top:12px}
+@media(max-width:800px){.adm__video-fields{grid-template-columns:1fr 1fr}.adm__video-brief{grid-template-columns:1fr}}
+@media(max-width:480px){.adm__video-fields{grid-template-columns:1fr}.adm__video-head{flex-direction:column}}

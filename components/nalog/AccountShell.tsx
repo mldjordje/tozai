@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useState, type ReactNode } from "react";
 import {
   CalendarClock,
+  ClipboardList,
   FileText,
   LayoutDashboard,
   LogOut,
@@ -19,6 +20,7 @@ import type { SessionUser } from "@/lib/auth/user-token";
 const LINKS = [
   { href: "/nalog", label: "Pregled", icon: LayoutDashboard },
   { href: "/nalog/projekti", label: "Projekti", icon: Sparkles },
+  { href: "/nalog/zahtevi", label: "Upiti i procene", icon: ClipboardList },
   { href: "/nalog/edukacija", label: "Edukacija", icon: CalendarClock },
   { href: "/nalog/porudzbine", label: "Porudžbine", icon: Receipt },
   { href: "/nalog/fakture", label: "Fakture", icon: FileText },

@@ -52,7 +52,7 @@ export const CLIP_PACKAGES: ClipPackage[] = [
       "Osnovni brendiranje i tekst",
       "1 krug revizija",
     ],
-    cta: "Naruči",
+    cta: "Pošalji upit",
   },
   {
     id: "pro",
@@ -67,7 +67,7 @@ export const CLIP_PACKAGES: ClipPackage[] = [
       "2 kruga revizija",
       "Prioritetna isporuka",
     ],
-    cta: "Naruči",
+    cta: "Pošalji upit",
     featured: true,
   },
   {
@@ -82,7 +82,7 @@ export const CLIP_PACKAGES: ClipPackage[] = [
       "Neograničene sitne izmene",
       "Namenski kontakt",
     ],
-    cta: "Kontakt",
+    cta: "Pošalji upit",
   },
 ];
 
@@ -101,6 +101,7 @@ export type PackageRow = {
   cta_label: string | null;
   /** Checkout slug; null for rows created before the shop layer landed. */
   slug?: string | null;
+  hours?: number | null;
 };
 
 function formatPrice(price: number | null, currency: string): string {
@@ -118,7 +119,7 @@ export function toClipPackage(p: PackageRow): ClipPackage {
     priceNote: p.unit ?? undefined,
     headline: p.description ?? "",
     features: p.features,
-    cta: p.cta_label ?? "Naruči",
+    cta: p.cta_label ?? "Pošalji upit",
     featured: p.highlighted,
     slug: p.slug ?? undefined,
   };
@@ -126,7 +127,8 @@ export function toClipPackage(p: PackageRow): ClipPackage {
 
 // education rail → 1-on-1 hour-pack card (#edukacija).
 export function toHourPack(p: PackageRow): HourPack {
-  const hours = Number((p.name.match(/\d+/) ?? p.unit?.match(/\d+/) ?? [])[0]) || 0;
+  const hours =
+    (p.hours ?? Number((p.name.match(/\d+/) ?? p.unit?.match(/\d+/) ?? [])[0])) || 0;
   const perHour =
     hours > 0 && p.price != null && p.currency === "EUR"
       ? `€${Math.round(p.price / hours)} / sat`

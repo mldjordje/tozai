@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import CheckoutFlow from "@/components/checkout/CheckoutFlow";
+import VideoInquiryFlow from "@/components/checkout/VideoInquiryFlow";
 import { getPackageBySlug } from "@/lib/packages";
 import { getSessionUser } from "@/lib/auth/user-session";
 import { getProfile } from "@/lib/account";
@@ -55,11 +56,22 @@ export default async function CheckoutPage({
             </>
           ) : (
             <>
-              Poručivanje <em>paketa</em>.
+              Pošalji <em>upit</em>.
             </>
           )}
         </h1>
 
+        {pkg.flow === "project" ? (
+          <VideoInquiryFlow
+            pkg={{
+              slug: pkg.slug ?? slug,
+              name: pkg.name,
+              description: pkg.description,
+              features: pkg.features,
+            }}
+            user={user ? { email: user.email, name: user.name ?? null } : null}
+          />
+        ) : (
         <CheckoutFlow
           pkg={{
             slug: pkg.slug ?? slug,
@@ -89,6 +101,7 @@ export default async function CheckoutPage({
           }
           cardPaymentLive={isCardPaymentConfigured()}
         />
+        )}
       </div>
     </main>
   );

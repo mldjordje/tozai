@@ -45,7 +45,8 @@ type ManualIntent = {
   payee: { name: string | null; account: string | null; pib: string | null; mb: string | null };
 };
 type RedirectIntent = { kind: "redirect"; redirectUrl: string };
-type Intent = ManualIntent | RedirectIntent;
+type FormIntent = { kind: "form"; action: string; fields: Record<string, string> };
+type Intent = ManualIntent | RedirectIntent | FormIntent;
 
 function money(amount: number | null, currency: string) {
   if (amount == null) return "€—";
@@ -113,6 +114,21 @@ export default function CheckoutFlow({
       }
       if (data.intent?.kind === "redirect") {
         window.location.href = data.intent.redirectUrl;
+        return;
+      }
+      if (data.intent?.kind === "form") {
+        const form = document.createElement("form");
+        form.method = "POST";
+        form.action = data.intent.action;
+        Object.entries(data.intent.fields as Record<string, string>).forEach(([name, value]) => {
+          const input = document.createElement("input");
+          input.type = "hidden";
+          input.name = name;
+          input.value = value;
+          form.appendChild(input);
+        });
+        document.body.appendChild(form);
+        form.submit();
         return;
       }
       setPlaced({ orderId: data.orderId, intent: data.intent });

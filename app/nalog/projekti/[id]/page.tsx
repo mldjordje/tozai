@@ -10,11 +10,16 @@ import {
   formatDay,
   projectTone,
 } from "@/lib/format";
+import MaterialsForm from "@/components/nalog/MaterialsForm";
 
 export const dynamic = "force-dynamic";
 
 // Labels for the brief keys the onboarding form writes into projects.brief.
 const BRIEF_LABEL: Record<string, string> = {
+  idea: "Ideja za klipove",
+  biznis: "Biznis / brend",
+  o_biznisu: "Kratko o biznisu",
+  broj_klipova: "Broj klipova",
   opis: "Opis projekta",
   publika: "Ciljna publika",
   ton: "Ton i stil",
@@ -96,13 +101,26 @@ export default async function ProjekatPage({
         })}
       </ol>
 
-      {project.status === "onboarding" && !project.brief_done && (
+      {project.status === "onboarding" && !project.materials_method && (
         <Card className="border-accent/30 bg-accent/5">
-          <p className="font-medium text-fg">Onboarding još nije popunjen</p>
+          <p className="font-medium text-fg">Dodaj materijale za izradu</p>
           <p className="mt-2 text-sm text-muted">
-            Da bismo krenuli u izradu, treba nam opis projekta, ciljna publika, ton i
-            materijali. Forma stiže u sledećoj fazi — do tada nam pošalji podatke na
-            email iz potvrde porudžbine.
+            Ideju već imamo iz upita. Sada izaberi kako želiš da nam predaš
+            fajlove, pa projekat odmah prelazi u izradu.
+          </p>
+          <div className="mt-6">
+            <MaterialsForm projectId={project.id} />
+          </div>
+        </Card>
+      )}
+
+      {project.materials_method && (
+        <Card>
+          <p className="text-xs uppercase tracking-[0.14em] text-faint">Materijali</p>
+          <p className="mt-2 text-sm text-fg">
+            {project.materials_method === "wetransfer"
+              ? "WeTransfer link je primljen."
+              : "WhatsApp kontakt je primljen."}
           </p>
         </Card>
       )}

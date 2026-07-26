@@ -51,9 +51,9 @@ export default async function ProjektiPage() {
                   tone={projectTone(p.status)}
                 />
               </div>
-              {p.status === "onboarding" && !p.brief_done && (
+              {p.status === "onboarding" && !p.materials_method && (
                 <p className="mt-3 text-sm text-accent-soft">
-                  Popuni onboarding formu da krenemo →
+                  Dodaj materijale da krenemo →
                 </p>
               )}
             </Link>

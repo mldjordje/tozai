@@ -25,6 +25,8 @@ export type Package = {
   flow: string;
   /** Hours credited for flow='hours'. Null for project packages. */
   hours: number | null;
+  /** Revision rounds included in a quoted project. */
+  revisions: number;
 };
 
 // Active packages for the public site, ordered for display. Falls back to an
@@ -36,12 +38,12 @@ export async function getPublicPackages(grp?: string): Promise<Package[]> {
       ? await sql`
           SELECT id, grp, category, name, price::float8 AS price, currency, unit,
                  description, features, highlighted, cta_label, cta_href, sort, active,
-                 slug, flow, hours::float8 AS hours
+                 slug, flow, hours::float8 AS hours, revisions
           FROM packages WHERE active AND grp = ${grp} ORDER BY sort, id`
       : await sql`
           SELECT id, grp, category, name, price::float8 AS price, currency, unit,
                  description, features, highlighted, cta_label, cta_href, sort, active,
-                 slug, flow, hours::float8 AS hours
+                 slug, flow, hours::float8 AS hours, revisions
           FROM packages WHERE active ORDER BY grp, sort, id`;
     return rows as Package[];
   } catch {
@@ -55,7 +57,7 @@ export async function getAllPackages(): Promise<Package[]> {
   const rows = await sql`
     SELECT id, grp, category, name, price::float8 AS price, currency, unit,
            description, features, highlighted, cta_label, cta_href, sort, active,
-           slug, flow, hours::float8 AS hours
+           slug, flow, hours::float8 AS hours, revisions
     FROM packages ORDER BY grp, sort, id`;
   return rows as Package[];
 }
@@ -68,7 +70,7 @@ export async function getPackageBySlug(slug: string): Promise<Package | null> {
     const rows = (await sql`
       SELECT id, grp, category, name, price::float8 AS price, currency, unit,
              description, features, highlighted, cta_label, cta_href, sort, active,
-             slug, flow, hours::float8 AS hours
+             slug, flow, hours::float8 AS hours, revisions
       FROM packages WHERE active AND slug = ${slug} LIMIT 1`) as Package[];
     return rows[0] ?? null;
   } catch {

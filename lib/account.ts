@@ -21,6 +21,9 @@ export type AccountProject = {
   brief_done: boolean;
   revisions_left: number;
   due_date: string | null;
+  materials_method: string | null;
+  materials_value: string | null;
+  materials_received_at: string | null;
   created_at: string;
 };
 
@@ -87,7 +90,8 @@ export async function getProjects(userId: number): Promise<AccountProject[]> {
   const sql = getSql();
   return (await sql`
     SELECT id, title, status, (brief IS NOT NULL) AS brief_done,
-           revisions_left, due_date::text AS due_date, created_at
+           revisions_left, due_date::text AS due_date, materials_method,
+           materials_value, materials_received_at, created_at
     FROM projects WHERE user_id = ${userId}
     ORDER BY created_at DESC
   `) as AccountProject[];
@@ -125,7 +129,8 @@ export async function getProjectDetail(
   const sql = getSql();
   const rows = (await sql`
     SELECT p.id, p.title, p.status, (p.brief IS NOT NULL) AS brief_done, p.brief,
-           p.revisions_left, p.due_date::text AS due_date, p.created_at, p.order_id,
+           p.revisions_left, p.due_date::text AS due_date, p.materials_method,
+           p.materials_value, p.materials_received_at, p.created_at, p.order_id,
            pk.name AS package_name
     FROM projects p
     LEFT JOIN packages pk ON pk.id = p.package_id

@@ -6,9 +6,9 @@ import CTAButton from "@/components/ui/CTAButton";
 import { CLIP_PACKAGES, type ClipPackage } from "@/lib/content/offerings";
 
 /**
- * #paketi — buy AI-clip packages. Tiers/prices come from the admin panel via
- * the `packages` table (passed as props by the server page); falls back to the
- * static CLIP_PACKAGES placeholders when the DB has no active service rows.
+ * #paketi — choose an AI-video scope and send a brief. Project pricing is
+ * intentionally private because it depends on the requested clip count,
+ * complexity and turnaround.
  */
 export default function Packages({ packages = CLIP_PACKAGES }: { packages?: ClipPackage[] }) {
   return (
@@ -19,13 +19,13 @@ export default function Packages({ packages = CLIP_PACKAGES }: { packages?: Clip
       <div className="w-full max-w-6xl">
         <p className="eyebrow mb-5">02 — Paketi</p>
         <KineticTitle
-          text="Kupi AI klipove. *Bez čekanja*."
+          text="AI video po meri. *Ponuda po briefu*."
           className="display mb-5 max-w-2xl text-4xl md:text-7xl"
         />
         <Reveal delay={0.1}>
           <p className="mb-16 max-w-xl text-muted md:mb-20 md:text-lg">
-            Izaberi paket, mi napravimo klipove za tvoj brend. Vertikalni
-            format spreman za objavu.
+            Izaberi smer i pošalji ideju. Dobijaš privatnu cenu i realno vreme
+            izrade pre nego što bilo šta potvrdiš.
           </p>
         </Reveal>
 
@@ -49,15 +49,10 @@ export default function Packages({ packages = CLIP_PACKAGES }: { packages?: Clip
                   {pkg.name}
                 </div>
 
-                <div className="mt-5 flex items-end gap-2">
-                  <span className="text-4xl font-semibold tracking-tighter tabular-nums md:text-5xl">
-                    {pkg.price}
+                <div className="mt-5">
+                  <span className="inline-flex rounded-full border border-line px-3 py-1.5 text-xs uppercase tracking-[0.16em] text-accent-soft">
+                    Privatna procena
                   </span>
-                  {pkg.priceNote && (
-                    <span className="mb-1.5 text-sm text-muted">
-                      {pkg.priceNote}
-                    </span>
-                  )}
                 </div>
 
                 <div className="mt-2 text-sm text-fg/90">{pkg.headline}</div>
@@ -95,8 +90,10 @@ export default function Packages({ packages = CLIP_PACKAGES }: { packages?: Clip
           ))}
         </div>
 
-        {/* TODO(admin): prices above are placeholders; wire to admin-editable
-            source (see lib/content/offerings.ts). */}
+        <p className="mt-8 max-w-2xl text-sm leading-relaxed text-faint">
+          Slanje upita je besplatno i ne obavezuje te na kupovinu. Cena je
+          vidljiva samo na tvom nalogu, nakon procene.
+        </p>
       </div>
     </section>
   );

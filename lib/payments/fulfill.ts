@@ -39,6 +39,7 @@ type OrderRow = {
   flow: string;
   kind: string | null;
   hours: number | null;
+  quote_request_id: number | null;
   paid_at: string | null;
 };
 
@@ -50,7 +51,7 @@ export async function fulfillPaidOrder(
 
   const before = (await sql`
     SELECT id, user_id, package_id, item, amount::float8 AS amount, currency,
-           flow, kind, hours::float8 AS hours, paid_at
+           flow, kind, hours::float8 AS hours, paid_at, quote_request_id
     FROM orders WHERE id = ${orderId}
   `) as OrderRow[];
   const order = before[0];
@@ -113,9 +114,32 @@ export async function fulfillPaidOrder(
     // limit the buyer actually paid for.
     if (order.user_id) {
       const created = (await sql`
-        INSERT INTO projects (order_id, user_id, package_id, title, status, revisions_left)
-        SELECT ${orderId}, ${order.user_id}, ${order.package_id}, ${order.item}, 'onboarding',
-               COALESCE((SELECT revisions FROM packages WHERE id = ${order.package_id}), 2)
+        INSERT INTO projects (
+          order_id, user_id, package_id, title, status, brief, revisions_left, due_date
+        )
+        SELECT ${orderId}, ${order.user_id}, ${order.package_id},
+               COALESCE(
+                 (SELECT project_title FROM video_requests WHERE id = ${order.quote_request_id}),
+                 ${order.item}
+               ),
+               'onboarding',
+               (
+                 SELECT brief || jsonb_build_object(
+                   'biznis', business_name,
+                   'o_biznisu', business_description,
+                   'broj_klipova', clip_count
+                 )
+                 FROM video_requests WHERE id = ${order.quote_request_id}
+               ),
+               COALESCE(
+                 (SELECT revisions FROM video_requests WHERE id = ${order.quote_request_id}),
+                 (SELECT revisions FROM packages WHERE id = ${order.package_id}),
+                 2
+               ),
+               (
+                 SELECT CURRENT_DATE + turnaround_days
+                 FROM video_requests WHERE id = ${order.quote_request_id}
+               )
         WHERE NOT EXISTS (SELECT 1 FROM projects WHERE order_id = ${orderId})
         RETURNING id
       `) as { id: number }[];
@@ -123,7 +147,7 @@ export async function fulfillPaidOrder(
       if (projectId) {
         await sql`
           INSERT INTO project_updates (project_id, status, note, author)
-          VALUES (${projectId}, 'onboarding', 'Porudžbina plaćena — popuni brief da krene izrada.', 'system')
+          VALUES (${projectId}, 'onboarding', 'Porudžbina je plaćena — dodaj materijale da krene izrada.', 'system')
         `;
       } else {
         const existing = (await sql`

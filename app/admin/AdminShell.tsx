@@ -14,6 +14,7 @@ import {
   FileText,
   BarChart3,
   Settings,
+  ClipboardList,
   Menu,
   X,
 } from "lucide-react";
@@ -26,6 +27,7 @@ type NavItem = {
 
 const NAV: NavItem[] = [
   { href: "/admin", label: "Pregled", icon: LayoutDashboard },
+  { href: "/admin/video-zahtevi", label: "Video upiti", icon: ClipboardList },
   { href: "/admin/klijenti", label: "Klijenti", icon: Users },
   { href: "/admin/paketi", label: "Paketi", icon: Tag },
   { href: "/admin/portfolio", label: "Portfolio", icon: Images },
