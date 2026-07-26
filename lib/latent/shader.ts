@@ -243,16 +243,19 @@ vec3 formation(float i, vec3 h, int k) {
 /** Per-formation brightness weight. Picking out nuclei, cluster cores and
  *  branch tips is what turns an even dust cloud into a legible structure.
  *
- *  The range is deliberately narrow. Accumulation is additive, so a weight of 2
+ *  The range is deliberately narrow — narrower still since the accents were the
+ *  source of the cheap-sparkle read. Accumulation is additive, so a weight of 2
  *  in an already dense region does not read as "twice as bright" — it reads as
- *  clipped white, and every gradient the lighting put there is lost. Tone is
- *  the rig's job; these weights only bias it. */
+ *  clipped white, and every gradient the lighting put there is lost. Worse, a
+ *  hot accent scattered at random through the form is exactly what glitter is:
+ *  brightness uncorrelated with the shape. Tone is the rig's job; these weights
+ *  only bias it, and they now bias it gently. */
 float nodeWeight(vec3 h, int k) {
-  if (k == 0) return h.z < 0.20 ? 1.25 : 0.88;      // nucleus
-  if (k == 1) return 0.78 + step(0.94, h.z) * 0.62; // lattice accents
-  if (k == 3) return 0.84 + step(0.88, h.y) * 0.60; // cluster cores
-  if (k == 4) return h.z > 0.90 ? 1.30 : 0.76;      // branch tips
-  if (k == 5) return h.x < 0.35 ? 1.18 : 0.76;      // the core itself
+  if (k == 0) return h.z < 0.20 ? 1.10 : 0.90;      // nucleus
+  if (k == 1) return 0.80 + step(0.94, h.z) * 0.40; // lattice accents
+  if (k == 3) return 0.86 + step(0.88, h.y) * 0.40; // cluster cores
+  if (k == 4) return h.z > 0.90 ? 1.12 : 0.80;      // branch tips
+  if (k == 5) return h.x < 0.35 ? 1.08 : 0.80;      // the core itself
   return 1.0;
 }
 
@@ -296,12 +299,18 @@ void main() {
   //    is crisp rather than soggy. On first load the spring is near zero and
   //    ramps in, so the page opens on latent chaos that visibly RESOLVES as
   //    the preloader lifts, rather than on an already-finished picture.
-  vec3 f = (tgt - p) * (2.4 + uSettle * 3.4) * (0.04 + 0.96 * uBoot);
+  vec3 f = (tgt - p) * (2.7 + uSettle * 4.1) * (0.04 + 0.96 * uBoot);
 
   // 2. Curl flow. Peaks mid-morph, plus a permanent trace so a settled field
-  //    still shimmers instead of freezing into a dead diagram. The boot ramp
-  //    adds the initial churn.
-  float turb = uTurb + 4.0 * fr * (1.0 - fr) + 0.035 + (1.0 - uBoot) * 1.35;
+  //    breathes instead of freezing into a dead diagram. The boot ramp adds the
+  //    initial churn.
+  //
+  //    That trace used to be nearly twice this. A settled form whose particles
+  //    keep wandering is a form whose every particle keeps crossing the
+  //    specular and bloom thresholds — which is the shimmer that made the whole
+  //    thing read as cheap. Stillness is what costs money: expensive lighting
+  //    needs something that holds still long enough to be lit.
+  float turb = uTurb + 4.0 * fr * (1.0 - fr) + 0.018 + (1.0 - uBoot) * 1.35;
   f += curl(p * 0.62, uTime * 0.10) * turb * 2.4;
 
   // 3. Cursor vortex, in VIEW space — the user aims at what they can see, and
@@ -462,9 +471,13 @@ const vec3 FILL_DIR = normalize(vec3( 0.74, -0.30,  0.36));   // lower right, we
 const vec3 RIM_DIR  = normalize(vec3( 0.22,  0.52, -0.82));   // above and behind
 const vec3 KEY_COL  = vec3(1.00, 0.965, 0.915);               // tungsten-warm
 const vec3 FILL_COL = vec3(0.42, 0.56, 0.92);                 // cool bounce
-const vec3 RIM_COL  = vec3(0.72, 0.84, 1.00);
+const vec3 RIM_COL  = vec3(0.66, 0.80, 1.00);
 const vec3 ALBEDO   = vec3(0.55, 0.575, 0.64);                // graphite, not white
 const vec3 VIEW_DIR = vec3(0.0, 0.0, 1.0);
+// Aerial perspective: the far side of the volume cools and loses contrast, the
+// way any depth of real atmosphere does. Free, and it is half of why a
+// photographed object looks like it occupies space.
+const vec3 DEPTH_COL = vec3(0.62, 0.74, 1.00);
 
 void main() {
   // Work in the sprite's velocity frame so the falloff can be elongated along
@@ -496,28 +509,49 @@ void main() {
   // is the most recognisable studio move there is.
   float rim  = pow(1.0 - abs(dot(n, VIEW_DIR)), 2.6) * max(dot(n, RIM_DIR), 0.0);
 
-  vec3 lit = ALBEDO * (0.14 + KEY_COL * key + FILL_COL * fill * 0.30)
-           + RIM_COL * rim * 0.58;
+  // Ambient dropped hard. A lifted floor is what makes a dark render look
+  // cheap: it greys out the unlit side so the key has nothing to be brighter
+  // THAN, and every particle ends up carrying roughly the same level — which is
+  // the flat, twinkly look. Let the shadow side go almost to black and the key
+  // does the describing.
+  vec3 lit = ALBEDO * (0.055 + KEY_COL * key * 1.14 + FILL_COL * fill * 0.26)
+           + RIM_COL * rim * 0.82;
 
-  // Specular on the bead, gated by node weight, so the glints land on the
-  // structural accents — nuclei, cluster cores, branch tips — instead of
-  // firing everywhere at once. Coherent highlights read as polish; scattered
-  // ones read as glitter.
+  // Specular on the bead — but gated TWICE, and that second gate is the whole
+  // fix for "why does this glitter".
+  //
+  // The bead normal is reconstructed per sprite pixel, so on its own the
+  // highlight fires wherever a particle's own little sphere happens to face the
+  // key. Across a quarter of a million independently drifting particles that is
+  // a field of random blinks, i.e. tinsel. Gating it on the FORM normal as well
+  // confines the whole set of highlights to the one patch of the volume that
+  // genuinely faces the light: a single coherent sheen that travels across the
+  // shape as the camera orbits. Same instruction count, completely different
+  // read — polished metal instead of Christmas lights.
   vec3 h = normalize(KEY_DIR + VIEW_DIR);
-  float spec = pow(max(dot(nBead, h), 0.0), 48.0) * smoothstep(0.75, 1.45, vNode);
-  lit += KEY_COL * spec * 1.25;
+  float sheen = smoothstep(0.42, 0.94, dot(n, h));
+  float spec = pow(max(dot(nBead, h), 0.0), 108.0)
+             * smoothstep(0.98, 1.12, vNode)
+             * sheen;
+  lit += KEY_COL * spec * 0.55;
 
-  // Motion is TEMPERATURE, not a flashbulb. The old version drove brightness
-  // straight to white with speed, which is exactly the cheap sparkle: a blink
-  // uncorrelated with the form. Now speed warms the particle and adds a small
-  // amount of light on top of the shading, so streaks still read in flight.
+  // Motion is TEMPERATURE, not a flashbulb. Driving brightness at white with
+  // speed is exactly the cheap sparkle: a blink uncorrelated with the form. So
+  // speed warms the particle and adds only a trace of light, enough that a
+  // streak still reads in flight and nothing more.
   float sp = clamp(vSpeed * 2.3, 0.0, 1.0);
   lit = mix(lit, lit * vec3(1.10, 1.02, 0.92), sp);
-  lit += vec3(1.0, 0.97, 0.93) * sp * sp * 0.22;
+  lit += vec3(1.0, 0.97, 0.93) * sp * sp * 0.06;
+
+  // Aerial perspective. vFade already dims with depth; this also cools and
+  // flattens the far side, so the volume separates front-to-back instead of
+  // reading as one sheet of dust at varying brightness.
+  float near = clamp(vFade, 0.0, 1.0);
+  lit = mix(lit * DEPTH_COL * 0.72, lit, near);
 
   // vGain compensates for the reduced particle count on mobile: accumulation
   // is linear, so a quarter of the points needs four times the light.
-  float lum = (0.62 + sp * 0.34) * vNode * vFade * vGain;
+  float lum = (0.66 + sp * 0.10) * vNode * vFade * vGain;
 
   // Energy is conserved as the sprite stretches, so streaks thin out instead
   // of turning into bright smears — and likewise as it defocuses, so a bokeh
@@ -569,19 +603,27 @@ void main() {
 }
 `;
 
-/** Separable gaussian, nine taps folded into five linear ones. */
+/** Separable gaussian, nine taps folded into five linear ones.
+ *
+ *  uRadius scales the tap spacing so the same program can be run twice per axis
+ *  at different widths. Two octaves of blur is what turns a bloom into
+ *  HALATION: a tight core glow plus a wide, very soft bleed. A single narrow
+ *  pass gives every bright particle its own small halo — which is glitter with
+ *  extra steps — while a wide bleed pools light across the whole form and reads
+ *  as an actual light source in the room. */
 export const blurShader = /* glsl */ `#version 300 es
 precision highp float;
 
 uniform sampler2D uSrc;
 uniform vec2 uTexSize;
 uniform vec2 uDir;        // (1,0) or (0,1), in texels
+uniform float uRadius;    // tap spacing multiplier
 
 out vec4 outColor;
 
 void main() {
   vec2 uv = gl_FragCoord.xy / uTexSize;
-  vec2 t = uDir / uTexSize;
+  vec2 t = uDir * uRadius / uTexSize;
   vec3 c = texture(uSrc, uv).rgb * 0.227027;
   c += (texture(uSrc, uv + t * 1.3846154).rgb + texture(uSrc, uv - t * 1.3846154).rgb) * 0.3162162;
   c += (texture(uSrc, uv + t * 3.2307692).rgb + texture(uSrc, uv - t * 3.2307692).rgb) * 0.0702703;
@@ -634,7 +676,10 @@ void main() {
     texture(uScene, uv).g,
     texture(uScene, uv - off).b);
 
-  c = c * uExposure + texture(uBloom, uv).rgb * uBloomAmt;
+  // Bloom is sampled at a slight offset from the scene's own aberration so the
+  // halation is not a perfectly registered copy of the highlights; real glass
+  // never lines them up exactly.
+  c = c * uExposure + texture(uBloom, uv + off * 0.5).rgb * uBloomAmt;
 
   // No anamorphic streak here on purpose. Wide horizontal taps of a
   // quarter-res bloom buffer ghost into visible horizontal lines across the
@@ -652,14 +697,20 @@ void main() {
 
   c = aces(c);
 
+  // Contrast, applied after the curve where it behaves like a print grade
+  // rather than like exposure. A soft S around the mids is the single cheapest
+  // way to stop a dark scene reading as a grey haze with sparkles in it: the
+  // shadows commit to black, so the lit side has somewhere to be bright from.
+  c = clamp((c - 0.5) * 1.16 + 0.5 - 0.028, 0.0, 1.0);
+
   float luma = dot(c, LUMA);
-  c += vec3(0.011, 0.014, 0.024) * (1.0 - luma);   // charcoal floor, not dead void
+  c += vec3(0.008, 0.010, 0.019) * (1.0 - luma);   // charcoal floor, not dead void
 
   // Vignette, elliptical and shaped rather than the old flat quadratic: it
   // holds the centre open and falls away hard in the corners, which is what
   // pulls the eye onto the subject.
   vec2 e = q * vec2(1.06, 1.24);
-  c *= mix(0.46, 1.0, pow(clamp(1.0 - dot(e, e) * 1.15, 0.0, 1.0), 1.5));
+  c *= mix(0.36, 1.0, pow(clamp(1.0 - dot(e, e) * 1.15, 0.0, 1.0), 1.45));
 
   // Film grain: strongest in the mids, backing off in the blacks and the
   // speculars, the way real stock behaves.

@@ -23,15 +23,35 @@ import {
   blurShader,
   displayShader,
 } from "./shader";
-import { getSafeCanvasSize } from "./quality";
+import {
+  applyRendererClass,
+  classifyRenderer,
+  getSafeCanvasSize,
+  PerfGovernor,
+  type LatentProfile,
+  type RendererClass,
+} from "./quality";
 
 export interface LatentOptions {
-  /** Particle texture edge — 512 = 262k particles (desktop), 256 = 65k (mobile). */
-  texDim?: number;
-  /** Device-pixel-ratio cap. */
-  maxDpr?: number;
-  /** Maximum pixels in the full-screen HDR accumulation texture. */
-  maxRenderPixels?: number;
+  /** Opening quality bid, from selectLatentProfile. The engine narrows it once
+   *  the GPU's own renderer string is known. */
+  profile: LatentProfile;
+  /** Called when the field gives up — the caller should show its fallback. */
+  onGiveUp?: () => void;
+}
+
+/** What the engine ended up doing, for the debug overlay and for support. */
+export interface LatentDiagnostics {
+  profile: string;
+  renderer: string;
+  rendererClass: RendererClass;
+  particles: number;
+  step: number;
+  renderScale: number;
+  fpsCap: number;
+  fps: number;
+  bufferW: number;
+  bufferH: number;
 }
 
 // Focal length, mirrored from pointVertexShader. The camera distance is no
@@ -117,6 +137,17 @@ export class LatentEngine {
   private maxTextureSize = 4096;
   private renderDpr = 1;
 
+  // Runtime quality. The governor owns these; resize() reads renderScale and
+  // the loop reads fpsCap.
+  private governor: PerfGovernor | null = null;
+  private renderScale = 1;
+  private fpsCap = 60;
+  private onGiveUp?: () => void;
+  private fps = 0;
+  private profileName = "high";
+  private renderer = "";
+  private rendererClass: RendererClass = "unknown";
+
   private dim = 512;
   private count = 512 * 512;
 
@@ -198,7 +229,7 @@ export class LatentEngine {
   private bobYaw = 0;
   private breath = 0;
 
-  mount(canvas: HTMLCanvasElement, options: LatentOptions = {}): boolean {
+  mount(canvas: HTMLCanvasElement, options: LatentOptions): boolean {
     const gl = canvas.getContext("webgl2", {
       antialias: false,
       alpha: false,
@@ -211,10 +242,28 @@ export class LatentEngine {
     // engine — the caller shows its CSS fallback instead.
     if (!gl.getExtension("EXT_color_buffer_float")) return false;
 
-    this.dim = options.texDim ?? 512;
+    // What the GPU actually is. Every pre-flight signal in quality.ts is a CPU
+    // signal; this is the only one that describes the part doing the work, and
+    // it is what keeps a fast-CPU/integrated-GPU laptop from being handed a
+    // quarter-million particles it can only draw at six frames a second.
+    const dbg = gl.getExtension("WEBGL_debug_renderer_info");
+    this.renderer = dbg
+      ? String(gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) ?? "")
+      : String(gl.getParameter(gl.RENDERER) ?? "");
+    this.rendererClass = classifyRenderer(this.renderer);
+    const profile = applyRendererClass(options.profile, this.rendererClass);
+    // Software rasteriser: there is no setting at which this is worth drawing.
+    if (!profile) return false;
+
+    this.profileName = profile.name;
+    this.dim = profile.texDim;
     this.count = this.dim * this.dim;
-    this.maxDpr = options.maxDpr ?? 1.5;
-    this.maxRenderPixels = options.maxRenderPixels ?? 5_000_000;
+    this.maxDpr = profile.maxDpr;
+    this.maxRenderPixels = profile.maxRenderPixels;
+    this.onGiveUp = options.onGiveUp;
+    this.governor = new PerfGovernor(profile.startStep);
+    this.renderScale = this.governor.state.renderScale;
+    this.fpsCap = this.governor.state.fpsCap;
     this.maxTextureSize = gl.getParameter(gl.MAX_TEXTURE_SIZE) as number;
     if (this.dim > this.maxTextureSize) return false;
 
@@ -404,6 +453,54 @@ export class LatentEngine {
     this.loop();
   }
 
+  /** What the engine settled on. Surfaced so a machine where the field misbehaves
+   *  can be diagnosed from the page itself instead of by guesswork. */
+  getDiagnostics(): LatentDiagnostics {
+    return {
+      profile: this.profileName,
+      renderer: this.renderer,
+      rendererClass: this.rendererClass,
+      particles: this.count,
+      step: this.governor?.level ?? 0,
+      renderScale: this.renderScale,
+      fpsCap: this.fpsCap,
+      fps: Math.round(this.fps),
+      bufferW: this.canvas?.width ?? 0,
+      bufferH: this.canvas?.height ?? 0,
+    };
+  }
+
+  /** Walk the quality ladder from measured frame times. */
+  private govern(frameMs: number) {
+    const g = this.governor;
+    if (!g) return;
+    this.fps += (1000 / Math.max(frameMs, 1) - this.fps) * 0.1;
+    const verdict = g.sample(frameMs);
+    if (verdict === "hold") return;
+    if (verdict === "abort") {
+      if (process.env.NODE_ENV !== "production") {
+        console.warn(`[latent] giving up — ${this.renderer || "unknown GPU"} cannot hold the field`);
+      }
+      this.pause();
+      this.onGiveUp?.();
+      return;
+    }
+    const next = g.state;
+    this.fpsCap = next.fpsCap;
+    if (next.renderScale !== this.renderScale) {
+      this.renderScale = next.renderScale;
+      if (!this.resize()) {
+        this.pause();
+        this.onGiveUp?.();
+      }
+    }
+    if (process.env.NODE_ENV !== "production") {
+      console.info(
+        `[latent] step ${g.level} — scale ${next.renderScale}, cap ${next.fpsCap}fps`,
+      );
+    }
+  }
+
   setProgress(p: number) {
     this.progressTarget = Math.min(Math.max(p, 0), 1);
   }
@@ -509,13 +606,18 @@ export class LatentEngine {
     const canvas = this.canvas;
     const gl = this.gl;
     if (!canvas || !gl || !this.sceneFbo) return false;
+    // renderScale rides on top of the profile's budget. Fill rate is the
+    // bottleneck in every pass after the simulation, so dropping resolution is
+    // the cheapest way to buy frames — and on a field this soft it is the
+    // change a viewer is least likely to notice.
+    const s = this.renderScale;
     const { width, height, dpr } = getSafeCanvasSize({
       cssWidth: canvas.clientWidth,
       cssHeight: canvas.clientHeight,
       devicePixelRatio: window.devicePixelRatio || 1,
-      maxDpr: this.maxDpr,
+      maxDpr: this.maxDpr * s,
       maxTextureSize: this.maxTextureSize,
-      maxRenderPixels: this.maxRenderPixels,
+      maxRenderPixels: this.maxRenderPixels * s * s,
     });
     this.renderDpr = dpr;
     if (canvas.width === width && canvas.height === height && this.sceneTex) return true;
@@ -796,7 +898,10 @@ export class LatentEngine {
     // Squared, with a very low floor: scattered over the viewport the cloud
     // covers roughly three times the area of any settled formation, so a
     // linear fade still opens brighter than the finished hero.
-    const exp = 3.0 * exposure * (0.06 + 0.94 * this.boot * this.boot);
+    // Nudged up from 3.0 to pay for the deeper shadows in the rig: dropping the
+    // ambient floor took real light out of the frame, and the grade's contrast
+    // curve takes a little more.
+    const exp = 3.3 * exposure * (0.06 + 0.94 * this.boot * this.boot);
 
     // ---- accumulate points into the HDR buffer ----
     gl.bindFramebuffer(gl.FRAMEBUFFER, this.sceneFbo);
@@ -821,7 +926,10 @@ export class LatentEngine {
     // like sandpaper rather than like a lit volume. Overlapping them is what
     // turns the dust into a surface — the fragment shader conserves energy, so
     // the extra area costs level, not detail.
-    gl.uniform1f(gl.getUniformLocation(this.pointProg, "uPxScale"), 1.75 * this.renderDpr);
+    // Widened again: bigger, softer, more overlapped sprites are what separate
+    // "a lit volume" from "a lot of small bright dots". Small dots are the
+    // geometry of glitter — you can resolve each one, so each one twinkles.
+    gl.uniform1f(gl.getUniformLocation(this.pointProg, "uPxScale"), 1.95 * this.renderDpr);
     // Exposure was calibrated against 512x512 particles; keep the HDR buffer
     // receiving the same total light when mobile drops to 256x256.
     gl.uniform1f(gl.getUniformLocation(this.pointProg, "uGain"), (512 * 512) / this.count);
@@ -835,7 +943,11 @@ export class LatentEngine {
       gl.getUniformLocation(this.pointProg, "uFocus"),
       camZ + Math.sin(this.animTime * 0.077) * 0.06,
     );
-    gl.uniform1f(gl.getUniformLocation(this.pointProg, "uCoc"), 0.55);
+    // Shallower than before. Depth of field is the most expensive-looking cue
+    // available and it is also a de-glitterer: an out-of-focus particle is a
+    // soft disc that cannot twinkle, so only the focal band is allowed to be
+    // crisp at all.
+    gl.uniform1f(gl.getUniformLocation(this.pointProg, "uCoc"), 0.72);
     gl.uniformMatrix3fv(gl.getUniformLocation(this.pointProg, "uRot"), false, this.buildRot());
     gl.bindVertexArray(this.vao);
     gl.drawArrays(gl.POINTS, 0, this.count);
@@ -865,23 +977,35 @@ export class LatentEngine {
         1 / canvas.height,
       );
       gl.uniform1f(gl.getUniformLocation(brightProg, "uExposure"), exp);
-      // Threshold just under the tonemap's knee, so what blooms is what would
-      // otherwise have clipped.
-      gl.uniform1f(gl.getUniformLocation(brightProg, "uThreshold"), 0.72);
-      gl.uniform1f(gl.getUniformLocation(brightProg, "uKnee"), 0.38);
+      // Raised well past the old 0.72. At that threshold most of the field was
+      // above the line, so every particle got its own little halo and the whole
+      // frame sparkled. Now only genuinely hot cores bleed — fewer sources,
+      // each one much wider. That is the difference between a lit set and a
+      // string of fairy lights.
+      gl.uniform1f(gl.getUniformLocation(brightProg, "uThreshold"), 0.9);
+      gl.uniform1f(gl.getUniformLocation(brightProg, "uKnee"), 0.5);
       gl.drawArrays(gl.TRIANGLES, 0, 3);
 
+      // Four passes, two octaves. H+V at radius 1 gives the tight core glow;
+      // H+V at radius 3.4 over the same buffer widens it into halation. Both
+      // accumulate into A, so the final texture carries a tight highlight
+      // sitting inside a broad, very soft pool of light.
+      const blurDir = gl.getUniformLocation(blurProg, "uDir");
+      const blurRadius = gl.getUniformLocation(blurProg, "uRadius");
       gl.useProgram(blurProg);
       gl.uniform2f(gl.getUniformLocation(blurProg, "uTexSize"), bw, bh);
       gl.uniform1i(gl.getUniformLocation(blurProg, "uSrc"), 0);
-      for (const [src, dst, dx, dy] of [
-        [bloomA, bloomB, 1, 0],
-        [bloomB, bloomA, 0, 1],
-      ] as [WebGLTexture, WebGLTexture, number, number][]) {
+      for (const [src, dst, dx, dy, r] of [
+        [bloomA, bloomB, 1, 0, 1.0],
+        [bloomB, bloomA, 0, 1, 1.0],
+        [bloomA, bloomB, 1, 0, 3.4],
+        [bloomB, bloomA, 0, 1, 3.4],
+      ] as [WebGLTexture, WebGLTexture, number, number, number][]) {
         gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, dst, 0);
         gl.activeTexture(gl.TEXTURE0);
         gl.bindTexture(gl.TEXTURE_2D, src);
-        gl.uniform2f(gl.getUniformLocation(blurProg, "uDir"), dx, dy);
+        gl.uniform2f(blurDir, dx, dy);
+        gl.uniform1f(blurRadius, r);
         gl.drawArrays(gl.TRIANGLES, 0, 3);
       }
     }
@@ -898,24 +1022,42 @@ export class LatentEngine {
     // legal; the scene's own black corners contribute nothing at amount 0.
     gl.bindTexture(gl.TEXTURE_2D, hasBloom ? bloomA : this.sceneTex);
     gl.uniform1i(gl.getUniformLocation(this.showProg, "uBloom"), 1);
-    gl.uniform1f(gl.getUniformLocation(this.showProg, "uBloomAmt"), hasBloom ? 0.34 : 0);
+    // Higher amount than before even though the threshold went up: far less of
+    // the frame qualifies now, so the surviving glow can be strong without
+    // washing the whole field. Few and wide, not many and small.
+    gl.uniform1f(gl.getUniformLocation(this.showProg, "uBloomAmt"), hasBloom ? 0.52 : 0);
     gl.uniform2f(gl.getUniformLocation(this.showProg, "uTexSize"), canvas.width, canvas.height);
     gl.uniform1f(gl.getUniformLocation(this.showProg, "uTime"), this.animTime);
     gl.uniform1f(gl.getUniformLocation(this.showProg, "uExposure"), exp);
     // The offset peaks at q*r2*uCA with |q| = 0.5 and r2 = 0.5, i.e. uCA/4 in
     // uv — about one pixel across a 1440-wide frame.
-    gl.uniform1f(gl.getUniformLocation(this.showProg, "uCA"), 0.005);
+    gl.uniform1f(gl.getUniformLocation(this.showProg, "uCA"), 0.004);
     // Light: the field is already made of discrete points, so grain on top of
-    // it stops reading as stock and starts reading as sandpaper.
-    gl.uniform1f(gl.getUniformLocation(this.showProg, "uGrain"), 0.007);
+    // it stops reading as stock and starts reading as sandpaper — and any
+    // per-frame high-frequency noise feeds straight back into the twinkle this
+    // pass exists to remove.
+    gl.uniform1f(gl.getUniformLocation(this.showProg, "uGrain"), 0.0045);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   }
 
   private loop = () => {
     if (!this.running) return;
     const now = performance.now();
-    const dt = Math.min((now - this.lastNow) / 1000, 0.05);
+    const since = now - this.lastNow;
+    // Frame cap. Below the cap the loop returns without touching the GPU, so a
+    // machine held at 30fps spends half its budget idle instead of queueing
+    // work it cannot finish — a steady 30 reads as cinematic, a ragged 45 as
+    // broken. Two milliseconds of slack keeps a 60Hz display from beating
+    // against a 60fps cap and dropping every other frame.
+    if (since < 1000 / this.fpsCap - 2) {
+      this.raf = requestAnimationFrame(this.loop);
+      return;
+    }
+    const dt = Math.min(since / 1000, 0.05);
     this.lastNow = now;
+    this.govern(since);
+    // Aborting mid-frame means the context is being torn down under us.
+    if (!this.running || !this.gl) return;
 
     this.progress += (this.progressTarget - this.progress) * Math.min(1, dt * 4.2);
     this.pointer[0] += (this.pointerTarget[0] - this.pointer[0]) * Math.min(1, dt * 6);
