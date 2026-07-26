@@ -39,10 +39,11 @@ function Word({ children }: { children: React.ReactNode }) {
 
 export default function Hero() {
   return (
-    <section
-      id="top"
-      className="relative flex min-h-[100svh] flex-col justify-center px-6 md:px-12"
-    >
+    // A short pin, not a full one: the hero holds just long enough for the
+    // latent core to settle and be read before it starts dissolving into the
+    // next formation. Any longer and the first scroll feels like it broke.
+    <section id="top" className="relative h-[145svh]">
+      <div className="sticky top-0 flex min-h-svh flex-col justify-center overflow-hidden px-6 md:px-12">
       <motion.div
         variants={container}
         initial="hidden"
@@ -114,8 +115,9 @@ export default function Hero() {
             className="h-1.5 w-1.5 rounded-full bg-accent"
           />
         </span>
-        Skroluj
-      </motion.div>
+          Skroluj
+        </motion.div>
+      </div>
     </section>
   );
 }

@@ -1,5 +1,6 @@
 import LatentBackground from "@/components/background/LatentBackground";
 import Nav from "@/components/layout/Nav";
+import PinnedSection from "@/components/layout/PinnedSection";
 import Preloader from "@/components/ui/Preloader";
 import Reveal from "@/components/ui/Reveal";
 import KineticTitle from "@/components/ui/KineticTitle";
@@ -42,10 +43,7 @@ export default async function Home() {
         <Hero />
 
         {/* Brojevi */}
-        <section
-          id="services"
-          className="relative flex min-h-[100svh] items-center px-6 py-28 md:px-12"
-        >
+        <PinnedSection id="services">
           <div className="w-full max-w-6xl">
             <p className="eyebrow mb-5">01 — Brojevi</p>
             <KineticTitle
@@ -66,7 +64,7 @@ export default async function Home() {
               ))}
             </div>
           </div>
-        </section>
+        </PinnedSection>
 
         <TextStrip />
 
@@ -80,10 +78,7 @@ export default async function Home() {
         <Education packs={hourPacks.length ? hourPacks : undefined} />
 
         {/* Booking */}
-        <section
-          id="booking"
-          className="relative flex min-h-[90svh] items-center justify-center px-6 py-28 text-center"
-        >
+        <PinnedSection id="booking" hold={0.7} className="justify-center text-center">
           <div>
             <Reveal>
               <p className="mb-5 inline-flex items-center gap-2 rounded-full border border-line bg-bg-elev/40 px-4 py-2 text-xs uppercase tracking-[0.2em] text-muted backdrop-blur-md">
@@ -106,7 +101,7 @@ export default async function Home() {
               </div>
             </Reveal>
           </div>
-        </section>
+        </PinnedSection>
       </main>
     </>
   );

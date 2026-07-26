@@ -34,21 +34,26 @@ const CAM_Z = 3.15;
 const FOCAL = 1.45;
 const PLANE = FOCAL / CAM_Z;
 
-// Field choreography: [progress, centerX, centerY, scale, exposure].
+// Field choreography per formation: [centerX, centerY, scale, exposure].
 // Center is an NDC offset — on desktop the field sits right of the copy.
 // Exposure compensates for how tightly each formation packs its particles:
-// the network is sparse and thin so it needs more, the stream concentrates
-// into a band so it needs less.
-type FieldKey = [number, number, number, number, number];
+// the network spreads over the widest footprint so it needs the least.
+type FieldKey = [number, number, number, number];
 
 const FIELD_KEYS: FieldKey[] = [
-  [0.0, 0.36, 0.02, 1.0, 1.0], // hero — latent core
-  [0.16, 0.3, 0.06, 1.06, 1.0], // brojevi — lattice
-  [0.36, 0.0, 0.1, 1.12, 0.86], // rezultati — stream spans the viewport
-  [0.56, 0.28, 0.04, 1.0, 0.92], // paketi — three clusters
-  [0.76, 0.3, 0.06, 1.04, 0.5], // edukacija — network (widest footprint)
-  [1.0, 0.0, 0.06, 0.92, 1.05], // booking — singularity, centered
+  [0.36, 0.02, 1.0, 1.0], // hero — latent core
+  [0.3, 0.06, 0.88, 1.0], // brojevi — lattice (a wide flat plane)
+  [0.0, 0.1, 1.12, 0.86], // rezultati — stream spans the viewport
+  [0.28, 0.04, 1.0, 0.92], // paketi — three clusters
+  [0.3, 0.06, 1.04, 0.5], // edukacija — network (widest footprint)
+  [0.0, 0.06, 0.92, 1.05], // booking — singularity, centered
 ];
+
+// Scroll window each formation OWNS, as [holdStart, holdEnd] in page progress.
+// Inside its window the shape is pinned and the field is allowed to settle;
+// between two windows it morphs. A single anchor point per section can only
+// ever cross-fade, which is why the forms never used to resolve.
+type HoldRange = [number, number];
 
 function smootherstep(t: number): number {
   const x = Math.min(Math.max(t, 0), 1);
@@ -100,7 +105,16 @@ export class LatentEngine {
   private pointerTarget: [number, number] = [0.5, 0.5];
   private pointer: [number, number] = [0.5, 0.5];
   private energy = 0;
-  private fieldKeys: FieldKey[] = FIELD_KEYS.map((k) => [...k] as FieldKey);
+  // Fallback spacing until the DOM is measured: evenly spaced, zero-width
+  // holds, i.e. the old cross-fade behaviour.
+  private ranges: HoldRange[] = [
+    [0, 0],
+    [0.16, 0.16],
+    [0.36, 0.36],
+    [0.56, 0.56],
+    [0.76, 0.76],
+    [1, 1],
+  ];
 
   private shape = 0;
   private prevShape = 0;
@@ -221,18 +235,21 @@ export class LatentEngine {
     this.progressTarget = Math.min(Math.max(p, 0), 1);
   }
 
-  /** Bind the six formations to measured page-section offsets, so the shape
-   *  story stays correct when sticky sections or CMS content change the
-   *  document height. */
-  setSectionAnchors(anchors: number[]) {
-    if (anchors.length !== this.fieldKeys.length || anchors.some((v) => !Number.isFinite(v))) {
-      return;
-    }
-    let previous = -0.001;
-    this.fieldKeys = FIELD_KEYS.map((key, index) => {
-      const progress = Math.max(previous + 0.001, Math.min(1, Math.max(0, anchors[index])));
-      previous = progress;
-      return [progress, key[1], key[2], key[3], key[4]];
+  /** Bind each formation to the scroll window its section stays pinned for, so
+   *  the shape story tracks the real layout when sticky sections, CMS content
+   *  or a resize change the document height.
+   *
+   *  Ranges are clamped into ascending order: a formation whose section is not
+   *  pinned collapses to a zero-width hold and simply cross-fades. */
+  setSectionRanges(ranges: HoldRange[]) {
+    if (ranges.length !== FIELD_KEYS.length) return;
+    if (ranges.some((r) => !Number.isFinite(r[0]) || !Number.isFinite(r[1]))) return;
+    let previous = 0;
+    this.ranges = ranges.map(([rawStart, rawEnd]) => {
+      const start = Math.min(1, Math.max(previous, rawStart));
+      const end = Math.min(1, Math.max(start, rawEnd));
+      previous = end;
+      return [start, end] as HoldRange;
     });
   }
 
@@ -355,37 +372,39 @@ export class LatentEngine {
     this.canvas = null;
   }
 
-  /** Fractional formation index for a scroll position. */
+  /** Fractional formation index for a scroll position. Flat inside a hold
+   *  window, easing between windows — the plateau is what lets the field
+   *  actually arrive at a shape instead of forever crossing between two. */
   private shapeAt(p: number): number {
-    const keys = this.fieldKeys;
-    for (let i = 0; i < keys.length - 1; i++) {
-      if (p >= keys[i][0] && p <= keys[i + 1][0]) {
-        const span = keys[i + 1][0] - keys[i][0] || 1;
-        return i + smootherstep((p - keys[i][0]) / span);
+    const r = this.ranges;
+    if (p <= r[0][1]) return 0;
+    for (let i = 0; i < r.length - 1; i++) {
+      const gapStart = r[i][1];
+      const gapEnd = r[i + 1][0];
+      if (p < gapEnd) {
+        const span = gapEnd - gapStart;
+        return span < 1e-5 ? i + 1 : i + smootherstep((p - gapStart) / span);
       }
+      if (p <= r[i + 1][1]) return i + 1;
     }
-    return p < keys[0][0] ? 0 : keys.length - 1;
+    return r.length - 1;
   }
 
-  /** Interpolate [centerX, centerY, scale, exposure] at the current progress. */
-  private frameAt(p: number): [number, number, number, number] {
-    const keys = this.fieldKeys;
-    let k0 = keys[0];
-    let k1 = keys[keys.length - 1];
-    for (let i = 0; i < keys.length - 1; i++) {
-      if (p >= keys[i][0] && p <= keys[i + 1][0]) {
-        k0 = keys[i];
-        k1 = keys[i + 1];
-        break;
-      }
-    }
-    const span = k1[0] - k0[0] || 1;
-    const u = smootherstep((p - k0[0]) / span);
+  /** Interpolate [centerX, centerY, scale, exposure] for a fractional shape
+   *  index. Keyed off the shape rather than raw progress so the framing can
+   *  never drift out of step with the formation it is framing. */
+  private frameAt(shape: number): [number, number, number, number] {
+    const last = FIELD_KEYS.length - 1;
+    const i0 = Math.max(0, Math.min(last, Math.floor(shape)));
+    const i1 = Math.min(last, i0 + 1);
+    const u = smootherstep(shape - i0);
+    const a = FIELD_KEYS[i0];
+    const b = FIELD_KEYS[i1];
     return [
-      k0[1] + (k1[1] - k0[1]) * u,
-      k0[2] + (k1[2] - k0[2]) * u,
-      k0[3] + (k1[3] - k0[3]) * u,
-      k0[4] + (k1[4] - k0[4]) * u,
+      a[0] + (b[0] - a[0]) * u,
+      a[1] + (b[1] - a[1]) * u,
+      a[2] + (b[2] - a[2]) * u,
+      a[3] + (b[3] - a[3]) * u,
     ];
   }
 
@@ -447,7 +466,7 @@ export class LatentEngine {
    */
   private layout(): [number, number, number, number] {
     const canvas = this.canvas!;
-    const [cx, cy, scale, exposure] = this.frameAt(this.progress);
+    const [cx, cy, scale, exposure] = this.frameAt(this.shape);
     if (canvas.width / canvas.height < 0.85) {
       return [cx * 0.2, cy * 0.25 - 0.42, scale * 0.72, exposure];
     }
