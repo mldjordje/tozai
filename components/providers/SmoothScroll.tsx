@@ -1,18 +1,27 @@
 "use client";
 
 import { ReactLenis } from "lenis/react";
+import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 
 /**
- * App-wide inertial smooth scroll. Lenis updates native window.scrollY, so the
- * scroll-scrubbed video background keeps reading scroll position unchanged —
+ * Marketing-site inertial smooth scroll. Lenis updates native window.scrollY, so
+ * the scroll-scrubbed video background keeps reading scroll position unchanged —
  * it just arrives eased instead of stepped, which makes the film glide.
  * Disabled automatically for users who prefer reduced motion.
+ *
+ * The app surfaces (/nalog, /admin) opt out: eased scrolling fights sticky
+ * sidebars and makes dense tables feel laggy.
  */
 export default function SmoothScroll({ children }: { children: ReactNode }) {
+  const pathname = usePathname();
   const prefersReduced =
     typeof window !== "undefined" &&
     window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  if (pathname?.startsWith("/nalog") || pathname?.startsWith("/admin")) {
+    return <>{children}</>;
+  }
 
   return (
     <ReactLenis

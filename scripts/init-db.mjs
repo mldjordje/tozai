@@ -204,15 +204,25 @@ await sql`
   )
 `;
 
-/* -------------------------------------------------------- education wallet --- */
+/* ------------------------------------------------------------ hour ledger --- */
+// Education/consulting hours are a ledger, not a counter: a purchase is a
+// positive row, a booking a negative one, a cancellation a positive one again.
+// Balance = SUM(hours). This is what makes refund-on-cancel and the CRM history
+// ("when was what spent") possible — see docs/.../shop-dashboard.md.
 await sql`
-  CREATE TABLE IF NOT EXISTS education_wallet (
-    user_id INT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
-    hours_purchased NUMERIC NOT NULL DEFAULT 0,
-    hours_used NUMERIC NOT NULL DEFAULT 0,
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  CREATE TABLE IF NOT EXISTS hour_entries (
+    id SERIAL PRIMARY KEY,
+    user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    kind TEXT NOT NULL DEFAULT 'education',
+    hours NUMERIC NOT NULL,
+    reason TEXT NOT NULL DEFAULT 'purchase',
+    order_id INT,
+    booking_id INT,
+    note TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
   )
 `;
+await sql`CREATE INDEX IF NOT EXISTS hour_entries_user ON hour_entries (user_id, kind)`;
 
 /* -------------------------------------------------- orders + invoices (CRM) --- */
 // Payment integration (Monri) fills these via webhook later; admin/analytics
@@ -283,7 +293,170 @@ await sql`
   ON CONFLICT (id) DO NOTHING
 `;
 
+/* ============================================================================
+   Shop / dashboard layer — checkout, projects, bookings.
+   See docs/superpowers/specs/2026-07-26-shop-dashboard.md.
+   Everything below is additive + idempotent, safe to re-run.
+   ========================================================================== */
+
+/* ------------------------------------------------- packages: sales routing --- */
+// `flow` decides what a purchase produces: a project to deliver, or hours in
+// the wallet. `slug` is the checkout URL segment.
+await sql`ALTER TABLE packages ADD COLUMN IF NOT EXISTS flow TEXT NOT NULL DEFAULT 'project'`;
+await sql`ALTER TABLE packages ADD COLUMN IF NOT EXISTS hours NUMERIC`;
+await sql`ALTER TABLE packages ADD COLUMN IF NOT EXISTS slug TEXT`;
+await sql`ALTER TABLE packages ADD COLUMN IF NOT EXISTS revisions INT NOT NULL DEFAULT 2`;
+
+// Education packs and 1-on-1 consulting sell hours; everything else is a project.
+await sql`
+  UPDATE packages SET flow = 'hours'
+  WHERE flow = 'project' AND (grp = 'education' OR category = 'AI Consulting')
+`;
+// Hours per pack come from the unit label ("/ 5h"); consulting is sold per hour.
+await sql`
+  UPDATE packages
+  SET hours = COALESCE(
+    NULLIF(substring(COALESCE(unit, '') from '([0-9]+)\\s*h'), '')::numeric,
+    1
+  )
+  WHERE flow = 'hours' AND hours IS NULL
+`;
+await sql`
+  UPDATE packages
+  SET slug = trim(both '-' from regexp_replace(lower(grp || '-' || name), '[^a-z0-9]+', '-', 'g'))
+  WHERE slug IS NULL
+`;
+await sql`CREATE UNIQUE INDEX IF NOT EXISTS packages_slug ON packages (slug)`;
+
+/* --------------------------------------------------- orders: checkout data --- */
+// `billing` is a snapshot taken at checkout — the invoice must not change when
+// the customer later edits their profile.
+await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS flow TEXT NOT NULL DEFAULT 'project'`;
+await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS kind TEXT`;
+await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS hours NUMERIC`;
+await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS buyer_type TEXT NOT NULL DEFAULT 'individual'`;
+await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS billing JSONB`;
+await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS paid_at TIMESTAMPTZ`;
+await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS provider TEXT`;
+await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS provider_ref TEXT`;
+await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS note TEXT`;
+
+/* -------------------------------------------------------------- projects --- */
+// One row per paid `flow='project'` order. status drives the client-visible
+// timeline: onboarding → u_izradi → na_reviziji → isporuceno.
+await sql`
+  CREATE TABLE IF NOT EXISTS projects (
+    id SERIAL PRIMARY KEY,
+    order_id INT REFERENCES orders(id) ON DELETE SET NULL,
+    user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    package_id INT REFERENCES packages(id) ON DELETE SET NULL,
+    title TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'onboarding',
+    brief JSONB,
+    revisions_left INT NOT NULL DEFAULT 2,
+    due_date DATE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  )
+`;
+await sql`CREATE INDEX IF NOT EXISTS projects_user ON projects (user_id, status)`;
+
+// Append-only status/note trail shown as the timeline in the client dashboard.
+await sql`
+  CREATE TABLE IF NOT EXISTS project_updates (
+    id SERIAL PRIMARY KEY,
+    project_id INT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    status TEXT,
+    note TEXT,
+    author TEXT NOT NULL DEFAULT 'admin',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  )
+`;
+await sql`CREATE INDEX IF NOT EXISTS project_updates_project ON project_updates (project_id, created_at)`;
+
+await sql`
+  CREATE TABLE IF NOT EXISTS project_deliverables (
+    id SERIAL PRIMARY KEY,
+    project_id INT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    title TEXT NOT NULL,
+    url TEXT NOT NULL,
+    kind TEXT NOT NULL DEFAULT 'video',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  )
+`;
+await sql`CREATE INDEX IF NOT EXISTS project_deliverables_project ON project_deliverables (project_id)`;
+
+/* -------------------------------------------------------------- bookings --- */
+// A session booked against the hour wallet. `booking_slots` carries one row per
+// occupied hour and its PRIMARY KEY (date, slot) is what actually prevents a
+// double booking — a check-then-insert would race.
+await sql`
+  CREATE TABLE IF NOT EXISTS bookings (
+    id SERIAL PRIMARY KEY,
+    user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    kind TEXT NOT NULL DEFAULT 'education',
+    date DATE NOT NULL,
+    start_slot TEXT NOT NULL,
+    hours NUMERIC NOT NULL DEFAULT 1,
+    status TEXT NOT NULL DEFAULT 'zakazano',
+    topic TEXT,
+    meet_url TEXT,
+    gcal_event_id TEXT,
+    recording_url TEXT,
+    reminded_24h BOOLEAN NOT NULL DEFAULT false,
+    reminded_1h BOOLEAN NOT NULL DEFAULT false,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  )
+`;
+await sql`CREATE INDEX IF NOT EXISTS bookings_user ON bookings (user_id, date)`;
+await sql`CREATE INDEX IF NOT EXISTS bookings_date ON bookings (date, status)`;
+await sql`
+  CREATE TABLE IF NOT EXISTS booking_slots (
+    booking_id INT NOT NULL REFERENCES bookings(id) ON DELETE CASCADE,
+    date DATE NOT NULL,
+    slot TEXT NOT NULL,
+    PRIMARY KEY (date, slot)
+  )
+`;
+await sql`CREATE INDEX IF NOT EXISTS booking_slots_booking ON booking_slots (booking_id)`;
+
+/* ------------------------------------------- education_wallet: table → view --- */
+// The old single-row-per-user counter cannot express refunds or history. It is
+// replaced by a view over `hour_entries` keeping the exact same column names,
+// so /api/admin/clients keeps working untouched. Existing rows are folded into
+// the ledger before the table is dropped.
+const walletRel = (await sql`
+  SELECT c.relkind FROM pg_class c
+  JOIN pg_namespace n ON n.oid = c.relnamespace
+  WHERE c.relname = 'education_wallet' AND n.nspname = 'public'
+`);
+if (walletRel[0]?.relkind === "r") {
+  await sql`
+    INSERT INTO hour_entries (user_id, kind, hours, reason, note)
+    SELECT user_id, 'education', hours_purchased, 'purchase', 'migrirano iz education_wallet'
+    FROM education_wallet WHERE hours_purchased > 0
+  `;
+  await sql`
+    INSERT INTO hour_entries (user_id, kind, hours, reason, note)
+    SELECT user_id, 'education', -hours_used, 'booking', 'migrirano iz education_wallet'
+    FROM education_wallet WHERE hours_used > 0
+  `;
+  await sql`DROP TABLE education_wallet`;
+  console.log("education_wallet: table folded into hour_entries, replaced by a view.");
+}
+await sql`
+  CREATE OR REPLACE VIEW education_wallet AS
+  SELECT user_id,
+         COALESCE(SUM(hours) FILTER (WHERE hours > 0), 0) AS hours_purchased,
+         COALESCE(-SUM(hours) FILTER (WHERE hours < 0), 0) AS hours_used,
+         MAX(created_at) AS updated_at
+  FROM hour_entries
+  WHERE kind = 'education'
+  GROUP BY user_id
+`;
+
 console.log("✅ TOZA AI schema ready:");
 console.log("   staff, users, packages, portfolio_categories/works, faq,");
-console.log("   email_templates, availability_days, education_wallet,");
-console.log("   orders, invoices, site_content, studio_settings.");
+console.log("   email_templates, availability_days, hour_entries (+education_wallet view),");
+console.log("   orders, invoices, projects (+updates/deliverables),");
+console.log("   bookings (+booking_slots), site_content, studio_settings.");
