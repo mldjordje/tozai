@@ -19,6 +19,9 @@ export type ClipPackage = {
   cta: string;
   /** Visually highlight one tier as recommended. */
   featured?: boolean;
+  /** Checkout slug. Absent on the static placeholder tiers, which have no
+   *  database row and therefore nothing to sell yet. */
+  slug?: string;
 };
 
 export type HourPack = {
@@ -31,6 +34,8 @@ export type HourPack = {
   perHour?: string;
   note?: string;
   featured?: boolean;
+  /** Checkout slug — see ClipPackage.slug. */
+  slug?: string;
 };
 
 // --- AI-clip packages (section: #paketi) --------------------------------
@@ -94,6 +99,8 @@ export type PackageRow = {
   features: string[];
   highlighted: boolean;
   cta_label: string | null;
+  /** Checkout slug; null for rows created before the shop layer landed. */
+  slug?: string | null;
 };
 
 function formatPrice(price: number | null, currency: string): string {
@@ -113,6 +120,7 @@ export function toClipPackage(p: PackageRow): ClipPackage {
     features: p.features,
     cta: p.cta_label ?? "Naruči",
     featured: p.highlighted,
+    slug: p.slug ?? undefined,
   };
 }
 
@@ -131,6 +139,7 @@ export function toHourPack(p: PackageRow): HourPack {
     perHour,
     note: p.description ?? undefined,
     featured: p.highlighted,
+    slug: p.slug ?? undefined,
   };
 }
 

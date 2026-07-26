@@ -84,7 +84,7 @@ export default function Packages({ packages = CLIP_PACKAGES }: { packages?: Clip
 
                 <div className="mt-8">
                   <CTAButton
-                    href="#booking"
+                    href={pkg.slug ? `/porudzbina/${pkg.slug}` : "#booking"}
                     variant={pkg.featured ? "primary" : "ghost"}
                   >
                     {pkg.cta}

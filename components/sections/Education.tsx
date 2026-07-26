@@ -78,10 +78,10 @@ export default function Education({ packs = HOUR_PACKS }: { packs?: HourPack[] }
 
                 <div className="mt-8">
                   <CTAButton
-                    href="#booking"
+                    href={pack.slug ? `/porudzbina/${pack.slug}` : "#booking"}
                     variant={pack.featured ? "primary" : "ghost"}
                   >
-                    Rezerviši
+                    {pack.slug ? "Kupi sate" : "Rezerviši"}
                   </CTAButton>
                 </div>
               </div>
