@@ -112,12 +112,21 @@ export type ProjectDeliverable = {
   created_at: string;
 };
 
+export type ProjectMaterial = {
+  id: number;
+  method: string;
+  value: string;
+  note: string | null;
+  created_at: string;
+};
+
 export type ProjectDetail = AccountProject & {
   brief: Record<string, unknown> | null;
   package_name: string | null;
   order_id: number | null;
   updates: ProjectUpdate[];
   deliverables: ProjectDeliverable[];
+  materials: ProjectMaterial[];
 };
 
 // Single project, scoped by user_id in the WHERE clause — an id belonging to
@@ -143,7 +152,7 @@ export async function getProjectDetail(
   const project = rows[0];
   if (!project) return null;
 
-  const [updates, deliverables] = await Promise.all([
+  const [updates, deliverables, materials] = await Promise.all([
     sql`
       SELECT id, status, note, created_at
       FROM project_updates WHERE project_id = ${projectId}
@@ -154,12 +163,18 @@ export async function getProjectDetail(
       FROM project_deliverables WHERE project_id = ${projectId}
       ORDER BY created_at DESC
     `,
+    sql`
+      SELECT id, method, value, note, created_at
+      FROM project_materials WHERE project_id = ${projectId}
+      ORDER BY created_at DESC
+    `,
   ]);
 
   return {
     ...project,
     updates: updates as ProjectUpdate[],
     deliverables: deliverables as ProjectDeliverable[],
+    materials: materials as ProjectMaterial[],
   };
 }
 

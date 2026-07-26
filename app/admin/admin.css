@@ -553,3 +553,28 @@ button.adm__chip:disabled{opacity:.3;cursor:default;text-decoration:line-through
 .adm__video-editor .adm__resched-confirm{margin-top:12px}
 @media(max-width:800px){.adm__video-fields{grid-template-columns:1fr 1fr}.adm__video-brief{grid-template-columns:1fr}}
 @media(max-width:480px){.adm__video-fields{grid-template-columns:1fr}.adm__video-head{flex-direction:column}}
+
+/* --------------------------------------------------------------- projects --- */
+.adm__muted{margin:6px 0 0;color:var(--muted);font-size:12px}
+.adm__status--proj-onboarding{background:rgba(255,196,80,.16);color:#f0c069}
+.adm__status--proj-u_izradi{background:rgba(108,148,255,.2);color:var(--neon)}
+.adm__status--proj-na_reviziji{background:rgba(200,120,255,.16);color:#cbb6ff}
+.adm__status--proj-isporuceno{background:rgba(80,200,120,.16);color:#7ee2a0}
+.adm__status--proj-otkazano{background:rgba(220,60,60,.14);color:#e0837f}
+.adm__proj-flags{margin:12px 0 14px;color:var(--muted);font-size:12px}
+.adm__proj-new{display:inline-block;padding:4px 10px;border-radius:999px;background:rgba(46,107,255,.2);color:#fff;font-size:11px}
+.adm__proj-block{margin-bottom:18px}
+.adm__proj-block h4{margin:0 0 10px;color:var(--muted);font-size:9px;letter-spacing:.14em;text-transform:uppercase}
+.adm__proj-mats,.adm__proj-trail{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.adm__proj-mats li,.adm__proj-trail li{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 10px;padding:10px 12px;border:1px solid var(--line);border-radius:6px;background:rgba(255,255,255,.02);font-size:12px}
+.adm__proj-mats a{color:var(--neon);word-break:break-all}
+.adm__proj-mat-kind{padding:2px 8px;border:1px solid rgba(108,148,255,.4);border-radius:999px;color:var(--neon);font-size:8px;letter-spacing:.14em;text-transform:uppercase}
+.adm__proj-mats em,.adm__proj-trail em{flex-basis:100%;color:#ddd;font-style:normal;line-height:1.5}
+.adm__proj-mats time,.adm__proj-trail time{margin-left:auto;color:var(--muted);font-size:11px;white-space:nowrap}
+.adm__proj-trail li span{color:#fff}
+.adm__proj-brief{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin:0}
+.adm__proj-brief div{padding:12px 14px;border:1px solid var(--line);border-radius:6px;background:rgba(255,255,255,.02)}
+.adm__proj-brief dt{color:var(--muted);font-size:9px;letter-spacing:.14em;text-transform:uppercase}
+.adm__proj-brief dd{margin:6px 0 0;color:#ddd;font-size:13px;line-height:1.55;white-space:pre-line}
+.adm__alert{display:flex;align-items:center;gap:10px;margin:0 0 28px;padding:14px 18px;border:1px solid rgba(46,107,255,.45);border-radius:6px;background:rgba(46,107,255,.1);color:#fff;font-size:13px;transition:background .2s}
+.adm__alert:hover{background:rgba(46,107,255,.2)}

@@ -6,7 +6,7 @@ import VideoInquiryFlow from "@/components/checkout/VideoInquiryFlow";
 import { getPackageBySlug } from "@/lib/packages";
 import { getSessionUser } from "@/lib/auth/user-session";
 import { getProfile } from "@/lib/account";
-import { isCardPaymentConfigured } from "@/lib/payments/provider";
+import { getPaymentMode } from "@/lib/payments/provider";
 
 // Deliberately OUTSIDE the middleware gate. A buyer should be able to read the
 // whole order before being asked to sign in — bouncing an anonymous visitor to
@@ -99,7 +99,7 @@ export default async function CheckoutPage({
                 }
               : null
           }
-          cardPaymentLive={isCardPaymentConfigured()}
+          paymentMode={getPaymentMode()}
         />
         )}
       </div>

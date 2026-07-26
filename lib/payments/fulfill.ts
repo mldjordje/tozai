@@ -76,17 +76,26 @@ export async function fulfillPaidOrder(
   // statement. Two concurrent callers can still read the same MAX under READ
   // COMMITTED; the UNIQUE index on invoices.number rejects the loser, and the
   // retry picks up the next number.
+  //
+  // The MAX is a scalar subquery, NOT an aggregate over the outer SELECT: an
+  // aggregate with no GROUP BY yields one row even when the WHERE matches
+  // nothing, so the "already invoiced" guard would never suppress the insert
+  // and a re-run would collide on invoices.number.
   const year = new Date().getFullYear();
   const invoiceRows = (await sql`
     INSERT INTO invoices (order_id, number, amount, currency)
     SELECT ${orderId},
            'TZ-' || ${year}::text || '-' ||
-             LPAD((COALESCE(MAX(SUBSTRING(i.number FROM 'TZ-[0-9]{4}-([0-9]+)')::int), 0) + 1)::text, 4, '0'),
+             LPAD((
+               COALESCE((
+                 SELECT MAX(SUBSTRING(i.number FROM 'TZ-[0-9]{4}-([0-9]+)')::int)
+                 FROM invoices i
+                 WHERE i.number LIKE ${`TZ-${year}-%`}
+               ), 0) + 1
+             )::text, 4, '0'),
            ${order.amount},
            ${order.currency}
-    FROM invoices i
-    WHERE i.number LIKE ${`TZ-${year}-%`}
-      AND NOT EXISTS (SELECT 1 FROM invoices x WHERE x.order_id = ${orderId})
+    WHERE NOT EXISTS (SELECT 1 FROM invoices x WHERE x.order_id = ${orderId})
     RETURNING id
   `) as { id: number }[];
 

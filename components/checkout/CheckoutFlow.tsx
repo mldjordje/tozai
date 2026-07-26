@@ -48,6 +48,10 @@ type RedirectIntent = { kind: "redirect"; redirectUrl: string };
 type FormIntent = { kind: "form"; action: string; fields: Record<string, string> };
 type Intent = ManualIntent | RedirectIntent | FormIntent;
 
+/** Mirrors PaymentMode in lib/payments/provider — duplicated rather than
+ *  imported so this client component pulls in no server-only module. */
+type PaymentMode = "card" | "manual" | "test";
+
 function money(amount: number | null, currency: string) {
   if (amount == null) return "€—";
   const symbol = currency === "EUR" ? "€" : `${currency} `;
@@ -60,12 +64,12 @@ export default function CheckoutFlow({
   pkg,
   user,
   profile,
-  cardPaymentLive,
+  paymentMode,
 }: {
   pkg: Pkg;
   user: { email: string; name: string | null } | null;
   profile: Profile | null;
-  cardPaymentLive: boolean;
+  paymentMode: PaymentMode;
 }) {
   // Signed-in buyers skip straight to billing; there is nothing to do on step 1.
   const [step, setStep] = useState(user ? 1 : 0);
@@ -189,7 +193,7 @@ export default function CheckoutFlow({
                 busy={busy}
                 error={error}
                 priceUnavailable={priceUnavailable}
-                cardPaymentLive={cardPaymentLive}
+                paymentMode={paymentMode}
                 onBack={() => setStep(1)}
                 onSubmit={submit}
               />
@@ -380,7 +384,7 @@ function ReviewStep({
   busy,
   error,
   priceUnavailable,
-  cardPaymentLive,
+  paymentMode,
   onBack,
   onSubmit,
 }: {
@@ -393,7 +397,7 @@ function ReviewStep({
   busy: boolean;
   error: string | null;
   priceUnavailable: boolean;
-  cardPaymentLive: boolean;
+  paymentMode: PaymentMode;
   onBack: () => void;
   onSubmit: () => void;
 }) {
@@ -414,10 +418,18 @@ function ReviewStep({
       {/* Payment method, stated before they commit rather than after. */}
       <div className="mt-9 rounded-2xl border border-line bg-bg-elev/40 p-6">
         <p className="text-xs uppercase tracking-[0.2em] text-faint">Način plaćanja</p>
-        {cardPaymentLive ? (
+        {paymentMode === "card" ? (
           <p className="mt-3 text-sm text-muted">
             Bićeš prebačen na sigurnu stranicu za plaćanje karticom.
           </p>
+        ) : paymentMode === "test" ? (
+          <>
+            <p className="mt-3 text-sm text-amber-300/90">TEST REŽIM — naplata je isključena</p>
+            <p className="mt-2 text-sm leading-relaxed text-muted">
+              Porudžbina se odmah označava kao plaćena, bez kartice. Služi samo
+              za proveru toka posle uplate.
+            </p>
+          </>
         ) : (
           <>
             <p className="mt-3 text-sm text-fg">Uplata na račun (predračun)</p>

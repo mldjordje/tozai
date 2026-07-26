@@ -436,6 +436,39 @@ await sql`ALTER TABLE projects ADD COLUMN IF NOT EXISTS materials_method TEXT`;
 await sql`ALTER TABLE projects ADD COLUMN IF NOT EXISTS materials_value TEXT`;
 await sql`ALTER TABLE projects ADD COLUMN IF NOT EXISTS materials_received_at TIMESTAMPTZ`;
 
+// A hand-off is not one event. Clients send a first WeTransfer, then remember
+// the logo, then re-send after the link expires — so every drop is its own row
+// and projects.materials_* keeps mirroring the most recent one for the summary
+// views that only ever needed "did anything arrive".
+//
+// seen_at is the admin's unread marker: NULL means nobody has opened it yet,
+// which is what the sidebar badge counts.
+await sql`
+  CREATE TABLE IF NOT EXISTS project_materials (
+    id SERIAL PRIMARY KEY,
+    project_id INT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    method TEXT NOT NULL,
+    value TEXT NOT NULL,
+    note TEXT,
+    seen_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  )
+`;
+await sql`CREATE INDEX IF NOT EXISTS project_materials_project ON project_materials (project_id, created_at DESC)`;
+await sql`CREATE INDEX IF NOT EXISTS project_materials_unseen ON project_materials (created_at DESC) WHERE seen_at IS NULL`;
+
+// Carry over hand-offs made before the table existed, so no client's link is
+// lost and the admin list is complete from day one.
+await sql`
+  INSERT INTO project_materials (project_id, method, value, seen_at, created_at)
+  SELECT p.id, p.materials_method, p.materials_value, now(),
+         COALESCE(p.materials_received_at, p.updated_at)
+  FROM projects p
+  WHERE p.materials_method IS NOT NULL
+    AND p.materials_value IS NOT NULL
+    AND NOT EXISTS (SELECT 1 FROM project_materials m WHERE m.project_id = p.id)
+`;
+
 /* --------------------------------------------------------- email outbox --- */
 // Transactional email is durable: if the provider is missing or temporarily
 // down, the message remains queued instead of silently disappearing.

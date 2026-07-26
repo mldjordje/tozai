@@ -64,6 +64,10 @@ export const PROJECT_STATUS_FLOW = [
   "isporuceno",
 ] as const;
 
+/** Statuses after which nothing more is expected from the client. Mirrored in
+ *  the materials route so the form and the API agree on when hand-off closes. */
+export const PROJECT_CLOSED = ["isporuceno", "otkazano"];
+
 export const PROJECT_STATUS_LABEL: Record<string, string> = {
   onboarding: "Onboarding",
   u_izradi: "U izradi",

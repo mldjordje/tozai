@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Tag, Images, Users, CalendarDays } from "lucide-react";
+import { Tag, Images, Users, CalendarDays, FolderKanban } from "lucide-react";
 
 type Recent = {
   id: number;
@@ -21,6 +21,8 @@ type Summary = {
     ordersMonth: number;
     revenueMonth: number;
     activePackages: number;
+    activeProjects: number;
+    newMaterials: number;
   };
   recent: Recent[];
 };
@@ -75,14 +77,24 @@ export function DashboardHome() {
           <span>Porudžbina ovog meseca</span>
         </div>
         <div className="adm__stat">
-          <strong>{c ? c.ordersPending : "–"}</strong>
-          <span>Na čekanju</span>
+          <strong>{c ? c.activeProjects : "–"}</strong>
+          <span>Projekata u radu</span>
         </div>
         <div className="adm__stat">
           <strong>{c ? c.clients : "–"}</strong>
           <span>Klijenata</span>
         </div>
       </div>
+
+      {/* The one thing that is genuinely waiting on the studio. */}
+      {c && c.newMaterials > 0 && (
+        <Link href="/admin/projekti" className="adm__alert">
+          <FolderKanban size={16} strokeWidth={1.6} />
+          {c.newMaterials === 1
+            ? "Klijent je poslao materijale — 1 nepregledan."
+            : `Klijenti su poslali materijale — ${c.newMaterials} nepregledanih.`}
+        </Link>
+      )}
 
       <section className="adm__dash-section">
         <h3>Poslednje porudžbine</h3>
@@ -113,6 +125,9 @@ export function DashboardHome() {
       <section className="adm__dash-section">
         <h3>Brze akcije</h3>
         <div className="adm__quick">
+          <Link href="/admin/projekti" className="adm__quick-btn">
+            <FolderKanban size={16} strokeWidth={1.6} /> Projekti u radu
+          </Link>
           <Link href="/admin/paketi" className="adm__quick-btn">
             <Tag size={16} strokeWidth={1.6} /> Uredi cenovnik
           </Link>

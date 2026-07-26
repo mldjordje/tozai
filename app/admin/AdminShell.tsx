@@ -15,19 +15,25 @@ import {
   BarChart3,
   Settings,
   ClipboardList,
+  FolderKanban,
   Menu,
   X,
 } from "lucide-react";
+
+type BadgeKey = "newMaterials" | "newRequests";
 
 type NavItem = {
   href: string;
   label: string;
   icon: React.ComponentType<{ size?: number; strokeWidth?: number }>;
+  /** Which live count, if any, lights this item up. */
+  badge?: BadgeKey;
 };
 
 const NAV: NavItem[] = [
   { href: "/admin", label: "Pregled", icon: LayoutDashboard },
-  { href: "/admin/video-zahtevi", label: "Video upiti", icon: ClipboardList },
+  { href: "/admin/projekti", label: "Projekti", icon: FolderKanban, badge: "newMaterials" },
+  { href: "/admin/video-zahtevi", label: "Video upiti", icon: ClipboardList, badge: "newRequests" },
   { href: "/admin/klijenti", label: "Klijenti", icon: Users },
   { href: "/admin/paketi", label: "Paketi", icon: Tag },
   { href: "/admin/portfolio", label: "Portfolio", icon: Images },
@@ -43,10 +49,35 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [badges, setBadges] = useState<Partial<Record<BadgeKey, number>>>({});
 
   useEffect(() => {
     setMenuOpen(false);
   }, [pathname]);
+
+  // Unread counts, refreshed on navigation and every minute. A client sending
+  // a WeTransfer link is the one event the studio must not miss, and nothing
+  // else in the panel would surface it.
+  useEffect(() => {
+    let alive = true;
+    const read = async () => {
+      try {
+        const response = await fetch("/api/admin/notifications", { cache: "no-store" });
+        const data = await response.json();
+        if (alive && data?.ok) setBadges(data.counts);
+      } catch {
+        /* a missing badge is not worth an error state */
+      }
+    };
+    void read();
+    const timer = setInterval(read, 60_000);
+    return () => {
+      alive = false;
+      clearInterval(timer);
+    };
+  }, [pathname]);
+
+  const totalBadge = (badges.newMaterials ?? 0) + (badges.newRequests ?? 0);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -76,6 +107,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
         <nav className="adm__nav">
           {NAV.map((item) => {
             const Icon = item.icon;
+            const count = item.badge ? (badges[item.badge] ?? 0) : 0;
             return (
               <Link
                 key={item.href}
@@ -85,6 +117,11 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
               >
                 <Icon size={16} strokeWidth={1.6} />
                 <span>{item.label}</span>
+                {count > 0 && (
+                  <em className="adm__nav-badge" aria-label={`${count} novo`}>
+                    {count}
+                  </em>
+                )}
               </Link>
             );
           })}
@@ -105,6 +142,9 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
             onClick={() => setMenuOpen((v) => !v)}
           >
             {menuOpen ? <X size={20} strokeWidth={1.6} /> : <Menu size={20} strokeWidth={1.6} />}
+            {!menuOpen && totalBadge > 0 && (
+              <em className="adm__nav-badge adm__nav-badge--burger">{totalBadge}</em>
+            )}
           </button>
           <div className="adm__brand adm__brand--mobile">
             TOZA AI <small>ADMIN</small>
@@ -125,6 +165,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
             <nav className="adm__mmenu-panel" aria-label="Glavna navigacija">
               {NAV.map((item) => {
                 const Icon = item.icon;
+                const count = item.badge ? (badges[item.badge] ?? 0) : 0;
                 return (
                   <Link
                     key={item.href}
@@ -134,6 +175,11 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
                   >
                     <Icon size={18} strokeWidth={1.6} />
                     <span>{item.label}</span>
+                    {count > 0 && (
+                      <em className="adm__nav-badge" aria-label={`${count} novo`}>
+                        {count}
+                      </em>
+                    )}
                   </Link>
                 );
               })}

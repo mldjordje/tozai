@@ -4,6 +4,7 @@ import { getSessionUser } from "@/lib/auth/user-session";
 import { getProjectDetail } from "@/lib/account";
 import { Card, SectionTitle, StatusBadge } from "@/components/nalog/ui";
 import {
+  PROJECT_CLOSED,
   PROJECT_STATUS_FLOW,
   PROJECT_STATUS_LABEL,
   formatDate,
@@ -101,28 +102,60 @@ export default async function ProjekatPage({
         })}
       </ol>
 
-      {project.status === "onboarding" && !project.materials_method && (
-        <Card className="border-accent/30 bg-accent/5">
-          <p className="font-medium text-fg">Dodaj materijale za izradu</p>
-          <p className="mt-2 text-sm text-muted">
-            Ideju već imamo iz upita. Sada izaberi kako želiš da nam predaš
-            fajlove, pa projekat odmah prelazi u izradu.
+      {/* Hand-off stays open until the project closes: transfer links expire,
+          and a revision round usually needs new source files. */}
+      {!PROJECT_CLOSED.includes(project.status) && (
+        <Card className={project.materials.length === 0 ? "border-accent/30 bg-accent/5" : undefined}>
+          <p className="font-medium text-fg">
+            {project.materials.length === 0
+              ? "Dodaj materijale za izradu"
+              : "Pošalji dodatne materijale"}
+          </p>
+          <p className="mt-2 text-sm leading-relaxed text-muted">
+            {project.materials.length === 0
+              ? "Ideju već imamo iz upita. Izaberi kako želiš da nam predaš fajlove, pa projekat odmah prelazi u izradu."
+              : "Možeš poslati koliko god WeTransfer linkova treba — link je istekao, stigao je novi fajl ili treba nešto za reviziju."}
           </p>
           <div className="mt-6">
-            <MaterialsForm projectId={project.id} />
+            <MaterialsForm
+              projectId={project.id}
+              whatsappSent={project.materials.some((m) => m.method === "whatsapp")}
+              compact={project.materials.length > 0}
+            />
           </div>
         </Card>
       )}
 
-      {project.materials_method && (
-        <Card>
-          <p className="text-xs uppercase tracking-[0.14em] text-faint">Materijali</p>
-          <p className="mt-2 text-sm text-fg">
-            {project.materials_method === "wetransfer"
-              ? "WeTransfer link je primljen."
-              : "WhatsApp kontakt je primljen."}
-          </p>
-        </Card>
+      {project.materials.length > 0 && (
+        <section>
+          <SectionTitle title="Poslati materijali" />
+          <Card className="p-0">
+            <ul className="divide-y divide-line">
+              {project.materials.map((m) => (
+                <li key={m.id} className="flex items-start justify-between gap-4 px-5 py-4">
+                  <div className="min-w-0">
+                    <p className="text-xs uppercase tracking-[0.14em] text-faint">
+                      {m.method === "wetransfer" ? "WeTransfer" : "WhatsApp"}
+                    </p>
+                    <p className="mt-1 truncate text-sm text-fg">{m.value}</p>
+                    {m.note && <p className="mt-1 text-sm text-muted">{m.note}</p>}
+                    <p className="mt-1 text-sm text-faint">{formatDate(m.created_at)}</p>
+                  </div>
+                  {m.method === "wetransfer" && (
+                    <a
+                      href={m.value}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="shrink-0 text-sm text-accent-soft underline underline-offset-4"
+                    >
+                      Otvori
+                    </a>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </Card>
+        </section>
       )}
 
       {project.brief && (

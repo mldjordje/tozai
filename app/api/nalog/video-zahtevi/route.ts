@@ -37,9 +37,11 @@ export async function POST(request: Request) {
 
   const slug = cleanText(body.slug, 120, 1);
   const buyerType = body.buyerType === "company" ? "company" : body.buyerType === "individual" ? "individual" : null;
-  const idea = cleanText(body.idea, 4000, 20);
+  // Minimums are mirrored in VideoInquiryFlow (MIN) so the hint text, the live
+  // counter and this check agree. A two-word "idea" cannot be quoted from.
+  const idea = cleanText(body.idea, 4000, 50);
   const businessName = cleanText(body.businessName, 160, 2);
-  const businessDescription = cleanText(body.businessDescription, 2000, 10);
+  const businessDescription = cleanText(body.businessDescription, 2000, 30);
   const clipCount = Number(body.clipCount);
   const budgetEur = Number(body.budgetEur);
   if (
@@ -190,7 +192,8 @@ export async function PATCH(request: Request) {
       ${JSON.stringify(billing)}::jsonb, ${q.id},
       ${q.turnaround_days ? `Dogovoreno vreme izrade: ${q.turnaround_days} dana` : null}
     )
-    ON CONFLICT (quote_request_id) DO UPDATE SET quote_request_id = EXCLUDED.quote_request_id
+    ON CONFLICT (quote_request_id) WHERE quote_request_id IS NOT NULL
+      DO UPDATE SET quote_request_id = EXCLUDED.quote_request_id
     RETURNING id
   `) as { id: number }[];
   const orderId = inserted[0].id;

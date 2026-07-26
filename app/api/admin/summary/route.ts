@@ -18,13 +18,18 @@ export async function GET() {
       (SELECT COUNT(*)::int FROM orders WHERE status = 'pending') AS orders_pending,
       (SELECT COUNT(*)::int FROM orders WHERE status = 'paid' AND created_at >= ${monthStartIso}) AS orders_month,
       (SELECT COALESCE(SUM(amount), 0)::numeric FROM orders WHERE status = 'paid' AND created_at >= ${monthStartIso}) AS revenue_month,
-      (SELECT COUNT(*)::int FROM packages WHERE active) AS active_packages
+      (SELECT COUNT(*)::int FROM packages WHERE active) AS active_packages,
+      (SELECT COUNT(*)::int FROM projects
+        WHERE status IN ('onboarding', 'u_izradi', 'na_reviziji')) AS active_projects,
+      (SELECT COUNT(*)::int FROM project_materials WHERE seen_at IS NULL) AS new_materials
   `) as {
     clients: number;
     orders_pending: number;
     orders_month: number;
     revenue_month: number;
     active_packages: number;
+    active_projects: number;
+    new_materials: number;
   }[];
 
   const recent = (await sql`
@@ -52,6 +57,8 @@ export async function GET() {
       ordersMonth: counts.orders_month,
       revenueMonth: Number(counts.revenue_month),
       activePackages: counts.active_packages,
+      activeProjects: counts.active_projects,
+      newMaterials: counts.new_materials,
     },
     recent,
   });

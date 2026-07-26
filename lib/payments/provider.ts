@@ -59,6 +59,14 @@ export interface PaymentProvider {
  * dead payment page, which is worse than an honest bank transfer.
  */
 export async function getPaymentProvider(): Promise<PaymentProvider> {
+  // PAYMENTS_MOCK short-circuits everything so the post-payment half of the
+  // product (invoice, project, wallet, /nalog) can be walked end to end while
+  // Monri credentials are still pending. Explicit opt-in only — an unset env
+  // var can never accidentally hand out free orders.
+  if (process.env.PAYMENTS_MOCK === "1") {
+    const { mockProvider } = await import("./mock");
+    return mockProvider;
+  }
   if (process.env.MONRI_MERCHANT_KEY && process.env.MONRI_AUTH_TOKEN) {
     const { monriProvider } = await import("./monri");
     return monriProvider;
@@ -67,8 +75,12 @@ export async function getPaymentProvider(): Promise<PaymentProvider> {
   return manualProvider;
 }
 
-/** Whether card payment is live. The checkout uses this to set expectations
- *  before the buyer commits, rather than surprising them at the last step. */
-export function isCardPaymentConfigured(): boolean {
-  return Boolean(process.env.MONRI_MERCHANT_KEY && process.env.MONRI_AUTH_TOKEN);
+export type PaymentMode = "card" | "manual" | "test";
+
+/** What the buyer is about to be handed off to. The checkout uses this to set
+ *  expectations before they commit, rather than surprising them at the last
+ *  step. */
+export function getPaymentMode(): PaymentMode {
+  if (process.env.PAYMENTS_MOCK === "1") return "test";
+  return process.env.MONRI_MERCHANT_KEY && process.env.MONRI_AUTH_TOKEN ? "card" : "manual";
 }
