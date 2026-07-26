@@ -19,6 +19,8 @@ import {
   makeSimShader,
   pointVertexShader,
   pointFragmentShader,
+  brightPassShader,
+  blurShader,
   displayShader,
 } from "./shader";
 import { getSafeCanvasSize } from "./quality";
@@ -32,26 +34,51 @@ export interface LatentOptions {
   maxRenderPixels?: number;
 }
 
-// Camera constants, mirrored from pointVertexShader. Used to convert pointer
-// coordinates from the screen into field units at the z=0 plane.
-const CAM_Z = 3.15;
+// Focal length, mirrored from pointVertexShader. The camera distance is no
+// longer a constant — each section is framed from its own dolly position — so
+// the pointer projection recomputes its plane from the current shot.
 const FOCAL = 1.45;
-const PLANE = FOCAL / CAM_Z;
 
-// Field choreography per formation: [centerX, centerY, scale, exposure].
-// Center is an NDC offset — on desktop the field sits right of the copy.
-// Exposure compensates for how tightly each formation packs its particles:
-// the network spreads over the widest footprint so it needs the least.
-type FieldKey = [number, number, number, number];
+/**
+ * One camera setup per formation. Scrolling the page moves the camera between
+ * them, so each section is a different SHOT of the same subject rather than the
+ * same view with different dots in it.
+ *
+ *  cx, cy   NDC offset — on desktop the field sits right of the copy
+ *  scale    field size in view units
+ *  exposure compensates for how tightly the formation packs its particles
+ *  yaw      studio azimuth, added on top of the idle drift and the user's drag
+ *  pitch    elevation
+ *  camZ     dolly distance — small is a tight shot, large is a wide one
+ *  roll     a few tenths of a degree of dutch, enough to kill the CG symmetry
+ */
+interface Shot {
+  cx: number;
+  cy: number;
+  scale: number;
+  exposure: number;
+  yaw: number;
+  pitch: number;
+  camZ: number;
+  roll: number;
+}
 
-const FIELD_KEYS: FieldKey[] = [
-  [0.36, 0.02, 1.0, 1.0], // hero — latent core
-  [0.3, 0.06, 0.88, 1.0], // brojevi — lattice (a wide flat plane)
-  [0.0, 0.1, 1.12, 0.86], // rezultati — stream spans the viewport
-  [0.28, 0.04, 1.0, 0.92], // paketi — three clusters
-  [0.3, 0.06, 1.04, 0.5], // edukacija — network (widest footprint)
-  [0.0, 0.06, 0.92, 1.05], // booking — singularity, centered
-  [0.0, 0.04, 1.1, 0.62], // finale — the field spells TOZAI
+const SHOTS: Shot[] = [
+  // hero — the latent core, three-quarter view so the rim light catches an edge
+  { cx: 0.36, cy: 0.02, scale: 1.0, exposure: 1.28, yaw: -0.42, pitch: 0.16, camZ: 3.15, roll: -0.012 },
+  // brojevi — a flat plane needs an angled camera or it reads as wallpaper
+  { cx: 0.3, cy: 0.06, scale: 0.88, exposure: 1.55, yaw: 0.55, pitch: 0.3, camZ: 3.3, roll: 0.02 },
+  // rezultati — a compact ribbon packs its particles hard; it clips first
+  { cx: 0.0, cy: 0.1, scale: 1.12, exposure: 0.7, yaw: -0.3, pitch: -0.18, camZ: 3.05, roll: -0.02 },
+  // paketi — three masses, held far enough apart to keep the gaps legible
+  { cx: 0.28, cy: 0.04, scale: 1.0, exposure: 1.05, yaw: 0.38, pitch: 0.12, camZ: 3.28, roll: 0.014 },
+  // edukacija — widest footprint, so the widest lens and the least exposure
+  { cx: 0.3, cy: 0.06, scale: 1.04, exposure: 0.88, yaw: -0.5, pitch: 0.22, camZ: 3.45, roll: -0.016 },
+  // booking — everything collapses inward; push in for the close-up. Densest
+  // formation of the set, hence the lowest exposure of the set.
+  { cx: 0.0, cy: 0.06, scale: 0.92, exposure: 0.72, yaw: 0.2, pitch: -0.1, camZ: 2.85, roll: 0.008 },
+  // finale — the wordmark, dead square: letterforms only read face-on
+  { cx: 0.0, cy: 0.04, scale: 1.1, exposure: 0.76, yaw: 0.0, pitch: 0.0, camZ: 3.2, roll: 0.0 },
 ];
 
 // Scroll window each formation OWNS, as [holdStart, holdEnd] in page progress.
@@ -95,6 +122,8 @@ export class LatentEngine {
 
   private simProg: WebGLProgram | null = null;
   private pointProg: WebGLProgram | null = null;
+  private brightProg: WebGLProgram | null = null;
+  private blurProg: WebGLProgram | null = null;
   private showProg: WebGLProgram | null = null;
 
   private posA: WebGLTexture | null = null;
@@ -105,6 +134,13 @@ export class LatentEngine {
   private simFbo: WebGLFramebuffer | null = null;
   private sceneFbo: WebGLFramebuffer | null = null;
   private sceneTex: WebGLTexture | null = null;
+  // Bloom chain, quarter resolution. A is the threshold target and the final
+  // result; B is the intermediate the horizontal blur writes into.
+  private bloomTexA: WebGLTexture | null = null;
+  private bloomTexB: WebGLTexture | null = null;
+  private bloomFbo: WebGLFramebuffer | null = null;
+  private bloomW = 0;
+  private bloomH = 0;
   private vao: WebGLVertexArrayObject | null = null;
 
   // Eased state — events set targets, the loop chases them so nothing jumps.
@@ -153,6 +189,15 @@ export class LatentEngine {
   private faceOn = 0;
   private rot = new Float32Array(9);
 
+  // Idle camera move, on top of the per-shot setup. A camera that only spins at
+  // a constant rate reads as a turntable GIF; a slow elevation bob, a hint of
+  // roll and a trace of handheld read as an operator. All three are suspended
+  // as the wordmark squares up.
+  private bobPitch = 0;
+  private bobRoll = 0;
+  private bobYaw = 0;
+  private breath = 0;
+
   mount(canvas: HTMLCanvasElement, options: LatentOptions = {}): boolean {
     const gl = canvas.getContext("webgl2", {
       antialias: false,
@@ -196,14 +241,19 @@ export class LatentEngine {
 
     this.simProg = link(fullscreenVertexShader, makeSimShader(this.count));
     this.pointProg = link(pointVertexShader, pointFragmentShader);
+    this.brightProg = link(fullscreenVertexShader, brightPassShader);
+    this.blurProg = link(fullscreenVertexShader, blurShader);
     this.showProg = link(fullscreenVertexShader, displayShader);
-    if (!this.simProg || !this.pointProg || !this.showProg) return false;
+    if (!this.simProg || !this.pointProg || !this.brightProg || !this.blurProg || !this.showProg) {
+      return false;
+    }
 
     this.gl = gl;
     this.canvas = canvas;
     this.vao = gl.createVertexArray();
     this.simFbo = gl.createFramebuffer();
     this.sceneFbo = gl.createFramebuffer();
+    this.bloomFbo = gl.createFramebuffer();
 
     // Seed: an isotropic cloud of noise. The field literally boots from chaos
     // and resolves into the hero formation on first paint.
@@ -365,7 +415,7 @@ export class LatentEngine {
    *  Ranges are clamped into ascending order: a formation whose section is not
    *  pinned collapses to a zero-width hold and simply cross-fades. */
   setSectionRanges(ranges: HoldRange[]) {
-    if (ranges.length !== FIELD_KEYS.length) return;
+    if (ranges.length !== SHOTS.length) return;
     if (ranges.some((r) => !Number.isFinite(r[0]) || !Number.isFinite(r[1]))) return;
     let previous = 0;
     this.ranges = ranges.map(([rawStart, rawEnd]) => {
@@ -397,26 +447,38 @@ export class LatentEngine {
     this.energy = Math.min(1, this.energy + Math.hypot(dx, dy) * 3);
   }
 
-  /** Rotation for the current orbit, as a column-major mat3. Pointer parallax
-   *  is added here rather than accumulated, so it leans and returns. */
+  /** Rotation for the current orbit, as a column-major mat3.
+   *
+   *  Three things stack here: the shot's own camera setup, the idle move, and
+   *  the user's drag. Pointer parallax is added rather than accumulated, so it
+   *  leans and returns.
+   *
+   *  Roll is what makes the frame stop looking rendered. It is a fraction of a
+   *  degree — enough that the horizon is never exactly level, not enough to
+   *  notice as a tilt. */
   private buildRot() {
     const lean = 1 - this.faceOn;
-    const yaw = this.yaw + (this.pointer[0] - 0.5) * 0.22 * lean;
-    const pitch = this.pitch + (this.pointer[1] - 0.5) * 0.14 * lean;
+    const shot = this.layout();
+    const yaw = this.yaw + (shot.yaw + this.bobYaw) * lean + (this.pointer[0] - 0.5) * 0.22 * lean;
+    const pitch =
+      this.pitch + (shot.pitch + this.bobPitch) * lean + (this.pointer[1] - 0.5) * 0.14 * lean;
+    const roll = (shot.roll + this.bobRoll) * lean;
     const cy = Math.cos(yaw);
     const sy = Math.sin(yaw);
     const cp = Math.cos(pitch);
     const sp = Math.sin(pitch);
-    // R = Rx(pitch) * Ry(yaw), written out column by column.
+    const cr = Math.cos(roll);
+    const sr = Math.sin(roll);
+    // R = Rz(roll) * Rx(pitch) * Ry(yaw), written out column by column.
     const r = this.rot;
-    r[0] = cy;
-    r[1] = sp * sy;
+    r[0] = cr * cy - sr * sp * sy;
+    r[1] = sr * cy + cr * sp * sy;
     r[2] = -cp * sy;
-    r[3] = 0;
-    r[4] = cp;
+    r[3] = -sr * cp;
+    r[4] = cr * cp;
     r[5] = sp;
-    r[6] = sy;
-    r[7] = -sp * cy;
+    r[6] = cr * sy + sr * sp * cy;
+    r[7] = sr * sy - cr * sp * cy;
     r[8] = cp * cy;
     return r;
   }
@@ -461,19 +523,10 @@ export class LatentEngine {
     const previous = this.sceneTex;
     canvas.width = width;
     canvas.height = height;
-    const t = gl.createTexture();
+    // LINEAR, not NEAREST: the bright pass downsamples this and the display
+    // pass reads it at sub-pixel offsets for the chromatic aberration.
+    const t = this.colorTex(gl, width, height);
     if (!t) return false;
-    gl.bindTexture(gl.TEXTURE_2D, t);
-    gl.getError();
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, width, height, 0, gl.RGBA, gl.HALF_FLOAT, null);
-    if (gl.getError() !== gl.NO_ERROR) {
-      gl.deleteTexture(t);
-      return false;
-    }
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
     gl.bindFramebuffer(gl.FRAMEBUFFER, this.sceneFbo);
     gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, t, 0);
     gl.drawBuffers([gl.COLOR_ATTACHMENT0]);
@@ -493,7 +546,46 @@ export class LatentEngine {
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     this.sceneTex = t;
     if (previous) gl.deleteTexture(previous);
+
+    // Bloom runs at quarter resolution. The blur radius is measured in source
+    // texels, so a smaller buffer buys a wider bleed for less fill — and the
+    // result is blurred anyway, so the detail is not missed.
+    const bw = Math.max(1, width >> 2);
+    const bh = Math.max(1, height >> 2);
+    const a = this.colorTex(gl, bw, bh);
+    const b = this.colorTex(gl, bw, bh);
+    if (!a || !b) {
+      if (a) gl.deleteTexture(a);
+      if (b) gl.deleteTexture(b);
+      // The scene target is live either way; drop bloom and keep rendering.
+      this.bloomW = this.bloomH = 0;
+      return true;
+    }
+    if (this.bloomTexA) gl.deleteTexture(this.bloomTexA);
+    if (this.bloomTexB) gl.deleteTexture(this.bloomTexB);
+    this.bloomTexA = a;
+    this.bloomTexB = b;
+    this.bloomW = bw;
+    this.bloomH = bh;
     return true;
+  }
+
+  /** RGBA16F render target with linear filtering. */
+  private colorTex(gl: WebGL2RenderingContext, w: number, h: number): WebGLTexture | null {
+    const t = gl.createTexture();
+    if (!t) return null;
+    gl.bindTexture(gl.TEXTURE_2D, t);
+    gl.getError();
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, w, h, 0, gl.RGBA, gl.HALF_FLOAT, null);
+    if (gl.getError() !== gl.NO_ERROR) {
+      gl.deleteTexture(t);
+      return null;
+    }
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    return t;
   }
 
   pause() {
@@ -513,19 +605,30 @@ export class LatentEngine {
     cancelAnimationFrame(this.raf);
     const gl = this.gl;
     if (gl) {
-      for (const p of [this.simProg, this.pointProg, this.showProg]) {
+      for (const p of [this.simProg, this.pointProg, this.brightProg, this.blurProg, this.showProg]) {
         if (p) gl.deleteProgram(p);
       }
-      for (const t of [this.posA, this.posB, this.velA, this.velB, this.sceneTex, this.wordTex]) {
+      for (const t of [
+        this.posA,
+        this.posB,
+        this.velA,
+        this.velB,
+        this.sceneTex,
+        this.wordTex,
+        this.bloomTexA,
+        this.bloomTexB,
+      ]) {
         if (t) gl.deleteTexture(t);
       }
       if (this.simFbo) gl.deleteFramebuffer(this.simFbo);
       if (this.sceneFbo) gl.deleteFramebuffer(this.sceneFbo);
+      if (this.bloomFbo) gl.deleteFramebuffer(this.bloomFbo);
       if (this.vao) gl.deleteVertexArray(this.vao);
     }
-    this.simProg = this.pointProg = this.showProg = null;
+    this.simProg = this.pointProg = this.brightProg = this.blurProg = this.showProg = null;
     this.posA = this.posB = this.velA = this.velB = this.sceneTex = this.wordTex = null;
-    this.simFbo = this.sceneFbo = null;
+    this.bloomTexA = this.bloomTexB = null;
+    this.simFbo = this.sceneFbo = this.bloomFbo = null;
     this.vao = null;
     this.gl = null;
     this.canvas = null;
@@ -549,22 +652,28 @@ export class LatentEngine {
     return r.length - 1;
   }
 
-  /** Interpolate [centerX, centerY, scale, exposure] for a fractional shape
-   *  index. Keyed off the shape rather than raw progress so the framing can
-   *  never drift out of step with the formation it is framing. */
-  private frameAt(shape: number): [number, number, number, number] {
-    const last = FIELD_KEYS.length - 1;
+  /** Interpolate the camera setup for a fractional shape index. Keyed off the
+   *  shape rather than raw progress so the framing can never drift out of step
+   *  with the formation it is framing — the camera move and the morph are the
+   *  same gesture. */
+  private frameAt(shape: number): Shot {
+    const last = SHOTS.length - 1;
     const i0 = Math.max(0, Math.min(last, Math.floor(shape)));
     const i1 = Math.min(last, i0 + 1);
     const u = smootherstep(shape - i0);
-    const a = FIELD_KEYS[i0];
-    const b = FIELD_KEYS[i1];
-    return [
-      a[0] + (b[0] - a[0]) * u,
-      a[1] + (b[1] - a[1]) * u,
-      a[2] + (b[2] - a[2]) * u,
-      a[3] + (b[3] - a[3]) * u,
-    ];
+    const a = SHOTS[i0];
+    const b = SHOTS[i1];
+    const mix = (x: number, y: number) => x + (y - x) * u;
+    return {
+      cx: mix(a.cx, b.cx),
+      cy: mix(a.cy, b.cy),
+      scale: mix(a.scale, b.scale),
+      exposure: mix(a.exposure, b.exposure),
+      yaw: mix(a.yaw, b.yaw),
+      pitch: mix(a.pitch, b.pitch),
+      camZ: mix(a.camZ, b.camZ),
+      roll: mix(a.roll, b.roll),
+    };
   }
 
   /** Advance the particle state by dt (MRT into the back position/velocity
@@ -573,13 +682,16 @@ export class LatentEngine {
     const gl = this.gl;
     if (!gl || !this.simProg || !this.canvas) return;
 
-    const [cx, cy, scale] = this.layout();
+    const { cx, cy, scale, camZ } = this.layout();
     // Pointer -> VIEW units on the z=0 plane, matching pointVertexShader. The
     // shader compares this against uRot*p, so no inverse is needed here; the
-    // scale divide keeps the cursor's reach constant as the field resizes.
+    // scale divide keeps the cursor's reach constant as the field resizes, and
+    // the plane is recomputed from the current dolly so a tighter shot does not
+    // silently widen the cursor's reach.
     const aspect = this.canvas.width / this.canvas.height;
-    const ptrX = ((this.pointer[0] * 2 - 1 - cx) * aspect) / PLANE / scale;
-    const ptrY = (this.pointer[1] * 2 - 1 - cy) / PLANE / scale;
+    const plane = FOCAL / camZ;
+    const ptrX = ((this.pointer[0] * 2 - 1 - cx) * aspect) / plane / scale;
+    const ptrY = (this.pointer[1] * 2 - 1 - cy) / plane / scale;
 
     gl.bindFramebuffer(gl.FRAMEBUFFER, this.simFbo);
     gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, this.posB, 0);
@@ -611,8 +723,8 @@ export class LatentEngine {
     gl.uniform1i(gl.getUniformLocation(this.simProg, "uWord"), 2);
 
     // Copy column -> the same view units the shader compares against uRot*p.
-    const toViewX = (n: number) => ((n * 2 - 1 - cx) * aspect) / PLANE / scale;
-    const toViewY = (n: number) => (n * 2 - 1 - cy) / PLANE / scale;
+    const toViewX = (n: number) => ((n * 2 - 1 - cx) * aspect) / plane / scale;
+    const toViewY = (n: number) => (n * 2 - 1 - cy) / plane / scale;
     gl.uniform4f(
       gl.getUniformLocation(this.simProg, "uCopy"),
       toViewX(this.copyRect[0]),
@@ -640,24 +752,51 @@ export class LatentEngine {
    *  - narrow    : pushed to the bottom-right corner, smaller
    *  - desktop   : the keyframes as authored
    */
-  private layout(): [number, number, number, number] {
+  private layout(): Shot {
     const canvas = this.canvas!;
-    const [cx, cy, scale, exposure] = this.frameAt(this.shape);
+    const shot = this.frameAt(this.shape);
+    // The dolly breathes a few centimetres either way. Barely perceptible on
+    // its own; what it removes is the sense that the camera is bolted down.
+    shot.camZ += this.breath;
     if (canvas.width / canvas.height < 0.85) {
-      return [cx * 0.2, cy * 0.25 - 0.42, scale * 0.72, exposure];
+      shot.cx *= 0.2;
+      shot.cy = shot.cy * 0.25 - 0.42;
+      shot.scale *= 0.72;
+      return shot;
     }
     if (canvas.clientWidth < 1024) {
-      return [cx * 0.5 + 0.32, cy * 0.3 - 0.4, scale * 0.62, exposure];
+      shot.cx = shot.cx * 0.5 + 0.32;
+      shot.cy = shot.cy * 0.3 - 0.4;
+      shot.scale *= 0.62;
+      return shot;
     }
-    return [cx, cy, scale, exposure];
+    return shot;
   }
 
   private draw() {
     const gl = this.gl;
     const canvas = this.canvas;
     if (!gl || !canvas || !this.pointProg || !this.showProg) return;
+    const brightProg = this.brightProg;
+    const blurProg = this.blurProg;
 
-    const [cx, cy, scale, exposure] = this.layout();
+    const { cx, cy, scale, exposure, camZ } = this.layout();
+    // Calibrated by rendering every formation settled and reading back the
+    // histogram: at this base the densest region of the densest formation
+    // reaches ~250/255 without clipping, so the tonemap's shoulder is fully
+    // used and no core flattens into a white disc. The per-formation factor
+    // corrects for how tightly each one packs its particles.
+    //
+    // Exposure also rides the boot ramp. Scattered across the whole viewport
+    // the particles cover far more area than any settled formation, so at full
+    // exposure the opening is a white blizzard that buries the hero copy. Dim
+    // at first, brightening as the field gathers: the page resolves out of the
+    // dark instead of flashing.
+    //
+    // Squared, with a very low floor: scattered over the viewport the cloud
+    // covers roughly three times the area of any settled formation, so a
+    // linear fade still opens brighter than the finished hero.
+    const exp = 3.0 * exposure * (0.06 + 0.94 * this.boot * this.boot);
 
     // ---- accumulate points into the HDR buffer ----
     gl.bindFramebuffer(gl.FRAMEBUFFER, this.sceneFbo);
@@ -677,41 +816,98 @@ export class LatentEngine {
     gl.uniform1i(gl.getUniformLocation(this.pointProg, "uVel"), 1);
     gl.uniform2f(gl.getUniformLocation(this.pointProg, "uDim"), this.dim, this.dim);
     gl.uniform1f(gl.getUniformLocation(this.pointProg, "uAspect"), canvas.width / canvas.height);
-    gl.uniform1f(gl.getUniformLocation(this.pointProg, "uPxScale"), 1.35 * this.renderDpr);
+    // Wider sprites than the point cloud strictly needs. Tight ones leave the
+    // field reading as static: individual particles resolve and the form looks
+    // like sandpaper rather than like a lit volume. Overlapping them is what
+    // turns the dust into a surface — the fragment shader conserves energy, so
+    // the extra area costs level, not detail.
+    gl.uniform1f(gl.getUniformLocation(this.pointProg, "uPxScale"), 1.75 * this.renderDpr);
     // Exposure was calibrated against 512x512 particles; keep the HDR buffer
     // receiving the same total light when mobile drops to 256x256.
     gl.uniform1f(gl.getUniformLocation(this.pointProg, "uGain"), (512 * 512) / this.count);
     gl.uniform2f(gl.getUniformLocation(this.pointProg, "uCenter"), cx, cy);
     gl.uniform1f(gl.getUniformLocation(this.pointProg, "uScale"), scale);
+    gl.uniform1f(gl.getUniformLocation(this.pointProg, "uCamZ"), camZ);
+    // Focus sits on the field's centre plane, with a slow drift either side of
+    // it. A perfectly static focal plane is the one part of a camera move a
+    // viewer notices as mechanical.
+    gl.uniform1f(
+      gl.getUniformLocation(this.pointProg, "uFocus"),
+      camZ + Math.sin(this.animTime * 0.077) * 0.06,
+    );
+    gl.uniform1f(gl.getUniformLocation(this.pointProg, "uCoc"), 0.55);
     gl.uniformMatrix3fv(gl.getUniformLocation(this.pointProg, "uRot"), false, this.buildRot());
     gl.bindVertexArray(this.vao);
     gl.drawArrays(gl.POINTS, 0, this.count);
 
-    // ---- tonemap to screen ----
+    gl.disable(gl.BLEND);
+
+    // ---- bloom: threshold, then two separable blur passes ----
+    const bloomA = this.bloomTexA;
+    const bloomB = this.bloomTexB;
+    const hasBloom = !!(this.bloomW > 0 && bloomA && bloomB && this.bloomFbo && brightProg && blurProg);
+    if (hasBloom && bloomA && bloomB && brightProg && blurProg) {
+      const bw = this.bloomW;
+      const bh = this.bloomH;
+      gl.bindFramebuffer(gl.FRAMEBUFFER, this.bloomFbo);
+      gl.drawBuffers([gl.COLOR_ATTACHMENT0]);
+      gl.viewport(0, 0, bw, bh);
+
+      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, bloomA, 0);
+      gl.useProgram(brightProg);
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, this.sceneTex);
+      gl.uniform1i(gl.getUniformLocation(brightProg, "uScene"), 0);
+      gl.uniform2f(gl.getUniformLocation(brightProg, "uTexSize"), bw, bh);
+      gl.uniform2f(
+        gl.getUniformLocation(brightProg, "uSrcTexel"),
+        1 / canvas.width,
+        1 / canvas.height,
+      );
+      gl.uniform1f(gl.getUniformLocation(brightProg, "uExposure"), exp);
+      // Threshold just under the tonemap's knee, so what blooms is what would
+      // otherwise have clipped.
+      gl.uniform1f(gl.getUniformLocation(brightProg, "uThreshold"), 0.72);
+      gl.uniform1f(gl.getUniformLocation(brightProg, "uKnee"), 0.38);
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+
+      gl.useProgram(blurProg);
+      gl.uniform2f(gl.getUniformLocation(blurProg, "uTexSize"), bw, bh);
+      gl.uniform1i(gl.getUniformLocation(blurProg, "uSrc"), 0);
+      for (const [src, dst, dx, dy] of [
+        [bloomA, bloomB, 1, 0],
+        [bloomB, bloomA, 0, 1],
+      ] as [WebGLTexture, WebGLTexture, number, number][]) {
+        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, dst, 0);
+        gl.activeTexture(gl.TEXTURE0);
+        gl.bindTexture(gl.TEXTURE_2D, src);
+        gl.uniform2f(gl.getUniformLocation(blurProg, "uDir"), dx, dy);
+        gl.drawArrays(gl.TRIANGLES, 0, 3);
+      }
+    }
+
+    // ---- tonemap and grade to screen ----
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     gl.viewport(0, 0, canvas.width, canvas.height);
-    gl.disable(gl.BLEND);
     gl.useProgram(this.showProg);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, this.sceneTex);
     gl.uniform1i(gl.getUniformLocation(this.showProg, "uScene"), 0);
+    gl.activeTexture(gl.TEXTURE1);
+    // Without a bloom chain the sampler still has to be bound to something
+    // legal; the scene's own black corners contribute nothing at amount 0.
+    gl.bindTexture(gl.TEXTURE_2D, hasBloom ? bloomA : this.sceneTex);
+    gl.uniform1i(gl.getUniformLocation(this.showProg, "uBloom"), 1);
+    gl.uniform1f(gl.getUniformLocation(this.showProg, "uBloomAmt"), hasBloom ? 0.34 : 0);
     gl.uniform2f(gl.getUniformLocation(this.showProg, "uTexSize"), canvas.width, canvas.height);
     gl.uniform1f(gl.getUniformLocation(this.showProg, "uTime"), this.animTime);
-    // 1.75 is the calibrated base; the per-formation factor compensates for
-    // how tightly each one packs its particles.
-    //
-    // Exposure also rides the boot ramp. Scattered across the whole viewport
-    // the particles cover far more area than any settled formation, so at full
-    // exposure the opening is a white blizzard that buries the hero copy. Dim
-    // at first, brightening as the field gathers: the page resolves out of the
-    // dark instead of flashing.
-    gl.uniform1f(
-      gl.getUniformLocation(this.showProg, "uExposure"),
-      // Squared, with a very low floor: scattered over the viewport the cloud
-      // covers roughly three times the area of any settled formation, so a
-      // linear fade still opens brighter than the finished hero.
-      1.75 * exposure * (0.06 + 0.94 * this.boot * this.boot),
-    );
+    gl.uniform1f(gl.getUniformLocation(this.showProg, "uExposure"), exp);
+    // The offset peaks at q*r2*uCA with |q| = 0.5 and r2 = 0.5, i.e. uCA/4 in
+    // uv — about one pixel across a 1440-wide frame.
+    gl.uniform1f(gl.getUniformLocation(this.showProg, "uCA"), 0.005);
+    // Light: the field is already made of discrete points, so grain on top of
+    // it stops reading as stock and starts reading as sandpaper.
+    gl.uniform1f(gl.getUniformLocation(this.showProg, "uGrain"), 0.007);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   }
 
@@ -755,7 +951,20 @@ export class LatentEngine {
     // NEAREST full turn rather than to zero — after a few minutes of drift the
     // absolute angle is large, and unwinding it would spin the field.
     const faceOn = Math.min(1, Math.max(0, (this.shape - 5.15) / 0.85));
-    this.yaw += dt * 0.06 * (1 - steering) * (1 - faceOn);
+    // Drift speed breathes instead of ticking along at a constant rate: a fixed
+    // angular velocity is the single clearest tell that a shot is a turntable
+    // render rather than a camera on a dolly.
+    const driftRate = 0.052 + 0.019 * Math.sin(this.animTime * 0.113);
+    this.yaw += dt * driftRate * (1 - steering) * (1 - faceOn);
+
+    // Idle move, layered on top of the shot: a slow elevation bob, a hint of
+    // roll on a different period so the two never sync up, and a trace of
+    // handheld from two incommensurate sines.
+    const t = this.animTime;
+    this.bobPitch = 0.055 * Math.sin(t * 0.2244);
+    this.bobRoll = 0.014 * Math.sin(t * 0.3306 + 1.7);
+    this.bobYaw = 0.008 * Math.sin(t * 0.71) + 0.005 * Math.sin(t * 1.33 + 0.9);
+    this.breath = 0.035 * Math.sin(t * 0.0913);
     if (faceOn > 0) {
       const k = Math.min(1, dt * 3 * faceOn);
       const square = Math.round(this.yaw / (Math.PI * 2)) * Math.PI * 2;
