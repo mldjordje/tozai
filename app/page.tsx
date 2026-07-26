@@ -47,11 +47,9 @@ export default async function Home() {
           className="relative flex min-h-[100svh] items-center px-6 py-28 md:px-12"
         >
           <div className="w-full max-w-6xl">
-            <p className="mb-3 text-sm font-medium uppercase tracking-[0.25em] text-accent-soft">
-              01 — Brojevi
-            </p>
+            <p className="eyebrow mb-5">01 — Brojevi</p>
             <KineticTitle
-              text="Brojevi koji rade za sebe."
+              text="Brojevi koji rade *za sebe*."
               className="display mb-16 max-w-2xl text-4xl md:mb-24 md:text-7xl"
             />
             <div className="grid grid-cols-2 gap-x-8 gap-y-14 md:grid-cols-4">
@@ -97,7 +95,7 @@ export default async function Home() {
               </p>
             </Reveal>
             <KineticTitle
-              text="Hajde da napravimo tvoj sadržaj."
+              text="Hajde da napravimo *tvoj sadržaj*."
               className="display mx-auto max-w-4xl text-5xl md:text-8xl"
             />
             <Reveal delay={0.25}>

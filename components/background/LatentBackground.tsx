@@ -85,28 +85,105 @@ export default function LatentBackground({ onReady }: { onReady?: () => void }) 
     }
 
     const onScroll = () => engine.setProgress(scrollProgress());
-    const onPointer = (e: PointerEvent) =>
-      engine.setPointer(e.clientX / window.innerWidth, 1 - e.clientY / window.innerHeight);
-    const onDown = () => engine.pulse();
     const onResize = () => {
       engine.resize();
       syncSectionAnchors();
     };
     const onVisibility = () => (document.hidden ? engine.pause() : engine.resume());
 
+    // Mouse: moving aims the vortex, dragging orbits the field. A press that
+    // never really moves is a click, so it fires the shockwave instead —
+    // otherwise every attempt to orbit would also detonate the field.
+    const minDim = () => Math.min(window.innerWidth, window.innerHeight);
+    let down = false;
+    let travel = 0;
+    let lx = 0;
+    let ly = 0;
+
+    const onPointerMove = (e: PointerEvent) => {
+      engine.setPointer(e.clientX / window.innerWidth, 1 - e.clientY / window.innerHeight);
+      if (!down || e.pointerType === "touch") return;
+      const dx = (e.clientX - lx) / minDim();
+      const dy = -(e.clientY - ly) / minDim();
+      travel += Math.hypot(dx, dy);
+      engine.dragBy(dx, dy);
+      lx = e.clientX;
+      ly = e.clientY;
+    };
+    const onPointerDown = (e: PointerEvent) => {
+      down = true;
+      travel = 0;
+      lx = e.clientX;
+      ly = e.clientY;
+    };
+    const onPointerUp = () => {
+      if (down && travel < 0.015) engine.pulse();
+      down = false;
+    };
+
+    // Touch: a gesture that starts mostly horizontal locks into orbiting; a
+    // mostly vertical one stays a normal page scroll. No hijacking.
+    let tracking = false;
+    let decided = false;
+    let orbiting = false;
+    let sx = 0;
+    let sy = 0;
+    let tx = 0;
+    let ty = 0;
+
+    const onTouchStart = (e: TouchEvent) => {
+      if (e.touches.length !== 1) return;
+      tracking = true;
+      decided = false;
+      orbiting = false;
+      sx = tx = e.touches[0].clientX;
+      sy = ty = e.touches[0].clientY;
+    };
+    const onTouchMove = (e: TouchEvent) => {
+      if (!tracking) return;
+      const t = e.touches[0];
+      if (!decided) {
+        const adx = Math.abs(t.clientX - sx);
+        const ady = Math.abs(t.clientY - sy);
+        if (adx > 8 || ady > 8) {
+          decided = true;
+          orbiting = adx > ady * 1.2;
+        }
+      }
+      if (decided && orbiting) {
+        e.preventDefault();
+        engine.dragBy((t.clientX - tx) / minDim(), -(t.clientY - ty) / minDim());
+      }
+      tx = t.clientX;
+      ty = t.clientY;
+    };
+    const onTouchEnd = () => {
+      tracking = false;
+    };
+
     engine.setProgress(scrollProgress());
     engine.start();
 
     window.addEventListener("scroll", onScroll, { passive: true });
-    window.addEventListener("pointermove", onPointer, { passive: true });
-    window.addEventListener("pointerdown", onDown, { passive: true });
+    window.addEventListener("pointermove", onPointerMove, { passive: true });
+    window.addEventListener("pointerdown", onPointerDown, { passive: true });
+    window.addEventListener("pointerup", onPointerUp, { passive: true });
+    window.addEventListener("pointercancel", onPointerUp, { passive: true });
+    window.addEventListener("touchstart", onTouchStart, { passive: true });
+    window.addEventListener("touchmove", onTouchMove, { passive: false });
+    window.addEventListener("touchend", onTouchEnd, { passive: true });
     window.addEventListener("resize", onResize);
     document.addEventListener("visibilitychange", onVisibility);
 
     return () => {
       window.removeEventListener("scroll", onScroll);
-      window.removeEventListener("pointermove", onPointer);
-      window.removeEventListener("pointerdown", onDown);
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerdown", onPointerDown);
+      window.removeEventListener("pointerup", onPointerUp);
+      window.removeEventListener("pointercancel", onPointerUp);
+      window.removeEventListener("touchstart", onTouchStart);
+      window.removeEventListener("touchmove", onTouchMove);
+      window.removeEventListener("touchend", onTouchEnd);
       window.removeEventListener("resize", onResize);
       document.removeEventListener("visibilitychange", onVisibility);
       engine.dispose();

@@ -119,11 +119,9 @@ export default function ResultsShowcase() {
     <section id="portfolio" ref={ref} className="relative h-[320svh]">
       <div className="sticky top-0 flex h-svh flex-col justify-center overflow-hidden pt-24 md:pt-28">
         <div className="px-6 md:px-12">
-          <p className="mb-3 text-sm font-medium uppercase tracking-[0.25em] text-accent-soft">
-            Real rezultati
-          </p>
+          <p className="eyebrow mb-5">Real rezultati</p>
           <KineticTitle
-            text="Svaki kadar je AI. Svaki broj je stvaran."
+            text="Svaki kadar je AI. Svaki broj je *stvaran*."
             className="display max-w-3xl text-4xl md:text-7xl"
           />
           <p className="mt-4 max-w-md text-sm text-muted md:mt-6 md:text-base">

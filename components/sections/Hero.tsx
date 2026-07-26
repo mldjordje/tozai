@@ -49,11 +49,7 @@ export default function Hero() {
         animate="show"
         className="relative max-w-4xl"
       >
-        <motion.p
-          variants={line}
-          className="mb-6 flex items-center gap-3 text-sm font-medium uppercase tracking-[0.25em] text-accent-soft"
-        >
-          <span className="h-px w-8 bg-accent-soft/60" />
+        <motion.p variants={line} className="eyebrow mb-7">
           AI Video Studio
         </motion.p>
 

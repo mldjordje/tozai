@@ -17,11 +17,9 @@ export default function Packages({ packages = CLIP_PACKAGES }: { packages?: Clip
       className="relative flex min-h-[100svh] items-center px-6 py-28 md:px-12"
     >
       <div className="w-full max-w-6xl">
-        <p className="mb-3 text-sm font-medium uppercase tracking-[0.25em] text-accent-soft">
-          02 — Paketi
-        </p>
+        <p className="eyebrow mb-5">02 — Paketi</p>
         <KineticTitle
-          text="Kupi AI klipove. Bez čekanja."
+          text="Kupi AI klipove. *Bez čekanja*."
           className="display mb-5 max-w-2xl text-4xl md:text-7xl"
         />
         <Reveal delay={0.1}>

@@ -19,11 +19,9 @@ export default function Education({ packs = HOUR_PACKS }: { packs?: HourPack[] }
       className="relative flex min-h-[100svh] items-center px-6 py-28 md:px-12"
     >
       <div className="w-full max-w-6xl">
-        <p className="mb-3 text-sm font-medium uppercase tracking-[0.25em] text-accent-soft">
-          03 — Privatna edukacija
-        </p>
+        <p className="eyebrow mb-5">03 — Privatna edukacija</p>
         <KineticTitle
-          text="Nauči da praviš sadržaj koji prodaje."
+          text="Nauči da praviš sadržaj *koji prodaje*."
           className="display max-w-3xl text-4xl md:text-7xl"
         />
         <Reveal delay={0.12}>

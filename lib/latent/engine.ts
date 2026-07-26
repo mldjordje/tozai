@@ -46,8 +46,8 @@ const FIELD_KEYS: FieldKey[] = [
   [0.16, 0.3, 0.06, 1.06, 1.0], // brojevi — lattice
   [0.36, 0.0, 0.1, 1.12, 0.86], // rezultati — stream spans the viewport
   [0.56, 0.28, 0.04, 1.0, 0.92], // paketi — three clusters
-  [0.76, 0.3, 0.06, 1.04, 1.14], // edukacija — network
-  [1.0, 0.0, 0.06, 0.92, 1.0], // booking — singularity, centered
+  [0.76, 0.3, 0.06, 1.04, 0.5], // edukacija — network (widest footprint)
+  [1.0, 0.0, 0.06, 0.92, 1.05], // booking — singularity, centered
 ];
 
 function smootherstep(t: number): number {
@@ -110,6 +110,14 @@ export class LatentEngine {
   private pulseV = 0;
   private animTime = 0;
   private lastNow = 0;
+
+  // Orbit. The formations are static and the camera turns around them, so
+  // this is the one piece of state the user can actually steer.
+  private yaw = 0;
+  private pitch = 0;
+  private yawVel = 0;
+  private pitchVel = 0;
+  private rot = new Float32Array(9);
 
   mount(canvas: HTMLCanvasElement, options: LatentOptions = {}): boolean {
     const gl = canvas.getContext("webgl2", {
@@ -240,6 +248,38 @@ export class LatentEngine {
     this.turb = Math.min(1.4, this.turb + 0.7);
   }
 
+  /** Drag to orbit. Deltas are normalized to the smaller viewport dimension,
+   *  y up. Feeds angular velocity rather than angle so releasing a fast drag
+   *  keeps spinning and coasts to rest. */
+  dragBy(dx: number, dy: number) {
+    this.yawVel += dx * 6.5;
+    this.pitchVel += dy * 5.0;
+    this.energy = Math.min(1, this.energy + Math.hypot(dx, dy) * 3);
+  }
+
+  /** Rotation for the current orbit, as a column-major mat3. Pointer parallax
+   *  is added here rather than accumulated, so it leans and returns. */
+  private buildRot() {
+    const yaw = this.yaw + (this.pointer[0] - 0.5) * 0.22;
+    const pitch = this.pitch + (this.pointer[1] - 0.5) * 0.14;
+    const cy = Math.cos(yaw);
+    const sy = Math.sin(yaw);
+    const cp = Math.cos(pitch);
+    const sp = Math.sin(pitch);
+    // R = Rx(pitch) * Ry(yaw), written out column by column.
+    const r = this.rot;
+    r[0] = cy;
+    r[1] = sp * sy;
+    r[2] = -cp * sy;
+    r[3] = 0;
+    r[4] = cp;
+    r[5] = sp;
+    r[6] = sy;
+    r[7] = -sp * cy;
+    r[8] = cp * cy;
+    return r;
+  }
+
   /** Draw one settled frame — used under prefers-reduced-motion. */
   renderOnce(progress = 0.3) {
     this.progress = this.progressTarget = clamp01(progress);
@@ -355,11 +395,13 @@ export class LatentEngine {
     const gl = this.gl;
     if (!gl || !this.simProg || !this.canvas) return;
 
-    const [cx, cy] = this.layout();
-    // Pointer -> field units on the z=0 plane, matching pointVertexShader.
+    const [cx, cy, scale] = this.layout();
+    // Pointer -> VIEW units on the z=0 plane, matching pointVertexShader. The
+    // shader compares this against uRot*p, so no inverse is needed here; the
+    // scale divide keeps the cursor's reach constant as the field resizes.
     const aspect = this.canvas.width / this.canvas.height;
-    const ptrX = ((this.pointer[0] * 2 - 1 - cx) * aspect) / PLANE;
-    const ptrY = (this.pointer[1] * 2 - 1 - cy) / PLANE;
+    const ptrX = ((this.pointer[0] * 2 - 1 - cx) * aspect) / PLANE / scale;
+    const ptrY = (this.pointer[1] * 2 - 1 - cy) / PLANE / scale;
 
     gl.bindFramebuffer(gl.FRAMEBUFFER, this.simFbo);
     gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, this.posB, 0);
@@ -383,6 +425,7 @@ export class LatentEngine {
     gl.uniform1f(gl.getUniformLocation(this.simProg, "uSettle"), this.settle);
     gl.uniform1f(gl.getUniformLocation(this.simProg, "uPulse"), this.pulseV);
     gl.uniform3f(gl.getUniformLocation(this.simProg, "uPtr"), ptrX, ptrY, this.energy);
+    gl.uniformMatrix3fv(gl.getUniformLocation(this.simProg, "uRot"), false, this.buildRot());
 
     gl.bindVertexArray(this.vao);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
@@ -446,6 +489,7 @@ export class LatentEngine {
     gl.uniform1f(gl.getUniformLocation(this.pointProg, "uGain"), (512 * 512) / this.count);
     gl.uniform2f(gl.getUniformLocation(this.pointProg, "uCenter"), cx, cy);
     gl.uniform1f(gl.getUniformLocation(this.pointProg, "uScale"), scale);
+    gl.uniformMatrix3fv(gl.getUniformLocation(this.pointProg, "uRot"), false, this.buildRot());
     gl.bindVertexArray(this.vao);
     gl.drawArrays(gl.POINTS, 0, this.count);
 
@@ -483,6 +527,18 @@ export class LatentEngine {
     );
     this.prevProgress = this.progress;
     this.velocity += (rawVel - this.velocity) * Math.min(1, dt * (rawVel > this.velocity ? 18 : 2.2));
+
+    // Orbit: integrate the user's angular velocity, then let it coast. A slow
+    // idle drift takes over once they stop steering, so the form keeps turning
+    // enough to read as a solid without ever fighting the drag.
+    this.yaw += this.yawVel * dt;
+    this.pitch += this.pitchVel * dt;
+    const decay = Math.exp(-dt * 2.4);
+    this.yawVel *= decay;
+    this.pitchVel *= decay;
+    this.pitch = Math.max(-0.6, Math.min(0.6, this.pitch));
+    const steering = Math.min(1, Math.abs(this.yawVel) + Math.abs(this.pitchVel));
+    this.yaw += dt * 0.06 * (1 - steering);
 
     this.shape = this.shapeAt(this.progress);
     const shapeRate = Math.abs(this.shape - this.prevShape) / Math.max(dt, 1e-3);
