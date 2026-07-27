@@ -913,7 +913,7 @@ export class LatentEngine {
     // Lower than the original plate: the compact bloom and dark-pearl grade
     // now describe the form with contrast rather than raw white energy.
     const morphLight = morphLightMultiplier(this.shape);
-    const exp = 2.35 * exposure * (0.06 + 0.94 * this.boot * this.boot) * morphLight;
+    const exp = 2.62 * exposure * (0.06 + 0.94 * this.boot * this.boot) * morphLight;
 
     // ---- accumulate points into the HDR buffer ----
     gl.bindFramebuffer(gl.FRAMEBUFFER, this.sceneFbo);
@@ -1035,7 +1035,7 @@ export class LatentEngine {
     const morph = 1 - morphLight;
     gl.uniform1f(
       gl.getUniformLocation(this.showProg, "uBloomAmt"),
-      hasBloom ? 0.2 * (1 - morph * 0.45) : 0,
+      hasBloom ? 0.22 * (1 - morph * 0.45) : 0,
     );
     gl.uniform2f(gl.getUniformLocation(this.showProg, "uTexSize"), canvas.width, canvas.height);
     gl.uniform1f(gl.getUniformLocation(this.showProg, "uTime"), this.animTime);
