@@ -351,10 +351,17 @@ export default function LatentBackground({ onReady }: { onReady?: () => void }) 
         </pre>
       ) : null}
 
-      {/* Legibility scrim. Desktop copy sits in the left column so the scrim
-          runs left-to-right; portrait copy is full-width with the field below
-          it, so there it runs top-to-bottom instead. */}
-      <div className="absolute inset-0 bg-gradient-to-b from-bg/85 via-bg/30 to-bg/5 md:bg-gradient-to-r md:from-bg/70 md:via-bg/10 md:to-transparent" />
+      {/* Legibility scrim, and the ONLY one — sections must not add their own.
+          Two stacked gradients multiply, which is how the field ended up
+          reading as almost black behind the hero copy.
+
+          Desktop copy sits in the left column so the scrim runs left-to-right
+          and reaches transparent well before the form, which lives right of
+          centre in every shot; portrait copy is full-width with the field below
+          it, so there it runs top-to-bottom instead. Darkening the left end is
+          therefore free — it buys the headline its contrast without touching a
+          single lit particle. */}
+      <div className="absolute inset-0 bg-gradient-to-b from-bg/85 via-bg/30 to-bg/5 md:bg-gradient-to-r md:from-bg/80 md:via-bg/16 md:to-transparent" />
     </div>
   );
 }

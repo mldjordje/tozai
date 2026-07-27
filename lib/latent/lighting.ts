@@ -21,3 +21,29 @@ export function transitionAccentPhase(ageSeconds: number): number {
   if (ageSeconds < 0 || ageSeconds >= TRANSITION_ACCENT_SECONDS) return -1;
   return ageSeconds / TRANSITION_ACCENT_SECONDS;
 }
+
+/** How long the idle sweep takes to cross the form, and how often it runs. */
+export const SHIMMER_SWEEP_SECONDS = 2.8;
+export const SHIMMER_PERIOD_SECONDS = 13;
+/** The field boots out of chaos; the first sweep waits for it to settle. */
+export const SHIMMER_FIRST_AT_SECONDS = 6;
+
+/**
+ * Idle light sweep — a slow plane of light crossing the settled form.
+ *
+ * Deliberately rare and deliberately slow. The whole rig is built to avoid
+ * brightness that is uncorrelated with the shape, so this is the one exception
+ * and it earns it by being a travelling WAVEFRONT: it lights the near side
+ * before the far side and wraps the silhouette, which is something a screen
+ * -space overlay cannot do. Run it often and it becomes the sparkle the
+ * lighting was written to remove.
+ *
+ * -1 means no sweep is running; otherwise 0..1 across one crossing.
+ */
+export function shimmerPhase(timeSeconds: number): number {
+  if (!Number.isFinite(timeSeconds) || timeSeconds < SHIMMER_FIRST_AT_SECONDS) {
+    return -1;
+  }
+  const cycle = (timeSeconds - SHIMMER_FIRST_AT_SECONDS) % SHIMMER_PERIOD_SECONDS;
+  return cycle < SHIMMER_SWEEP_SECONDS ? cycle / SHIMMER_SWEEP_SECONDS : -1;
+}

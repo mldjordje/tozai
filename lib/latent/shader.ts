@@ -464,6 +464,7 @@ in vec3  vNormal;
 in float vCoc;
 in float vSweep;
 uniform float uTransitionPhase; // -1 inactive, otherwise 0..1 over 220ms
+uniform float uShimmer;         // -1 inactive, otherwise 0..1 over one sweep
 out vec4 outColor;
 
 // The rig. Fixed in VIEW space: the lamps stand still and the subject turns on
@@ -518,8 +519,12 @@ void main() {
   // THAN, and every particle ends up carrying roughly the same level — which is
   // the flat, twinkly look. Let the shadow side go almost to black and the key
   // does the describing.
-  vec3 lit = ALBEDO * (0.022 + KEY_COL * key * 0.92 + FILL_COL * fill * 0.14)
-           + RIM_COL * rim * 1.08;
+  // Ambient stays low on purpose — a lifted floor greys out the shadow side and
+  // leaves the key nothing to be brighter THAN. The fill carries the lift
+  // instead, because it is directional: it opens the unlit side where the bounce
+  // would actually reach it and leaves the terminator intact.
+  vec3 lit = ALBEDO * (0.030 + KEY_COL * key * 1.02 + FILL_COL * fill * 0.22)
+           + RIM_COL * rim * 1.18;
 
   // Specular on the bead — but gated TWICE, and that second gate is the whole
   // fix for "why does this glitter".
@@ -545,6 +550,26 @@ void main() {
     float band = exp(-pow((vSweep - sweepCenter) * 5.8, 2.0))
                * sin(uTransitionPhase * 3.14159265);
     lit += mix(RIM_COL, KEY_COL, 0.38) * band * (0.16 + rim * 0.84) * 0.42;
+  }
+
+  // Idle shimmer. Same mechanism as the cut above, but three times wider and
+  // twelve times slower, so it reads as a light source travelling PAST the
+  // object rather than as a flash on it. vSweep is a projection of the
+  // particle's view-space position, which is what makes this a wavefront: the
+  // near side of the form lights before the far side and the band bends around
+  // the silhouette. A screen-space overlay cannot do that — it would light a
+  // flat ellipse over the top of the frame.
+  //
+  // Gated on rim and key for the same reason the specular is gated on the form
+  // normal: an ungated band raises every particle equally, which is precisely
+  // the uncorrelated sparkle the rest of this shader is built to avoid. What
+  // gets through is bright enough to cross the bloom threshold, so the halation
+  // follows the sweep for free instead of being faked with a second pass.
+  if (uShimmer >= 0.0) {
+    float shimmerCenter = mix(-2.7, 2.7, uShimmer);
+    float band = exp(-pow((vSweep - shimmerCenter) * 1.9, 2.0))
+               * sin(uShimmer * 3.14159265);
+    lit += mix(RIM_COL, KEY_COL, 0.30) * band * (0.10 + rim * 0.62 + key * 0.46) * 0.58;
   }
 
   // Motion is TEMPERATURE, not a flashbulb. Driving brightness at white with
@@ -696,7 +721,12 @@ void main() {
   // white, while the sparse rim/specular bloom can still sit above the body.
   c *= uExposure;
   float sceneLum = dot(c, LUMA);
-  c *= 1.0 / (1.0 + sceneLum * 1.5);
+  // The compression strength is the single biggest lever on how dark the field
+  // reads. At 1.5 it was pulling the lit side down almost as hard as the packed
+  // interiors it exists to protect, and the whole plate sat in the bottom of
+  // the range. 0.95 still holds a dense formation off white while leaving the
+  // form somewhere to actually be bright.
+  c *= 1.0 / (1.0 + sceneLum * 0.95);
   c += texture(uBloom, uv + off * 0.5).rgb * uBloomAmt;
 
   // No anamorphic streak here on purpose. Wide horizontal taps of a
@@ -719,16 +749,25 @@ void main() {
   // rather than like exposure. A soft S around the mids is the single cheapest
   // way to stop a dark scene reading as a grey haze with sparkles in it: the
   // shadows commit to black, so the lit side has somewhere to be bright from.
-  c = clamp((c - 0.5) * 1.16 + 0.5 - 0.028, 0.0, 1.0);
+  // The pedestal subtraction is what tips a graded plate from "deep" into
+  // "murky": it comes off every pixel including the ones the key is describing.
+  // Kept, because the blacks do need to commit, but at a third of its old
+  // weight.
+  c = clamp((c - 0.5) * 1.16 + 0.5 - 0.010, 0.0, 1.0);
 
   float luma = dot(c, LUMA);
-  c += vec3(0.008, 0.010, 0.019) * (1.0 - luma);   // charcoal floor, not dead void
+  c += vec3(0.012, 0.015, 0.028) * (1.0 - luma);   // charcoal floor, not dead void
 
   // Vignette, elliptical and shaped rather than the old flat quadratic: it
   // holds the centre open and falls away hard in the corners, which is what
   // pulls the eye onto the subject.
+  //
+  // The floor was 0.36, which is a corner darker than the page background —
+  // the frame closed in around the form and took most of the field's spread
+  // with it. Opened up, and the falloff softened, so it still shapes the frame
+  // without eating it.
   vec2 e = q * vec2(1.06, 1.24);
-  c *= mix(0.36, 1.0, pow(clamp(1.0 - dot(e, e) * 1.15, 0.0, 1.0), 1.45));
+  c *= mix(0.56, 1.0, pow(clamp(1.0 - dot(e, e) * 1.15, 0.0, 1.0), 1.22));
 
   // Film grain: strongest in the mids, backing off in the blacks and the
   // speculars, the way real stock behaves.

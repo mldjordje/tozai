@@ -34,6 +34,7 @@ import {
 import {
   morphLightMultiplier,
   particleLightGain,
+  shimmerPhase,
   TRANSITION_ACCENT_SECONDS,
   transitionAccentPhase,
 } from "./lighting";
@@ -927,7 +928,7 @@ export class LatentEngine {
     // Lower than the original plate: the compact bloom and dark-pearl grade
     // now describe the form with contrast rather than raw white energy.
     const morphLight = morphLightMultiplier(this.shape);
-    const exp = 2.62 * exposure * (0.06 + 0.94 * this.boot * this.boot) * morphLight;
+    const exp = 3.05 * exposure * (0.06 + 0.94 * this.boot * this.boot) * morphLight;
 
     // ---- accumulate points into the HDR buffer ----
     gl.bindFramebuffer(gl.FRAMEBUFFER, this.sceneFbo);
@@ -974,6 +975,13 @@ export class LatentEngine {
       gl.getUniformLocation(this.pointProg, "uTransitionPhase"),
       this.transitionPhase,
     );
+    // The two sweeps are mutually exclusive. A formation change already fires
+    // its own light cut, and stacking the slow one on top of it during a morph
+    // is the one moment the field is dense enough for the sum to clip.
+    gl.uniform1f(
+      gl.getUniformLocation(this.pointProg, "uShimmer"),
+      this.transitionPhase >= 0 ? -1 : shimmerPhase(this.animTime),
+    );
     gl.uniformMatrix3fv(gl.getUniformLocation(this.pointProg, "uRot"), false, this.buildRot());
     gl.bindVertexArray(this.vao);
     gl.drawArrays(gl.POINTS, 0, this.count);
@@ -1008,8 +1016,8 @@ export class LatentEngine {
       // frame sparkled. Now only genuinely hot cores bleed — fewer sources,
       // each one much wider. That is the difference between a lit set and a
       // string of fairy lights.
-      gl.uniform1f(gl.getUniformLocation(brightProg, "uThreshold"), 1.1);
-      gl.uniform1f(gl.getUniformLocation(brightProg, "uKnee"), 0.22);
+      gl.uniform1f(gl.getUniformLocation(brightProg, "uThreshold"), 0.98);
+      gl.uniform1f(gl.getUniformLocation(brightProg, "uKnee"), 0.26);
       gl.drawArrays(gl.TRIANGLES, 0, 3);
 
       // A single compact H+V octave keeps glow attached to the highlight. The
@@ -1049,7 +1057,7 @@ export class LatentEngine {
     const morph = 1 - morphLight;
     gl.uniform1f(
       gl.getUniformLocation(this.showProg, "uBloomAmt"),
-      hasBloom ? 0.22 * (1 - morph * 0.45) : 0,
+      hasBloom ? 0.30 * (1 - morph * 0.45) : 0,
     );
     gl.uniform2f(gl.getUniformLocation(this.showProg, "uTexSize"), canvas.width, canvas.height);
     gl.uniform1f(gl.getUniformLocation(this.showProg, "uTime"), this.animTime);

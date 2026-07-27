@@ -241,8 +241,12 @@ textarea,
     var(--color-muted) 66%,
     var(--color-muted) 100%
   );
+  /* Painted UNDER the gradient and clipped with it. The fill is transparent, so
+     any glyph the background image fails to cover renders as nothing at all —
+     this is the floor that makes an invisible accent word impossible. */
+  background-color: var(--color-muted);
   background-size: 280% 100%;
-  background-position: 130% 0;
+  background-position: 0% 0;
   background-repeat: no-repeat;
   -webkit-background-clip: text;
   background-clip: text;
@@ -258,12 +262,21 @@ textarea,
     sheen 1.5s cubic-bezier(0.16, 1, 0.3, 1) 0.35s both,
     accent-bloom 1.8s cubic-bezier(0.16, 1, 0.3, 1) 0.35s both;
 }
+/* 0% and 100% are not arbitrary end points, they are the ONLY safe ones.
+   Percentage background-position resolves against (box width - image width),
+   which is negative when the image is wider than the box: 0% and 100% are the
+   two extremes at which a 280%-wide image still covers the element exactly, and
+   any value outside that range slides part of the text off the image entirely.
+   The old sweep ran 130% -> -30%, so it finished with roughly half the word
+   uncovered — and uncovered, under `background-clip: text` with a transparent
+   fill, means INVISIBLE. That is why the accent words were rendering with their
+   leading glyphs missing once the sweep had settled. */
 @keyframes sheen {
   from {
-    background-position: 130% 0;
+    background-position: 0% 0;
   }
   to {
-    background-position: -30% 0;
+    background-position: 100% 0;
   }
 }
 

@@ -111,15 +111,6 @@ export default function Hero() {
           className="pointer-events-none absolute inset-0 z-[1] bg-gradient-to-b from-bg via-bg/90 to-bg/55 md:hidden"
         />
 
-        {/* Desktop had no scrim at all, so the headline was set straight over
-            the live particle field and lost its counters wherever a bright
-            cluster drifted behind it. Anchored left and fading out well before
-            the core, so the field still reads as the light source. */}
-        <div
-          aria-hidden
-          className="pointer-events-none absolute inset-y-0 left-0 z-[1] hidden w-[68%] bg-gradient-to-r from-bg via-bg/78 to-transparent md:block"
-        />
-
         <motion.div
           variants={container}
           initial="hidden"
