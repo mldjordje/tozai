@@ -13,8 +13,15 @@ export async function GET() {
       (SELECT COUNT(*)::int FROM project_materials WHERE seen_at IS NULL) AS new_materials,
       (SELECT COUNT(*)::int FROM video_requests WHERE status = 'submitted') AS new_requests,
       (SELECT COUNT(*)::int FROM projects
-        WHERE status IN ('onboarding', 'u_izradi', 'na_reviziji')) AS active_projects
-  `) as { new_materials: number; new_requests: number; active_projects: number }[];
+        WHERE status IN ('onboarding', 'u_izradi', 'na_reviziji')) AS active_projects,
+      (SELECT COUNT(*)::int FROM orders
+        WHERE paid_at IS NULL AND status = 'pending') AS unpaid_orders
+  `) as {
+    new_materials: number;
+    new_requests: number;
+    active_projects: number;
+    unpaid_orders: number;
+  }[];
 
   return NextResponse.json({
     ok: true,
@@ -22,6 +29,7 @@ export async function GET() {
       newMaterials: counts.new_materials,
       newRequests: counts.new_requests,
       activeProjects: counts.active_projects,
+      unpaidOrders: counts.unpaid_orders,
     },
   });
 }
