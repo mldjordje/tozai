@@ -31,6 +31,12 @@ import {
   type LatentProfile,
   type RendererClass,
 } from "./quality";
+import {
+  morphLightMultiplier,
+  particleLightGain,
+  TRANSITION_ACCENT_SECONDS,
+  transitionAccentPhase,
+} from "./lighting";
 
 export interface LatentOptions {
   /** Opening quality bid, from selectLatentProfile. The engine narrows it once
@@ -208,6 +214,9 @@ export class LatentEngine {
   private turb = 0;
   private settle = 0;
   private pulseV = 0;
+  private transitionAge = TRANSITION_ACCENT_SECONDS;
+  private transitionPhase = -1;
+  private formationIndex = 0;
   private animTime = 0;
   private lastNow = 0;
 
@@ -585,8 +594,11 @@ export class LatentEngine {
     this.progress = this.progressTarget = clamp01(progress);
     this.prevProgress = this.progress;
     this.shape = this.prevShape = this.shapeAt(this.progress);
+    this.formationIndex = Math.floor(this.shape + 0.5);
     this.settle = 1;
     this.boot = 1;
+    this.transitionAge = TRANSITION_ACCENT_SECONDS;
+    this.transitionPhase = -1;
     if (this.shape > 5.15) {
       this.yaw = 0;
       this.pitch = 0;
@@ -898,10 +910,10 @@ export class LatentEngine {
     // Squared, with a very low floor: scattered over the viewport the cloud
     // covers roughly three times the area of any settled formation, so a
     // linear fade still opens brighter than the finished hero.
-    // Nudged up from 3.0 to pay for the deeper shadows in the rig: dropping the
-    // ambient floor took real light out of the frame, and the grade's contrast
-    // curve takes a little more.
-    const exp = 3.3 * exposure * (0.06 + 0.94 * this.boot * this.boot);
+    // Lower than the original plate: the compact bloom and dark-pearl grade
+    // now describe the form with contrast rather than raw white energy.
+    const morphLight = morphLightMultiplier(this.shape);
+    const exp = 2.35 * exposure * (0.06 + 0.94 * this.boot * this.boot) * morphLight;
 
     // ---- accumulate points into the HDR buffer ----
     gl.bindFramebuffer(gl.FRAMEBUFFER, this.sceneFbo);
@@ -921,18 +933,15 @@ export class LatentEngine {
     gl.uniform1i(gl.getUniformLocation(this.pointProg, "uVel"), 1);
     gl.uniform2f(gl.getUniformLocation(this.pointProg, "uDim"), this.dim, this.dim);
     gl.uniform1f(gl.getUniformLocation(this.pointProg, "uAspect"), canvas.width / canvas.height);
-    // Wider sprites than the point cloud strictly needs. Tight ones leave the
-    // field reading as static: individual particles resolve and the form looks
-    // like sandpaper rather than like a lit volume. Overlapping them is what
-    // turns the dust into a surface — the fragment shader conserves energy, so
-    // the extra area costs level, not detail.
-    // Widened again: bigger, softer, more overlapped sprites are what separate
-    // "a lit volume" from "a lot of small bright dots". Small dots are the
-    // geometry of glitter — you can resolve each one, so each one twinkles.
-    gl.uniform1f(gl.getUniformLocation(this.pointProg, "uPxScale"), 1.95 * this.renderDpr);
-    // Exposure was calibrated against 512x512 particles; keep the HDR buffer
-    // receiving the same total light when mobile drops to 256x256.
-    gl.uniform1f(gl.getUniformLocation(this.pointProg, "uGain"), (512 * 512) / this.count);
+    // A compact bead leaves enough overlap to read as a volume while keeping
+    // the individual point and the formation's edge visible on small screens.
+    gl.uniform1f(gl.getUniformLocation(this.pointProg, "uPxScale"), 1.55 * this.renderDpr);
+    // Lower profiles receive sublinear compensation: enough presence to keep
+    // the form, without turning every remaining mobile particle into a lamp.
+    gl.uniform1f(
+      gl.getUniformLocation(this.pointProg, "uGain"),
+      particleLightGain(this.count),
+    );
     gl.uniform2f(gl.getUniformLocation(this.pointProg, "uCenter"), cx, cy);
     gl.uniform1f(gl.getUniformLocation(this.pointProg, "uScale"), scale);
     gl.uniform1f(gl.getUniformLocation(this.pointProg, "uCamZ"), camZ);
@@ -943,11 +952,14 @@ export class LatentEngine {
       gl.getUniformLocation(this.pointProg, "uFocus"),
       camZ + Math.sin(this.animTime * 0.077) * 0.06,
     );
-    // Shallower than before. Depth of field is the most expensive-looking cue
-    // available and it is also a de-glitterer: an out-of-focus particle is a
-    // soft disc that cannot twinkle, so only the focal band is allowed to be
-    // crisp at all.
-    gl.uniform1f(gl.getUniformLocation(this.pointProg, "uCoc"), 0.72);
+    // Preserve more focal detail in portrait, where a broad bokeh disc can
+    // consume the point and its silhouette in only a few physical pixels.
+    const portrait = canvas.width / canvas.height < 0.85;
+    gl.uniform1f(gl.getUniformLocation(this.pointProg, "uCoc"), portrait ? 0.3 : 0.48);
+    gl.uniform1f(
+      gl.getUniformLocation(this.pointProg, "uTransitionPhase"),
+      this.transitionPhase,
+    );
     gl.uniformMatrix3fv(gl.getUniformLocation(this.pointProg, "uRot"), false, this.buildRot());
     gl.bindVertexArray(this.vao);
     gl.drawArrays(gl.POINTS, 0, this.count);
@@ -982,24 +994,20 @@ export class LatentEngine {
       // frame sparkled. Now only genuinely hot cores bleed — fewer sources,
       // each one much wider. That is the difference between a lit set and a
       // string of fairy lights.
-      gl.uniform1f(gl.getUniformLocation(brightProg, "uThreshold"), 0.9);
-      gl.uniform1f(gl.getUniformLocation(brightProg, "uKnee"), 0.5);
+      gl.uniform1f(gl.getUniformLocation(brightProg, "uThreshold"), 1.1);
+      gl.uniform1f(gl.getUniformLocation(brightProg, "uKnee"), 0.22);
       gl.drawArrays(gl.TRIANGLES, 0, 3);
 
-      // Four passes, two octaves. H+V at radius 1 gives the tight core glow;
-      // H+V at radius 3.4 over the same buffer widens it into halation. Both
-      // accumulate into A, so the final texture carries a tight highlight
-      // sitting inside a broad, very soft pool of light.
+      // A single compact H+V octave keeps glow attached to the highlight. The
+      // former wide octave pooled light over the entire mobile formation.
       const blurDir = gl.getUniformLocation(blurProg, "uDir");
       const blurRadius = gl.getUniformLocation(blurProg, "uRadius");
       gl.useProgram(blurProg);
       gl.uniform2f(gl.getUniformLocation(blurProg, "uTexSize"), bw, bh);
       gl.uniform1i(gl.getUniformLocation(blurProg, "uSrc"), 0);
       for (const [src, dst, dx, dy, r] of [
-        [bloomA, bloomB, 1, 0, 1.0],
-        [bloomB, bloomA, 0, 1, 1.0],
-        [bloomA, bloomB, 1, 0, 3.4],
-        [bloomB, bloomA, 0, 1, 3.4],
+        [bloomA, bloomB, 1, 0, 1.35],
+        [bloomB, bloomA, 0, 1, 1.35],
       ] as [WebGLTexture, WebGLTexture, number, number, number][]) {
         gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, dst, 0);
         gl.activeTexture(gl.TEXTURE0);
@@ -1022,10 +1030,13 @@ export class LatentEngine {
     // legal; the scene's own black corners contribute nothing at amount 0.
     gl.bindTexture(gl.TEXTURE_2D, hasBloom ? bloomA : this.sceneTex);
     gl.uniform1i(gl.getUniformLocation(this.showProg, "uBloom"), 1);
-    // Higher amount than before even though the threshold went up: far less of
-    // the frame qualifies now, so the surviving glow can be strong without
-    // washing the whole field. Few and wide, not many and small.
-    gl.uniform1f(gl.getUniformLocation(this.showProg, "uBloomAmt"), hasBloom ? 0.52 : 0);
+    // Suppress bloom further while formations overlap; movement remains fully
+    // visible, but the transition no longer becomes a prolonged light source.
+    const morph = 1 - morphLight;
+    gl.uniform1f(
+      gl.getUniformLocation(this.showProg, "uBloomAmt"),
+      hasBloom ? 0.2 * (1 - morph * 0.45) : 0,
+    );
     gl.uniform2f(gl.getUniformLocation(this.showProg, "uTexSize"), canvas.width, canvas.height);
     gl.uniform1f(gl.getUniformLocation(this.showProg, "uTime"), this.animTime);
     gl.uniform1f(gl.getUniformLocation(this.showProg, "uExposure"), exp);
@@ -1118,6 +1129,14 @@ export class LatentEngine {
     this.faceOn = faceOn;
 
     this.shape = this.shapeAt(this.progress);
+    const formationIndex = Math.floor(this.shape + 0.5);
+    if (formationIndex !== this.formationIndex) {
+      this.formationIndex = formationIndex;
+      this.transitionAge = 0;
+    } else {
+      this.transitionAge += dt;
+    }
+    this.transitionPhase = transitionAccentPhase(this.transitionAge);
     const shapeRate = Math.abs(this.shape - this.prevShape) / Math.max(dt, 1e-3);
     this.prevShape = this.shape;
 

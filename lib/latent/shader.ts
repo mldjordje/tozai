@@ -388,6 +388,7 @@ out vec2  vDir;          // screen-space velocity direction
 out float vStretch;      // motion-blur elongation along vDir
 out vec3  vNormal;       // form-scale shading normal, view space
 out float vCoc;          // defocus radius, in sprite widths
+out float vSweep;        // diagonal coordinate for the transition light cut
 
 const float FOCAL = 1.45;
 
@@ -432,7 +433,8 @@ void main() {
   // band the camera is focused on stays crisp, so the eye is told where to
   // look. The sprite grows with the defocus radius and the fragment shader
   // divides the light back out, so blurring never adds energy.
-  vCoc = min(abs(z - uFocus) * uCoc, 2.2);
+  vCoc = min(abs(z - uFocus) * uCoc, 1.35);
+  vSweep = dot(p.xy, normalize(vec2(0.78, 0.62)));
 
   vec2 sv = vec2(v.x / uAspect, v.y) * f;
   float svl = length(sv);
@@ -460,6 +462,8 @@ in vec2  vDir;
 in float vStretch;
 in vec3  vNormal;
 in float vCoc;
+in float vSweep;
+uniform float uTransitionPhase; // -1 inactive, otherwise 0..1 over 220ms
 out vec4 outColor;
 
 // The rig. Fixed in VIEW space: the lamps stand still and the subject turns on
@@ -472,7 +476,7 @@ const vec3 RIM_DIR  = normalize(vec3( 0.22,  0.52, -0.82));   // above and behin
 const vec3 KEY_COL  = vec3(1.00, 0.965, 0.915);               // tungsten-warm
 const vec3 FILL_COL = vec3(0.42, 0.56, 0.92);                 // cool bounce
 const vec3 RIM_COL  = vec3(0.66, 0.80, 1.00);
-const vec3 ALBEDO   = vec3(0.55, 0.575, 0.64);                // graphite, not white
+const vec3 ALBEDO   = vec3(0.20, 0.225, 0.30);                // dark graphite pearl
 const vec3 VIEW_DIR = vec3(0.0, 0.0, 1.0);
 // Aerial perspective: the far side of the volume cools and loses contrast, the
 // way any depth of real atmosphere does. Free, and it is half of why a
@@ -487,10 +491,10 @@ void main() {
   vec2 a = vec2(dot(c, vDir), dot(c, vec2(-vDir.y, vDir.x)));
   a.x /= vStretch;
 
-  // Out-of-focus sprites lose their hard edge. This is the bokeh: a defocused
-  // point is a soft disc, a focused one is a tight dot.
-  float edge = mix(0.04, 0.44, clamp(vCoc, 0.0, 1.0));
-  float mask = smoothstep(0.5, edge, length(a));
+  // Focused particles keep a precise bead edge; defocus adds a controlled
+  // feather instead of expanding the point into an anonymous light blob.
+  float feather = mix(0.07, 0.25, clamp(vCoc, 0.0, 1.0));
+  float mask = 1.0 - smoothstep(0.5 - feather, 0.5, length(a));
 
   // Sphere imposter: treat the sprite as a tiny bead and reconstruct its
   // normal from the sprite coordinate. Costs three instructions and turns flat
@@ -502,20 +506,20 @@ void main() {
   // Wrapped diffuse. A hard Lambert terminator aliases badly across a point
   // cloud — half the form would simply vanish — so the falloff wraps around
   // and the unlit side keeps just enough presence to read as mass.
-  float key  = pow(dot(n, KEY_DIR)  * 0.5 + 0.5, 1.7);
-  float fill = pow(dot(n, FILL_DIR) * 0.5 + 0.5, 2.2);
+  float key  = pow(dot(n, KEY_DIR)  * 0.5 + 0.5, 2.15);
+  float fill = pow(dot(n, FILL_DIR) * 0.5 + 0.5, 2.8);
   // Rim: brightest where the form normal turns away from the camera, i.e. at
   // the silhouette. This is what separates the object from the background and
   // is the most recognisable studio move there is.
-  float rim  = pow(1.0 - abs(dot(n, VIEW_DIR)), 2.6) * max(dot(n, RIM_DIR), 0.0);
+  float rim  = pow(1.0 - abs(dot(n, VIEW_DIR)), 4.2) * max(dot(n, RIM_DIR), 0.0);
 
   // Ambient dropped hard. A lifted floor is what makes a dark render look
   // cheap: it greys out the unlit side so the key has nothing to be brighter
   // THAN, and every particle ends up carrying roughly the same level — which is
   // the flat, twinkly look. Let the shadow side go almost to black and the key
   // does the describing.
-  vec3 lit = ALBEDO * (0.055 + KEY_COL * key * 1.14 + FILL_COL * fill * 0.26)
-           + RIM_COL * rim * 0.82;
+  vec3 lit = ALBEDO * (0.022 + KEY_COL * key * 0.92 + FILL_COL * fill * 0.14)
+           + RIM_COL * rim * 1.08;
 
   // Specular on the bead — but gated TWICE, and that second gate is the whole
   // fix for "why does this glitter".
@@ -529,11 +533,19 @@ void main() {
   // shape as the camera orbits. Same instruction count, completely different
   // read — polished metal instead of Christmas lights.
   vec3 h = normalize(KEY_DIR + VIEW_DIR);
-  float sheen = smoothstep(0.42, 0.94, dot(n, h));
-  float spec = pow(max(dot(nBead, h), 0.0), 108.0)
-             * smoothstep(0.98, 1.12, vNode)
-             * sheen;
-  lit += KEY_COL * spec * 0.55;
+  float sheen = pow(max(dot(n, h), 0.0), 18.0);
+  float bead = 0.72 + pow(max(dot(nBead, VIEW_DIR), 0.0), 28.0) * 0.28;
+  float spec = sheen * bead * smoothstep(0.92, 1.1, vNode);
+  lit += KEY_COL * spec * 0.78;
+
+  // A scene change gets one narrow, time-based light cut. It is rim-gated so
+  // it describes the surface instead of flashing the entire formation.
+  if (uTransitionPhase >= 0.0) {
+    float sweepCenter = mix(-2.2, 2.2, uTransitionPhase);
+    float band = exp(-pow((vSweep - sweepCenter) * 5.8, 2.0))
+               * sin(uTransitionPhase * 3.14159265);
+    lit += mix(RIM_COL, KEY_COL, 0.38) * band * (0.16 + rim * 0.84) * 0.42;
+  }
 
   // Motion is TEMPERATURE, not a flashbulb. Driving brightness at white with
   // speed is exactly the cheap sparkle: a blink uncorrelated with the form. So
@@ -549,9 +561,9 @@ void main() {
   float near = clamp(vFade, 0.0, 1.0);
   lit = mix(lit * DEPTH_COL * 0.72, lit, near);
 
-  // vGain compensates for the reduced particle count on mobile: accumulation
-  // is linear, so a quarter of the points needs four times the light.
-  float lum = (0.66 + sp * 0.10) * vNode * vFade * vGain;
+  // vGain uses sublinear compensation on reduced profiles so mobile retains
+  // presence without matching desktop's total additive energy.
+  float lum = (0.52 + sp * 0.06) * vNode * vFade * vGain;
 
   // Energy is conserved as the sprite stretches, so streaks thin out instead
   // of turning into bright smears — and likewise as it defocuses, so a bokeh
@@ -679,7 +691,13 @@ void main() {
   // Bloom is sampled at a slight offset from the scene's own aberration so the
   // halation is not a perfectly registered copy of the highlights; real glass
   // never lines them up exactly.
-  c = c * uExposure + texture(uBloom, uv + off * 0.5).rgb * uBloomAmt;
+  // Compress dense additive accumulation before bloom is added. This keeps a
+  // packed formation graphite-grey instead of mapping its whole interior to
+  // white, while the sparse rim/specular bloom can still sit above the body.
+  c *= uExposure;
+  float sceneLum = dot(c, LUMA);
+  c *= 1.0 / (1.0 + sceneLum * 1.5);
+  c += texture(uBloom, uv + off * 0.5).rgb * uBloomAmt;
 
   // No anamorphic streak here on purpose. Wide horizontal taps of a
   // quarter-res bloom buffer ghost into visible horizontal lines across the
