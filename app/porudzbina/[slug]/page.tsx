@@ -16,7 +16,7 @@ import { getPaymentMode } from "@/lib/payments/provider";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Porudžbina — TOZAI",
+  title: "Porudžbina — TOZA AI",
   robots: { index: false, follow: false },
 };
 

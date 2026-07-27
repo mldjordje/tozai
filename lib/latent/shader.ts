@@ -1,4 +1,4 @@
-// TOZAI latent field — a GPU particle system, not a fullscreen noise shader.
+// TOZA AI latent field — a GPU particle system, not a fullscreen noise shader.
 //
 // Every particle is a point mass with velocity. Each section of the page has a
 // FORMATION (a target position per particle); scroll interpolates between them.
@@ -229,7 +229,7 @@ vec3 fSingularity(float i, vec3 h) {
   return d * (0.34 + pow(h.x, 2.2) * 0.34 + pow(h.x, 9.0) * 1.30);
 }
 
-/** Index 6 is not procedural: its targets are rasterised from the TOZAI
+/** Index 6 is not procedural: its targets are rasterised from the TOZA AI
  *  wordmark on the CPU and uploaded as a texture, one texel per particle. */
 vec3 formation(float i, vec3 h, int k) {
   if (k <= 0) return fCore(i, h);

@@ -38,7 +38,7 @@ export default async function PrijavaPage({
           href="/"
           className="block text-center text-xl font-semibold tracking-tight text-fg"
         >
-          TOZ<span className="text-accent">AI</span>
+          TOZA <span className="text-accent">AI</span>
         </Link>
 
         <div className="mt-8 rounded-2xl border border-line bg-bg-elev/60 p-7 backdrop-blur-sm">

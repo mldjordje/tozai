@@ -387,8 +387,22 @@ export class LatentEngine {
     const family = getComputedStyle(document.documentElement)
       .getPropertyValue("--font-instrument")
       .trim();
-    ctx.font = `400 ${Math.round(H * 0.78)}px ${family || "Georgia"}, Georgia, serif`;
-    ctx.fillText("TOZAI", W / 2, H * 0.54);
+    const stack = `${family || "Georgia"}, Georgia, serif`;
+    const wordmark = "TOZA AI";
+    // Fit to the canvas before drawing. The name currently measures ~547px of
+    // the 1024 available, so this never fires — but the wordmark is now two
+    // words and the nominal size is a fixed fraction of the canvas HEIGHT, so
+    // nothing else stops a longer name from being rasterised off the edge and
+    // morphing the field into a truncated logo.
+    let size = Math.round(H * 0.78);
+    ctx.font = `400 ${size}px ${stack}`;
+    const maxWidth = W * 0.92;
+    const measured = ctx.measureText(wordmark).width;
+    if (measured > maxWidth) {
+      size = Math.floor((size * maxWidth) / measured);
+      ctx.font = `400 ${size}px ${stack}`;
+    }
+    ctx.fillText(wordmark, W / 2, H * 0.54);
 
     // Collect the lit pixels once, then draw particles from that pool.
     const px = ctx.getImageData(0, 0, W, H).data;

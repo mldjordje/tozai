@@ -1,6 +1,6 @@
-/* TOZA AI admin — ported from the studio-admin base, rebranded to the TOZAI
+/* TOZA AI admin — ported from the studio-admin base, rebranded to the TOZA AI
    dark/electric-blue system. Token bridge so the shared class names resolve to
-   TOZAI's globals.css palette instead of the original purple. */
+   TOZA AI's globals.css palette instead of the original purple. */
 .adm,.adm-login{
   --neon:#2e6bff;
   --line:#1f1f23;

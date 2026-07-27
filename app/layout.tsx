@@ -20,7 +20,7 @@ const instrumentSerif = Instrument_Serif({
 });
 
 export const metadata: Metadata = {
-  title: "TOZAI — Build Your Business With AI",
+  title: "TOZA AI — Build Your Business With AI",
   description:
     "Kreiramo AI video reklame i pružamo privatnu AI edukaciju. Pametnije. Brže. Profitabilnije.",
   metadataBase: new URL("https://toza-ai.rs"),
@@ -28,7 +28,7 @@ export const metadata: Metadata = {
     icon: "/media/tozai-mark.svg",
   },
   openGraph: {
-    title: "TOZAI — Build Your Business With AI",
+    title: "TOZA AI — Build Your Business With AI",
     description:
       "AI video reklame i privatna AI edukacija. Pametnije. Brže. Profitabilnije.",
     type: "website",

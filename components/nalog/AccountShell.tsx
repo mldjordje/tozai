@@ -77,7 +77,7 @@ export default function AccountShell({
     <div className="min-h-screen select-text bg-bg text-fg">
       {/* Mobile top bar */}
       <header className="sticky top-0 z-40 flex items-center justify-between border-b border-line bg-bg/90 px-4 py-3 backdrop-blur-md md:hidden">
-        <Link href="/" aria-label="TOZAI — početna" className="text-base">
+        <Link href="/" aria-label="TOZA AI — početna" className="text-base">
           <BrandLogo markClassName="size-7" />
         </Link>
         <button
@@ -98,7 +98,7 @@ export default function AccountShell({
       <div className="mx-auto flex w-full max-w-7xl gap-8 px-4 py-6 md:px-8 md:py-10">
         {/* Desktop sidebar */}
         <aside className="sticky top-10 hidden h-fit w-56 shrink-0 md:block">
-          <Link href="/" aria-label="TOZAI — početna" className="mb-8 block text-lg">
+          <Link href="/" aria-label="TOZA AI — početna" className="mb-8 block text-lg">
             <BrandLogo markClassName="size-8" />
           </Link>
           {nav}

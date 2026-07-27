@@ -40,7 +40,7 @@ export default function BrandLogo({
     <span className={clsx("inline-flex items-center gap-2.5", className)}>
       <PhoenixMark className={clsx("size-7 shrink-0", markClassName)} />
       <span className="text-[0.95em] font-semibold tracking-[0.08em] text-fg">
-        TOZ<span className="text-[#9b7cff]">AI</span>
+        TOZA <span className="text-[#9b7cff]">AI</span>
       </span>
     </span>
   );
