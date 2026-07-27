@@ -1,5 +1,6 @@
 import LatentBackground from "@/components/background/LatentBackground";
 import Nav from "@/components/layout/Nav";
+import Footer from "@/components/layout/Footer";
 import PinnedSection from "@/components/layout/PinnedSection";
 import Preloader from "@/components/ui/Preloader";
 import Reveal from "@/components/ui/Reveal";
@@ -11,7 +12,8 @@ import Hero from "@/components/sections/Hero";
 import ResultsShowcase from "@/components/sections/ResultsShowcase";
 import Packages from "@/components/sections/Packages";
 import Education from "@/components/sections/Education";
-import { getPublicPackages } from "@/lib/packages";
+import { getPublicPackages, type Package } from "@/lib/packages";
+import { getPublicContact } from "@/lib/settings";
 import { toClipPackage, toHourPack } from "@/lib/content/offerings";
 
 // Pricing is admin-driven (packages table). ISR keeps the landing fast; the
@@ -25,25 +27,52 @@ const STATS = [
   { value: "2+", label: "Years Creating Content" },
 ];
 
+// Every CTA on this page has to land on something a buyer can complete. The
+// destinations are derived from the packages table rather than hard-coded, so a
+// renamed or retired package moves the buttons with it instead of leaving a
+// 404. When the DB is unreachable the helpers return [] and everything falls
+// back to the in-page sections, which still work.
+function checkoutHref(pkg: Package | undefined, fallback: string): string {
+  return pkg?.slug ? `/porudzbina/${pkg.slug}` : fallback;
+}
+
+function pickFeatured(items: Package[]): Package | undefined {
+  return items.find((item) => item.highlighted) ?? items[0];
+}
+
 export default async function Home() {
-  const [services, education] = await Promise.all([
+  const [services, education, contact] = await Promise.all([
     getPublicPackages("services"),
     getPublicPackages("education"),
+    getPublicContact(),
   ]);
-  const clipPackages = services.filter((item) => item.flow === "project").map(toClipPackage);
-  const hourPacks = [
-    ...education,
-    ...services.filter((item) => item.flow === "hours"),
-  ].map(toHourPack);
+  const projects = services.filter((item) => item.flow === "project");
+  const clipPackages = projects.map(toClipPackage);
+  const serviceHours = services.filter((item) => item.flow === "hours");
+  const hourPacks = [...education, ...serviceHours].map(toHourPack);
+
+  // The free brief — the funnel's real entry point, and what "Book a Call"
+  // was gesturing at without linking to.
+  const inquiryHref = checkoutHref(pickFeatured(projects), "#paketi");
+  // A paid 1-on-1 hour, if the studio sells one. There is no calendar yet, so
+  // this buys the hour and the term is agreed from the account.
+  const consultPkg = pickFeatured(serviceHours) ?? pickFeatured(education);
+  const consultHref = checkoutHref(consultPkg, "#edukacija");
+  const consultLabel = consultPkg ? "Kupi sate 1-na-1" : "Privatna edukacija";
 
   return (
     <>
       <Preloader />
       <LatentBackground />
-      <Nav />
+      <Nav ctaHref={inquiryHref} ctaLabel="Pošalji upit" />
 
       <main className="relative">
-        <Hero />
+        <Hero
+          primaryHref={inquiryHref}
+          primaryLabel="Poruči AI video"
+          secondaryHref="#paketi"
+          secondaryLabel="Pogledaj pakete"
+        />
 
         {/* Brojevi */}
         <PinnedSection id="services">
@@ -72,7 +101,7 @@ export default async function Home() {
         <TextStrip />
 
         {/* Proof — pinned horizontal showcase */}
-        <ResultsShowcase />
+        <ResultsShowcase ctaHref={inquiryHref} />
 
         {/* Paketi — buy AI clips (admin-driven, static fallback) */}
         <Packages packages={clipPackages.length ? clipPackages : undefined} />
@@ -97,15 +126,41 @@ export default async function Home() {
               className="display mx-auto max-w-4xl text-5xl md:text-8xl"
             />
             <Reveal delay={0.25}>
-              <div className="mt-10">
-                <CTAButton href="#top" size="lg">
-                  Book a Call
+              {/* This was a "Book a Call" that scrolled back to #top — the last
+                  thing a convinced buyer saw was a button that undid their
+                  scroll. Both options now open a checkout they can finish. */}
+              <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
+                <CTAButton href={inquiryHref} size="lg">
+                  Pošalji upit
+                </CTAButton>
+                <CTAButton href={consultHref} variant="ghost" size="lg">
+                  {consultLabel}
                 </CTAButton>
               </div>
+            </Reveal>
+            <Reveal delay={0.35}>
+              <p className="mt-7 text-sm text-faint">
+                Upit je besplatan i ne obavezuje te.
+                {contact.email && (
+                  <>
+                    {" "}
+                    Ili piši direktno na{" "}
+                    <a
+                      href={`mailto:${contact.email}`}
+                      className="text-muted underline underline-offset-4 transition-colors duration-300 hover:text-fg"
+                    >
+                      {contact.email}
+                    </a>
+                    .
+                  </>
+                )}
+              </p>
             </Reveal>
           </div>
         </PinnedSection>
       </main>
+
+      <Footer contact={contact} inquiryHref={inquiryHref} />
     </>
   );
 }

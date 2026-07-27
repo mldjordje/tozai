@@ -91,7 +91,21 @@ function Word({
   );
 }
 
-export default function Hero() {
+export default function Hero({
+  // Both hero CTAs pointed at anchors that dead-ended: "Book a Call" landed on
+  // a section whose own button scrolled back to the top, and "Explore Services"
+  // landed on the stats block. They now open the two things that can actually
+  // be bought. Defaults keep the component renderable without the DB.
+  primaryHref = "#paketi",
+  primaryLabel = "Poruči AI video",
+  secondaryHref = "#edukacija",
+  secondaryLabel = "Privatna edukacija",
+}: {
+  primaryHref?: string;
+  primaryLabel?: string;
+  secondaryHref?: string;
+  secondaryLabel?: string;
+} = {}) {
   // The preloader sits over the first ~2s of the page. Animating on mount meant
   // the whole reveal played behind an opaque panel and the headline was already
   // set when the panel parted.
@@ -193,9 +207,9 @@ export default function Hero() {
           </motion.p>
 
           <motion.div variants={line} className="mt-10 flex flex-wrap gap-4">
-            <CTAButton href="#booking">Book a Call</CTAButton>
-            <CTAButton href="#services" variant="ghost">
-              Explore Services
+            <CTAButton href={primaryHref}>{primaryLabel}</CTAButton>
+            <CTAButton href={secondaryHref} variant="ghost">
+              {secondaryLabel}
             </CTAButton>
           </motion.div>
         </motion.div>

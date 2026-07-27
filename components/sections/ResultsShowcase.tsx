@@ -94,7 +94,13 @@ function Card({ shot, index }: { shot: (typeof SHOTS)[number]; index: number }) 
   );
 }
 
-export default function ResultsShowcase() {
+export default function ResultsShowcase({
+  // The closing card is the one CTA a buyer reaches while still looking at the
+  // proof, so it opens the brief directly instead of scrolling to #booking.
+  ctaHref = "#paketi",
+}: {
+  ctaHref?: string;
+} = {}) {
   const ref = useRef<HTMLElement>(null);
   const { scrollYProgress } = useScroll({
     target: ref,
@@ -145,7 +151,7 @@ export default function ResultsShowcase() {
                 Hoćeš ovakve <span className="text-accent">brojke</span>?
               </p>
               <div className="mt-7">
-                <CTAButton href="#booking">Book a Call</CTAButton>
+                <CTAButton href={ctaHref}>Pošalji upit</CTAButton>
               </div>
             </div>
           </div>

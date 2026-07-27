@@ -32,6 +32,13 @@ html {
   scroll-behavior: smooth;
 }
 
+/* Lenis drives the scroll on the marketing pages. Native smooth-scrolling on
+   top of it means two animations writing scrollY in the same frame, which is
+   what made anchor links stall or snap back. Lenis sets this class itself. */
+html.lenis {
+  scroll-behavior: auto;
+}
+
 body {
   background-color: var(--color-bg);
   color: var(--color-fg);
