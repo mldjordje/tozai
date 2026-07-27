@@ -2,6 +2,7 @@
 
 import { motion } from "framer-motion";
 import CTAButton from "@/components/ui/CTAButton";
+import { PhoenixMark } from "@/components/brand/Logo";
 
 const container = {
   hidden: {},
@@ -56,11 +57,26 @@ export default function Hero() {
     // next formation. Any longer and the first scroll feels like it broke.
     <section id="top" className="relative h-[145svh]">
       <div className="sticky top-0 flex min-h-svh flex-col justify-center overflow-hidden px-6 md:px-12">
-      <motion.div
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 z-[1] bg-gradient-to-b from-bg via-bg/90 to-bg/55 md:hidden"
+        />
+
+        <motion.div
+          aria-hidden
+          initial={{ opacity: 0, x: 28, scale: 0.96 }}
+          animate={{ opacity: 0.58, x: 0, scale: 1 }}
+          transition={{ duration: 1.4, delay: 0.35, ease: [0.16, 1, 0.3, 1] }}
+          className="pointer-events-none absolute right-[8vw] top-1/2 hidden w-[min(29vw,24rem)] -translate-y-1/2 text-bg lg:block"
+        >
+          <PhoenixMark className="h-auto w-full" />
+        </motion.div>
+
+        <motion.div
         variants={container}
         initial="hidden"
         animate="show"
-        className="relative max-w-4xl"
+        className="relative z-10 max-w-4xl"
       >
         <motion.p variants={line} className="eyebrow mb-7">
           AI Video Studio
@@ -122,14 +138,14 @@ export default function Hero() {
             Explore Services
           </CTAButton>
         </motion.div>
-      </motion.div>
+        </motion.div>
 
       {/* Scroll indicator */}
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 1.6, duration: 1 }}
-        className="absolute bottom-8 left-6 flex items-center gap-3 text-xs uppercase tracking-[0.2em] text-faint md:left-12"
+        className="absolute bottom-8 left-6 z-10 flex items-center gap-3 text-xs uppercase tracking-[0.2em] text-faint md:left-12"
       >
         <span className="relative flex h-9 w-5 items-start justify-center rounded-full border border-faint p-1">
           <motion.span

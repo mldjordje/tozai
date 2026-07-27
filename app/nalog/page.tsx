@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { getSessionUser } from "@/lib/auth/user-session";
 import { getAccountOverview } from "@/lib/account";
+import { getPublicPackages } from "@/lib/packages";
+import PurchaseAgain from "@/components/nalog/PurchaseAgain";
 import { Card, EmptyState, SectionTitle, Stat, StatusBadge } from "@/components/nalog/ui";
 import {
   BOOKING_STATUS_LABEL,
@@ -18,9 +20,10 @@ export const dynamic = "force-dynamic";
 
 export default async function NalogPage() {
   const user = (await getSessionUser())!;
-  const { wallets, projects, upcoming, orders, invoices } = await getAccountOverview(
-    user.uid,
-  );
+  const [{ wallets, projects, upcoming, orders, invoices }, packages] = await Promise.all([
+    getAccountOverview(user.uid),
+    getPublicPackages(),
+  ]);
 
   const activeProjects = projects.filter(
     (p) => p.status !== "isporuceno" && p.status !== "otkazano",
@@ -31,6 +34,10 @@ export default async function NalogPage() {
   const firstName = user.name?.split(" ")[0] ?? "";
 
   const isNew = projects.length === 0 && orders.length === 0 && wallets.length === 0;
+  const videoPackages = packages.filter((pkg) => pkg.flow === "project" && pkg.slug);
+  const educationPackages = packages.filter(
+    (pkg) => pkg.flow === "hours" && pkg.grp === "education" && pkg.slug,
+  );
 
   return (
     <div className="space-y-10">
@@ -95,6 +102,12 @@ export default async function NalogPage() {
           </Link>
         </Card>
       )}
+
+      <PurchaseAgain
+        videoPackages={videoPackages}
+        educationPackages={educationPackages}
+        isNew={isNew}
+      />
 
       {activeProjects.length > 0 && (
         <section>

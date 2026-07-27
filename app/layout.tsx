@@ -24,6 +24,9 @@ export const metadata: Metadata = {
   description:
     "Kreiramo AI video reklame i pružamo privatnu AI edukaciju. Pametnije. Brže. Profitabilnije.",
   metadataBase: new URL("https://toza-ai.rs"),
+  icons: {
+    icon: "/media/tozai-mark.svg",
+  },
   openGraph: {
     title: "TOZAI — Build Your Business With AI",
     description:

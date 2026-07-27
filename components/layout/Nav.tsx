@@ -1,6 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
+import BrandLogo from "@/components/brand/Logo";
 
 const LINKS = [
   { href: "#services", label: "Usluge" },
@@ -21,9 +22,10 @@ export default function Nav() {
       <nav className="mx-auto flex max-w-7xl items-center justify-between px-6 py-5 md:px-12">
         <a
           href="#top"
-          className="text-lg font-semibold tracking-tight text-fg"
+          aria-label="TOZAI — početna"
+          className="text-lg text-fg"
         >
-          TOZ<span className="text-accent">AI</span>
+          <BrandLogo markClassName="size-8" />
         </a>
 
         <div className="hidden items-center gap-8 md:flex">

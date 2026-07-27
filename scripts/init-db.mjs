@@ -426,6 +426,9 @@ await sql`ALTER TABLE video_requests ADD COLUMN IF NOT EXISTS business_name TEXT
 await sql`ALTER TABLE video_requests ADD COLUMN IF NOT EXISTS business_description TEXT NOT NULL DEFAULT ''`;
 await sql`ALTER TABLE video_requests ADD COLUMN IF NOT EXISTS budget_eur NUMERIC`;
 await sql`ALTER TABLE video_requests ADD COLUMN IF NOT EXISTS turnaround_days INT`;
+// Invoice details are frozen when the request is sent. A later profile edit
+// must not silently change the buyer attached to an already accepted quote.
+await sql`ALTER TABLE video_requests ADD COLUMN IF NOT EXISTS billing JSONB`;
 await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS quote_request_id INT REFERENCES video_requests(id) ON DELETE SET NULL`;
 await sql`CREATE UNIQUE INDEX IF NOT EXISTS orders_quote_request ON orders (quote_request_id) WHERE quote_request_id IS NOT NULL`;
 

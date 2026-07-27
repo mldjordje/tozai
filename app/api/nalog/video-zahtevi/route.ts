@@ -14,6 +14,18 @@ export const dynamic = "force-dynamic";
 
 const MAX_OPEN_REQUESTS = 5;
 
+type BillingSnapshot = {
+  name: string;
+  phone: string;
+  isCompany: boolean;
+  companyName: string;
+  pib: string;
+  mb: string;
+  address: string;
+  city: string;
+  email: string;
+};
+
 export async function GET() {
   const user = await getSessionUser();
   if (!user) {
@@ -44,13 +56,34 @@ export async function POST(request: Request) {
   const businessDescription = cleanText(body.businessDescription, 2000, 30);
   const clipCount = Number(body.clipCount);
   const budgetEur = Number(body.budgetEur);
+  const name = cleanText(body.name, 120, 2) ?? "";
+  const phone = cleanText(body.phone, 40) ?? "";
+  const isCompany = buyerType === "company";
+  const companyName = cleanText(body.companyName, 160) ?? "";
+  const pib = cleanText(body.pib, 20) ?? "";
+  const mb = cleanText(body.mb, 20) ?? "";
+  const address = cleanText(body.address, 200) ?? "";
+  const city = cleanText(body.city, 120) ?? "";
   if (
-    !slug || !buyerType || !idea || !businessName || !businessDescription ||
+    !slug || !buyerType || !name || !idea || !businessName || !businessDescription ||
     !Number.isInteger(clipCount) || clipCount < 1 || clipCount > 100 ||
     !Number.isFinite(budgetEur) || budgetEur <= 0 || budgetEur > 1_000_000
   ) {
     return NextResponse.json(
       { ok: false, message: "Popuni sva polja. Broj klipova i budžet moraju biti veći od nule." },
+      { status: 400 },
+    );
+  }
+  if (
+    isCompany &&
+    (!companyName || !/^\d{9}$/.test(pib) || !/^\d{8}$/.test(mb) || !address || !city)
+  ) {
+    return NextResponse.json(
+      {
+        ok: false,
+        message:
+          "Za pravno lice su obavezni pun naziv, PIB (9 cifara), matični broj (8 cifara), adresa i grad.",
+      },
       { status: 400 },
     );
   }
@@ -62,6 +95,17 @@ export async function POST(request: Request) {
 
   const brief: VideoRequestBrief = { idea };
   const projectTitle = `${businessName} — ${pkg.name}`;
+  const billing: BillingSnapshot = {
+    name,
+    phone,
+    isCompany,
+    companyName,
+    pib,
+    mb,
+    address,
+    city,
+    email: user.email,
+  };
 
   const sql = getSql();
   const open = (await sql`
@@ -76,15 +120,30 @@ export async function POST(request: Request) {
     );
   }
 
+  await sql`
+    UPDATE users
+    SET name = ${name},
+        phone = NULLIF(${phone}, ''),
+        is_company = ${isCompany},
+        company_name = NULLIF(${isCompany ? companyName : ""}, ''),
+        pib = NULLIF(${isCompany ? pib : ""}, ''),
+        mb = NULLIF(${isCompany ? mb : ""}, ''),
+        address = NULLIF(${isCompany ? address : ""}, ''),
+        city = NULLIF(${isCompany ? city : ""}, '')
+    WHERE id = ${user.uid}
+  `;
+
   const rows = (await sql`
     INSERT INTO video_requests (
       user_id, package_id, service_name, project_title, brief, buyer_type,
-      clip_count, business_name, business_description, budget_eur, currency, revisions
+      clip_count, business_name, business_description, budget_eur, currency, revisions,
+      billing
     )
     VALUES (
       ${user.uid}, ${pkg.id}, ${pkg.name}, ${projectTitle},
       ${JSON.stringify(brief)}::jsonb, ${buyerType}, ${clipCount}, ${businessName},
-      ${businessDescription}, ${budgetEur}, ${pkg.currency}, ${pkg.revisions}
+      ${businessDescription}, ${budgetEur}, ${pkg.currency}, ${pkg.revisions},
+      ${JSON.stringify(billing)}::jsonb
     )
     RETURNING id
   `) as { id: number }[];
@@ -131,6 +190,7 @@ export async function PATCH(request: Request) {
     SELECT r.id, r.service_name, r.project_title, r.brief,
            r.quoted_amount::float8 AS quoted_amount, r.currency,
            r.package_id, r.revisions, r.turnaround_days, r.buyer_type,
+           r.billing AS request_billing,
            r.quote_valid_until::text AS quote_valid_until,
            u.email, u.name, u.phone, u.is_company, u.company_name, u.pib, u.mb, u.address, u.city
     FROM video_requests r
@@ -148,6 +208,7 @@ export async function PATCH(request: Request) {
     revisions: number;
     turnaround_days: number | null;
     buyer_type: "individual" | "company";
+    request_billing: BillingSnapshot | null;
     quote_valid_until: string | null;
     email: string;
     name: string | null;
@@ -167,7 +228,7 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ ok: false, message: "Ponuda je istekla. Zatraži novu procenu." }, { status: 409 });
   }
 
-  const billing = {
+  const billing: BillingSnapshot = q.request_billing ?? {
     name: q.name ?? "",
     phone: q.phone ?? "",
     isCompany: q.buyer_type === "company",
@@ -178,6 +239,23 @@ export async function PATCH(request: Request) {
     city: q.city ?? "",
     email: q.email,
   };
+  if (
+    billing.isCompany &&
+    (!billing.companyName ||
+      !/^\d{9}$/.test(billing.pib) ||
+      !/^\d{8}$/.test(billing.mb) ||
+      !billing.address ||
+      !billing.city)
+  ) {
+    return NextResponse.json(
+      {
+        ok: false,
+        message:
+          "Pre plaćanja dopuni naziv firme, PIB, matični broj, adresu i grad u profilu.",
+      },
+      { status: 409 },
+    );
+  }
 
   // quote_request_id is unique. A retry after a network interruption reuses
   // the same order instead of creating a duplicate charge.
@@ -212,10 +290,10 @@ export async function PATCH(request: Request) {
     currency: q.currency,
     buyerEmail: q.email,
     buyer: {
-      name: q.name,
-      phone: q.phone,
-      address: q.address,
-      city: q.city,
+      name: billing.isCompany ? billing.companyName : billing.name,
+      phone: billing.phone,
+      address: billing.address,
+      city: billing.city,
     },
   });
   await sql`UPDATE orders SET provider = ${provider.id} WHERE id = ${orderId}`;

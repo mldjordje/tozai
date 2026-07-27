@@ -22,9 +22,21 @@ type PackageSummary = {
   features: string[];
 };
 
+type ProfileSummary = {
+  name: string | null;
+  phone: string | null;
+  isCompany: boolean;
+  companyName: string | null;
+  pib: string | null;
+  mb: string | null;
+  address: string | null;
+  city: string | null;
+};
+
 /** Mirrors the server-side minimums in /api/nalog/video-zahtevi. Kept here as
  *  one object so the hint text, the counter and the check can never disagree. */
 const MIN = {
+  name: 2,
   businessName: 2,
   businessDescription: 30,
   idea: 50,
@@ -32,6 +44,13 @@ const MIN = {
 
 const EMPTY = {
   buyerType: "individual" as "individual" | "company",
+  name: "",
+  phone: "",
+  companyName: "",
+  pib: "",
+  mb: "",
+  address: "",
+  city: "",
   idea: "",
   clipCount: "3",
   businessName: "",
@@ -48,8 +67,32 @@ function digitsOnly(value: string) {
   return value.replace(/\D/g, "").slice(0, 7);
 }
 
+function fixedDigits(value: string, length: number) {
+  return value.replace(/\D/g, "").slice(0, length);
+}
+
 function validate(form: FormState): Partial<Record<FieldKey, string>> {
   const errors: Partial<Record<FieldKey, string>> = {};
+  if (form.name.trim().length < MIN.name) {
+    errors.name = "Upiši ime i prezime kontakt osobe.";
+  }
+  if (form.buyerType === "company") {
+    if (form.companyName.trim().length < 2) {
+      errors.companyName = "Upiši pun naziv pravnog lica ili preduzetnika.";
+    }
+    if (!/^\d{9}$/.test(form.pib.trim())) {
+      errors.pib = "PIB mora imati tačno 9 cifara.";
+    }
+    if (!/^\d{8}$/.test(form.mb.trim())) {
+      errors.mb = "Matični broj mora imati tačno 8 cifara.";
+    }
+    if (form.address.trim().length < 3) {
+      errors.address = "Upiši adresu sedišta.";
+    }
+    if (form.city.trim().length < 2) {
+      errors.city = "Upiši grad.";
+    }
+  }
   if (form.businessName.trim().length < MIN.businessName) {
     errors.businessName = "Upiši naziv biznisa ili brenda.";
   }
@@ -73,11 +116,23 @@ function validate(form: FormState): Partial<Record<FieldKey, string>> {
 export default function VideoInquiryFlow({
   pkg,
   user,
+  profile,
 }: {
   pkg: PackageSummary;
   user: { email: string; name: string | null } | null;
+  profile: ProfileSummary | null;
 }) {
-  const [form, setForm] = useState<FormState>(EMPTY);
+  const [form, setForm] = useState<FormState>(() => ({
+    ...EMPTY,
+    buyerType: profile?.isCompany ? "company" : "individual",
+    name: profile?.name ?? user?.name ?? "",
+    phone: profile?.phone ?? "",
+    companyName: profile?.companyName ?? "",
+    pib: profile?.pib ?? "",
+    mb: profile?.mb ?? "",
+    address: profile?.address ?? "",
+    city: profile?.city ?? "",
+  }));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [requestId, setRequestId] = useState<number | null>(null);
@@ -86,9 +141,10 @@ export default function VideoInquiryFlow({
   const fieldRefs = useRef<Partial<Record<FieldKey, HTMLElement | null>>>({});
 
   const errors = validate(form);
-  const filled = (Object.keys(MIN) as FieldKey[]).length + 2;
-  const done = filled - Object.keys(errors).length;
-  const progress = Math.round((done / filled) * 100);
+  const requiredCount = form.buyerType === "company" ? 11 : 6;
+  const progress = Math.round(
+    ((requiredCount - Object.keys(errors).length) / requiredCount) * 100,
+  );
 
   const set =
     (key: FieldKey, transform?: (value: string) => string) =>
@@ -112,7 +168,19 @@ export default function VideoInquiryFlow({
     const problems = validate(form);
     if (Object.keys(problems).length > 0) {
       setShowAll(true);
-      const first = (["businessName", "businessDescription", "idea", "clipCount", "budgetEur"] as FieldKey[])
+      const first = ([
+        "name",
+        "companyName",
+        "pib",
+        "mb",
+        "address",
+        "city",
+        "businessName",
+        "businessDescription",
+        "idea",
+        "clipCount",
+        "budgetEur",
+      ] as FieldKey[])
         .find((key) => problems[key]);
       if (first) {
         const node = fieldRefs.current[first];
@@ -296,6 +364,111 @@ export default function VideoInquiryFlow({
               </div>
             </fieldset>
           </Reveal>
+
+          <Reveal delay={0.12}>
+            <div className="grid gap-9 sm:grid-cols-2">
+              <Field
+                label="Ime i prezime"
+                required
+                value={form.name}
+                onChange={set("name")}
+                onBlur={blur("name")}
+                placeholder="Kontakt osoba"
+                error={errorFor("name")}
+                innerRef={(node) => (fieldRefs.current.name = node)}
+              />
+              <Field
+                label="Telefon"
+                value={form.phone}
+                onChange={set("phone")}
+                inputMode="tel"
+                placeholder="+381 60 000 0000"
+              />
+            </div>
+          </Reveal>
+
+          <AnimatePresence initial={false}>
+            {form.buyerType === "company" && (
+              <motion.div
+                key="company-billing"
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                exit={{ opacity: 0, height: 0 }}
+                transition={{ duration: 0.35, ease: EASE }}
+                className="overflow-hidden"
+              >
+                <div className="rounded-2xl border border-line bg-bg-elev/30 p-5 sm:p-6">
+                  <p className="text-xs uppercase tracking-[0.18em] text-accent-soft">
+                    Podaci za fakturu
+                  </p>
+                  <p className="mt-2 text-sm leading-relaxed text-muted">
+                    Čuvamo ih uz ovaj upit, da faktura bude spremna kada prihvatiš
+                    procenu. Pečat nije potrebno slati.
+                  </p>
+                  <div className="mt-7 space-y-7">
+                    <Field
+                      label="Pun naziv pravnog lica / preduzetnika"
+                      required
+                      value={form.companyName}
+                      onChange={set("companyName")}
+                      onBlur={blur("companyName")}
+                      placeholder="Naziv iz registra"
+                      error={errorFor("companyName")}
+                      innerRef={(node) => (fieldRefs.current.companyName = node)}
+                    />
+                    <div className="grid gap-7 sm:grid-cols-2">
+                      <Field
+                        label="PIB"
+                        required
+                        value={form.pib}
+                        onChange={set("pib", (value) => fixedDigits(value, 9))}
+                        onBlur={blur("pib")}
+                        inputMode="numeric"
+                        placeholder="9 cifara"
+                        hint="Tačno 9 cifara"
+                        error={errorFor("pib")}
+                        innerRef={(node) => (fieldRefs.current.pib = node)}
+                      />
+                      <Field
+                        label="Matični broj"
+                        required
+                        value={form.mb}
+                        onChange={set("mb", (value) => fixedDigits(value, 8))}
+                        onBlur={blur("mb")}
+                        inputMode="numeric"
+                        placeholder="8 cifara"
+                        hint="Tačno 8 cifara"
+                        error={errorFor("mb")}
+                        innerRef={(node) => (fieldRefs.current.mb = node)}
+                      />
+                    </div>
+                    <div className="grid gap-7 sm:grid-cols-2">
+                      <Field
+                        label="Adresa sedišta"
+                        required
+                        value={form.address}
+                        onChange={set("address")}
+                        onBlur={blur("address")}
+                        placeholder="Ulica i broj"
+                        error={errorFor("address")}
+                        innerRef={(node) => (fieldRefs.current.address = node)}
+                      />
+                      <Field
+                        label="Grad"
+                        required
+                        value={form.city}
+                        onChange={set("city")}
+                        onBlur={blur("city")}
+                        placeholder="Mesto"
+                        error={errorFor("city")}
+                        innerRef={(node) => (fieldRefs.current.city = node)}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           <Reveal delay={0.14}>
             <Field

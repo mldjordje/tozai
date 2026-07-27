@@ -70,6 +70,20 @@ export default async function CheckoutPage({
               features: pkg.features,
             }}
             user={user ? { email: user.email, name: user.name ?? null } : null}
+            profile={
+              profile
+                ? {
+                    name: profile.name,
+                    phone: profile.phone,
+                    isCompany: profile.is_company,
+                    companyName: profile.company_name,
+                    pib: profile.pib,
+                    mb: profile.mb,
+                    address: profile.address,
+                    city: profile.city,
+                  }
+                : null
+            }
           />
         ) : (
         <CheckoutFlow
