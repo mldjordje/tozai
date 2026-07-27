@@ -1,58 +1,73 @@
 "use client";
 
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { motion, useInView } from "framer-motion";
 
+const EXPO = [0.16, 1, 0.3, 1] as const;
+
+const STAGGER = 0.085;
+const LEAD = 0.1;
+const RISE = 1.15;
+
 /**
- * Editorial headline reveal. Each CHARACTER rises out of an overflow mask when
- * the title scrolls into view, staggered across the whole line — per-word
- * reveals move too much mass at once and read as a slideshow rather than as
- * type being set.
+ * Editorial headline reveal. Each WORD rises out of an overflow mask when the
+ * title scrolls into view, staggered along the line.
  *
- * Words stay intact as inline-blocks so wrapping is normal. Driven by useInView
- * on the container rather than per-element whileInView, which is unreliable
- * inside a position:sticky ancestor (the pinned showcase title).
+ * Per-CHARACTER masks were the previous approach and they were the bug: every
+ * glyph became its own inline-block, which discards the kerning pairs and the
+ * discretionary ligatures `.display` explicitly turns on, and the per-glyph
+ * `skewY` threw each glyph's corners past a clip cut to that same glyph, so the
+ * letters visibly sliced on the way in. Words are the right unit — the type
+ * stays set the way the face intends it.
+ *
+ * Driven by useInView on the container rather than per-element whileInView,
+ * which is unreliable inside a position:sticky ancestor (the pinned titles).
  *
  * Wrap a word in asterisks to set it as the italic accent: "Brojevi koji rade
  * *za sebe*." Every headline gets one, which is what makes the set read as a
  * family instead of six unrelated lines. The accent also takes a single slow
- * sheen once the line has finished arriving.
+ * sheen and a bloom once the line has finished arriving.
  *
  * Three things move, at three different rates, which is what stops the reveal
  * reading as one CSS transition:
  *
- *   1. the whole line resolves out of focus — ONE blur animation on the
- *      container, never per character. Thirty simultaneous filters is thirty
- *      offscreen buffers, and on exactly the integrated GPUs this site already
- *      has to be careful with it turns a headline into a stutter.
- *   2. each character rises out of its mask, staggered along the line
- *   3. each character un-skews as it lands, so the type settles rather than
- *      stopping dead
+ *   1. the whole line resolves out of focus and settles a few pixels — ONE blur
+ *      animation on the container, never per word. A filter per element is an
+ *      offscreen buffer per element, and on exactly the integrated GPUs this
+ *      site already has to be careful with it turns a headline into a stutter.
+ *   2. each word rises out of its mask, staggered along the line
+ *   3. the accent word lands a beat late and then takes the sheen
  */
-const char = {
-  hidden: { y: "118%", opacity: 0, skewY: 4 },
-  show: (i: number) => ({
+const word = {
+  hidden: { y: "118%" },
+  show: {
     y: "0%",
-    opacity: 1,
-    skewY: 0,
-    transition: {
-      duration: 1.05,
-      ease: [0.16, 1, 0.3, 1] as const,
-      delay: i * 0.02,
-    },
-  }),
+    transition: { duration: RISE, ease: EXPO },
+  },
 };
 
-// The container's focus pull. Slightly longer than a single character's rise so
-// the line is still sharpening after the last glyph has landed — a reveal that
+// The container's focus pull and settle. Longer than a single word's rise so
+// the line is still sharpening after the last one has landed — a reveal that
 // finishes all at once reads as a state change, not as a movement.
+// `delay` rides in through `custom` rather than a `transition` prop: a
+// transition prop on the component REPLACES the variant's own transition, which
+// would take staggerChildren with it and drop the whole line at once.
 const focus = {
-  hidden: { filter: "blur(14px)", opacity: 0.55 },
-  show: {
+  hidden: { filter: "blur(16px)", opacity: 0, y: 14 },
+  show: (d: number) => ({
     filter: "blur(0px)",
     opacity: 1,
-    transition: { duration: 1.35, ease: [0.16, 1, 0.3, 1] as const },
-  },
+    y: 0,
+    transition: {
+      duration: 1.5,
+      ease: EXPO,
+      delay: d,
+      staggerChildren: STAGGER,
+      // Absolute offset from the parent's start, so the parent's own delay has
+      // to be folded in here too.
+      delayChildren: LEAD + d,
+    },
+  }),
 };
 
 export default function KineticTitle({
@@ -62,15 +77,14 @@ export default function KineticTitle({
 }: {
   text: string;
   className?: string;
+  /** Extra seconds before the line starts, for stacking two titles. */
   delay?: number;
 }) {
   const ref = useRef<HTMLHeadingElement>(null);
-  const inView = useInView(ref, { once: true, amount: 0.3 });
+  const inView = useInView(ref, { once: true, amount: 0.25 });
+  const [settled, setSettled] = useState(false);
 
   const words = text.split(" ");
-  // Character index has to run across the whole title, not restart per word,
-  // or the stagger resets and the line arrives in clumps.
-  let index = Math.round(delay * 18);
 
   return (
     // Words are separated by margin, not whitespace, so the split-up spans are
@@ -80,82 +94,55 @@ export default function KineticTitle({
       className={className}
       aria-label={text.replace(/\*/g, "")}
       variants={focus}
+      custom={delay}
       initial="hidden"
       animate={inView ? "show" : "hidden"}
+      onAnimationComplete={(def) => def === "show" && setSettled(true)}
       // Promoted for the duration of the blur only — a permanent will-change on
       // a filter keeps the layer alive for the whole page.
-      style={{ willChange: inView ? "auto" : "filter" }}
+      style={{ willChange: settled ? "auto" : "filter" }}
     >
-      {words.map((word, wordIndex) => {
+      {words.map((raw, i) => {
         // Any asterisk marks the word, not just a leading/trailing one: the
         // closing marker is usually followed by punctuation ("sebe*."), which
         // an endsWith check misses.
-        const accent = word.includes("*");
-        const clean = word.replace(/\*/g, "");
+        const accent = raw.includes("*");
+        const clean = raw.replace(/\*/g, "");
 
-        // The accent word rises as ONE unit rather than character by character.
-        // Two reasons, and only the second is aesthetic:
-        //
-        //   1. the sheen is a gradient clipped to the glyphs, and a clip whose
-        //      DESCENDANTS are transformed is fragile — putting the transform on
-        //      an ancestor of the clipped span instead is the topology that is
-        //      reliable everywhere.
-        //   2. the marked word is the emphasis of the line. Landing it whole,
-        //      a beat behind the letters around it, is what emphasis looks like.
-        if (accent) {
-          // Wait out the stagger still to run before this word, plus the rise
-          // itself, so the highlight crosses type that is already set.
-          const sheenDelay = `${(index * 0.02 + 0.85).toFixed(2)}s`;
-          const wordIn = index * 0.02;
-          index += clean.length;
-          return (
-            <span
-              key={`${word}-${wordIndex}`}
-              aria-hidden
-              className="display-accent mr-[0.22em] inline-block align-bottom"
-            >
-              <span className="-mb-[0.16em] inline-block overflow-hidden pb-[0.16em] align-bottom">
-                <motion.span
-                  className="inline-block will-change-transform"
-                  custom={wordIn / 0.02}
-                  variants={char}
-                  initial="hidden"
-                  animate={inView ? "show" : "hidden"}
-                >
+        // Wait out the stagger still to run before this word plus most of its
+        // own rise, so the highlight crosses type that is already set.
+        const sheenDelay = `${(delay + LEAD + i * STAGGER + RISE * 0.6).toFixed(2)}s`;
+
+        return (
+          <span
+            key={`${raw}-${i}`}
+            aria-hidden
+            className={`mr-[0.22em] inline-block align-bottom ${
+              accent ? "display-accent" : ""
+            }`}
+          >
+            <span className="-mb-[0.16em] inline-block overflow-hidden pb-[0.16em] align-bottom">
+              <motion.span
+                variants={word}
+                className="inline-block"
+                style={{ willChange: settled ? "auto" : "transform" }}
+              >
+                {accent ? (
+                  // The sheen is a gradient clipped to the glyphs, and a clip
+                  // whose ANCESTORS are transformed is the topology that is
+                  // reliable everywhere — so the rise stays on the wrapper and
+                  // the clip sits inside it, never the other way round.
                   <span
-                    className={`sheen ${inView ? "sheen-run" : ""}`}
+                    className={inView ? "sheen sheen-run" : "sheen"}
                     style={{ animationDelay: sheenDelay }}
                   >
                     {clean}
                   </span>
-                </motion.span>
-              </span>
+                ) : (
+                  clean
+                )}
+              </motion.span>
             </span>
-          );
-        }
-
-        return (
-          <span
-            key={`${word}-${wordIndex}`}
-            aria-hidden
-            className="mr-[0.22em] inline-block align-bottom"
-          >
-            {Array.from(clean).map((glyph, glyphIndex) => (
-              <span
-                key={glyphIndex}
-                className="-mb-[0.16em] inline-block overflow-hidden pb-[0.16em] align-bottom"
-              >
-                <motion.span
-                  className="inline-block will-change-transform"
-                  custom={index++}
-                  variants={char}
-                  initial="hidden"
-                  animate={inView ? "show" : "hidden"}
-                >
-                  {glyph}
-                </motion.span>
-              </span>
-            ))}
           </span>
         );
       })}

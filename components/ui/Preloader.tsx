@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { releaseIntro } from "@/lib/intro";
 
 /**
  * Clean brand preloader. A counter + hairline bar fill while the page
@@ -31,6 +32,10 @@ export default function Preloader() {
       if (target >= 100 && elapsed >= MIN) {
         setProgress(100);
         setLeaving(true);
+        // Hand the page over as the panels START parting, not once they are
+        // gone: the hero reveal is meant to be caught in the opening, and
+        // waiting for the full 900ms split would leave a dead beat instead.
+        releaseIntro();
         setTimeout(() => setGone(true), reduce ? 300 : 900);
         return;
       }
@@ -80,7 +85,7 @@ export default function Preloader() {
         {/* Set in the display face: the panels part onto a field that is still
             resolving, and it spells this same wordmark again at the finale. */}
         <div className="display text-5xl md:text-6xl">
-          TOZ<em>AI</em>
+          TOZA <em>AI</em>
         </div>
         <div className="mt-6 h-px w-40 overflow-hidden bg-line md:w-52">
           <div

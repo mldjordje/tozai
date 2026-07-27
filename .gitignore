@@ -8,3 +8,6 @@
 next-env.d.ts
 .DS_Store
 neon.txt
+
+# dev-server build dir (see distDir in next.config.ts)
+/.next-dev

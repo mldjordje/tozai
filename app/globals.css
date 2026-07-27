@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 /* ---------------------------------------------------------------------------
-   TOZAI design tokens — dark-only, editorial.
+   TOZA AI design tokens — dark-only, editorial.
    Near-black ground · editorial serif display · Inter body · blue as INK.
 
    The accent is deliberately desaturated from the old #2e6bff and is only ever
@@ -208,6 +208,12 @@ textarea,
   line-height: 0.98;
   font-feature-settings: "kern" 1, "liga" 1, "dlig" 1;
   text-wrap: balance;
+  /* Headlines are set straight over the live particle field. A serif this thin
+     loses its hairlines and counters wherever a bright cluster drifts behind a
+     stroke, so every display line carries its own dark halo. One shadow, no
+     blur filter, no extra layer — and it costs nothing while the type is
+     static, which is all but two seconds of the page. */
+  text-shadow: 0 2px 28px rgb(8 8 10 / 0.62);
 }
 
 /* The italic accent word. One per headline — it is what makes the set read as
@@ -242,8 +248,15 @@ textarea,
   background-clip: text;
   color: transparent;
 }
+/* Both animations are declared in ONE shorthand on purpose. Split across two
+   classes on the same span the second `animation` declaration replaces the
+   first outright, and the sheen silently never runs. The call sites set
+   `animation-delay` inline, which applies to both entries in the list — the
+   sweep and the bloom are meant to arrive together. */
 .sheen-run {
-  animation: sheen 1.5s cubic-bezier(0.16, 1, 0.3, 1) 0.35s both;
+  animation:
+    sheen 1.5s cubic-bezier(0.16, 1, 0.3, 1) 0.35s both,
+    accent-bloom 1.8s cubic-bezier(0.16, 1, 0.3, 1) 0.35s both;
 }
 @keyframes sheen {
   from {
@@ -251,6 +264,26 @@ textarea,
   }
   to {
     background-position: -30% 0;
+  }
+}
+
+/* A single bloom under the accent word, riding along with the sheen so the
+   highlight reads as light falling on the type rather than as a gradient
+   sliding under it. text-shadow on the span that is already there — no second
+   element, no blur filter, no new compositing layer.
+
+   The colour is given explicitly because `.sheen` sets `color: transparent` for
+   the clip; a shadow inheriting currentColor would never render. */
+@keyframes accent-bloom {
+  0%,
+  18% {
+    text-shadow: 0 0 0 rgb(139 164 224 / 0);
+  }
+  46% {
+    text-shadow: 0 0 42px rgb(139 164 224 / 0.5);
+  }
+  100% {
+    text-shadow: 0 0 0 rgb(139 164 224 / 0);
   }
 }
 
