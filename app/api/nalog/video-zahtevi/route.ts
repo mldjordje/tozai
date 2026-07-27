@@ -3,6 +3,7 @@ import { getSql } from "@/lib/db";
 import { getSessionUser } from "@/lib/auth/user-session";
 import { getPackageBySlug } from "@/lib/packages";
 import { getPaymentProvider } from "@/lib/payments/provider";
+import { queueQuietly, queueStudioNotice } from "@/lib/email";
 import {
   cleanText,
   getUserVideoRequests,
@@ -148,7 +149,52 @@ export async function POST(request: Request) {
     RETURNING id
   `) as { id: number }[];
 
-  return NextResponse.json({ ok: true, requestId: rows[0].id }, { status: 201 });
+  const requestId = rows[0].id;
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? new URL(request.url).origin;
+
+  // The buyer just handed over a brief and got a screen that says "we'll be in
+  // touch" — with nothing in their inbox, that promise lives only in a tab they
+  // are about to close.
+  await queueQuietly({
+    userId: user.uid,
+    recipient: user.email,
+    templateKey: "inquiry_received",
+    subject: `Upit #${requestId} je stigao — ${pkg.name}`,
+    body: [
+      `Zdravo ${name.split(" ")[0]},`,
+      "",
+      `Primili smo tvoj upit za ${pkg.name} (${clipCount} ${clipCount === 1 ? "klip" : "klipova"}).`,
+      "",
+      "Šta sledi:",
+      "1. Pregledamo ideju, broj klipova i budžet.",
+      "2. Cena i rok izrade stižu na tvoj nalog — javićemo ti mejlom.",
+      "3. Tek tada odlučuješ da li prihvataš. Do tada te ništa ne obavezuje.",
+      "",
+      "Prati status upita:",
+      `${baseUrl}/nalog/zahtevi`,
+      "",
+      "TOZA AI",
+    ].join("\n"),
+  });
+
+  await queueStudioNotice({
+    templateKey: "studio_new_inquiry",
+    subject: `Novi upit #${requestId} — ${businessName}`,
+    body: [
+      `${name} (${user.email}) je poslao upit za ${pkg.name}.`,
+      "",
+      `Biznis: ${businessName}`,
+      `Klipova: ${clipCount}`,
+      `Budžet: ${budgetEur} EUR`,
+      "",
+      "Ideja:",
+      idea,
+      "",
+      `Pošalji procenu: ${baseUrl}/admin/video-zahtevi`,
+    ].join("\n"),
+  });
+
+  return NextResponse.json({ ok: true, requestId }, { status: 201 });
 }
 
 export async function PATCH(request: Request) {
@@ -297,6 +343,49 @@ export async function PATCH(request: Request) {
     },
   });
   await sql`UPDATE orders SET provider = ${provider.id} WHERE id = ${orderId}`;
+
+  // Accepting a quote is the same event as placing an order, so it gets the
+  // same slip — this is the branch where a project buyer actually owes money.
+  const acceptBase = process.env.NEXT_PUBLIC_APP_URL ?? new URL(request.url).origin;
+  const acceptTotal = `${q.quoted_amount.toLocaleString("sr-RS")} ${q.currency}`;
+  await queueQuietly({
+    userId: user.uid,
+    recipient: q.email,
+    templateKey: "order_created",
+    subject: `Porudžbina #${orderId} — ${q.project_title}`,
+    body: [
+      `Zdravo ${(q.name ?? billing.name).split(" ")[0]},`,
+      "",
+      `Ponuda je prihvaćena: ${q.service_name} — ${acceptTotal}.`,
+      ...(intent.kind === "manual"
+        ? [
+            "",
+            "Podaci za uplatu:",
+            `Poziv na broj: ${intent.reference}`,
+            ...(intent.payee.name ? [`Primalac: ${intent.payee.name}`] : []),
+            ...(intent.payee.account ? [`Račun: ${intent.payee.account}`] : []),
+            "",
+            "Čim uplata legne, otvaramo projekat i tražimo materijale.",
+          ]
+        : []),
+      "",
+      "Status porudžbine:",
+      `${acceptBase}/nalog/porudzbine`,
+      "",
+      "TOZA AI",
+    ].join("\n"),
+  });
+
+  await queueStudioNotice({
+    templateKey: "studio_quote_accepted",
+    subject: `Ponuda prihvaćena — porudžbina #${orderId} (${acceptTotal})`,
+    body: [
+      `${q.name ?? billing.name} (${q.email}) je prihvatio ponudu za ${q.project_title}.`,
+      `Iznos: ${acceptTotal}`,
+      "",
+      `Potvrdi uplatu: ${acceptBase}/admin/porudzbine`,
+    ].join("\n"),
+  });
 
   return NextResponse.json({ ok: true, orderId, intent });
 }

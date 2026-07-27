@@ -3,6 +3,7 @@ import { getSql } from "@/lib/db";
 import { getSessionUser } from "@/lib/auth/user-session";
 import { getPackageBySlug } from "@/lib/packages";
 import { getPaymentProvider } from "@/lib/payments/provider";
+import { queueQuietly, queueStudioNotice } from "@/lib/email";
 
 // Create a pending order and hand back a payment intent.
 //
@@ -147,6 +148,64 @@ export async function POST(request: Request) {
   }
 
   await sql`UPDATE orders SET provider = ${provider.id} WHERE id = ${orderId}`;
+
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? new URL(request.url).origin;
+  const total = `${pkg.price.toLocaleString("sr-RS")} ${pkg.currency}`;
+
+  // On bank transfer the buyer has to carry a reference number away from the
+  // screen. Repeating the slip in mail is the difference between a payment that
+  // reconciles itself and one the studio has to chase.
+  // null drops the line; "" is a deliberate blank line between paragraphs.
+  const lines = (parts: (string | null)[]) =>
+    parts.filter((line): line is string => line !== null).join("\n");
+
+  const payment =
+    intent.kind === "manual"
+      ? [
+          "Podaci za uplatu:",
+          `Iznos: ${total}`,
+          `Poziv na broj: ${intent.reference}`,
+          intent.payee.name ? `Primalac: ${intent.payee.name}` : null,
+          intent.payee.account ? `Račun: ${intent.payee.account}` : null,
+          "",
+          "Čim uplata legne, potvrdićemo je i sve postaje dostupno na nalogu.",
+        ]
+      : ["Plaćanje se završava u koraku koji ti je otvoren na sajtu."];
+
+  await queueQuietly({
+    userId: user.uid,
+    recipient: user.email,
+    templateKey: "order_created",
+    subject: `Porudžbina #${orderId} — ${pkg.name}`,
+    body: lines([
+      `Zdravo ${billing.name.split(" ")[0]},`,
+      "",
+      `Primili smo porudžbinu: ${pkg.name} — ${total}.`,
+      pkg.flow === "hours" && pkg.hours
+        ? `Nakon potvrde uplate dobijaš ${pkg.hours} ${Number(pkg.hours) === 1 ? "sat" : "sati"} na svom nalogu.`
+        : null,
+      "",
+      ...payment,
+      "",
+      "Status porudžbine:",
+      `${baseUrl}/nalog/porudzbine`,
+      "",
+      "TOZA AI",
+    ]),
+  });
+
+  await queueStudioNotice({
+    templateKey: "studio_new_order",
+    subject: `Nova porudžbina #${orderId} — ${total}`,
+    body: lines([
+      `${billing.name} (${user.email}) je naručio: ${pkg.name}.`,
+      `Iznos: ${total}`,
+      `Način plaćanja: ${provider.id}`,
+      intent.kind === "manual" ? `Poziv na broj: ${intent.reference}` : null,
+      "",
+      `Potvrdi uplatu: ${baseUrl}/admin/porudzbine`,
+    ]),
+  });
 
   return NextResponse.json({ ok: true, orderId, flow: pkg.flow, intent });
 }

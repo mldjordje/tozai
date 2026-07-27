@@ -2,7 +2,8 @@ import "server-only";
 import { getSql } from "@/lib/db";
 
 type EmailInput = {
-  userId: number;
+  /** Null for mail addressed to the studio rather than to a customer. */
+  userId: number | null;
   recipient: string;
   templateKey: string;
   subject: string;
@@ -56,5 +57,47 @@ export async function queueTransactionalEmail(input: EmailInput) {
       WHERE id = ${outboxId}
     `;
     return { queued: true, sent: false, outboxId };
+  }
+}
+
+/**
+ * Same pipeline, addressed to the studio.
+ *
+ * A lead that only appears inside the admin panel is a lead nobody sees until
+ * someone happens to log in, so both buyer-initiated events send a copy here.
+ * The address comes from studio_settings (admin → Podešavanja); until it is
+ * filled in this is a no-op rather than a failure, because a missing owner
+ * address must never cost the buyer their order.
+ */
+export async function queueStudioNotice(input: {
+  templateKey: string;
+  subject: string;
+  body: string;
+}) {
+  try {
+    const sql = getSql();
+    const rows = (await sql`
+      SELECT email FROM studio_settings WHERE id = 1
+    `) as { email: string | null }[];
+    const to = rows[0]?.email?.trim();
+    if (!to) return { queued: false, sent: false };
+    return await queueTransactionalEmail({ ...input, userId: null, recipient: to });
+  } catch (error) {
+    console.error("[email] studio notice failed", error);
+    return { queued: false, sent: false };
+  }
+}
+
+/**
+ * Queue without letting mail take a purchase down with it. The buyer's order is
+ * already committed by the time these run; an outbox insert that fails must
+ * surface in the log, not as a 500 on a completed transaction.
+ */
+export async function queueQuietly(input: EmailInput) {
+  try {
+    return await queueTransactionalEmail(input);
+  } catch (error) {
+    console.error(`[email] ${input.templateKey} failed to queue`, error);
+    return { queued: false, sent: false };
   }
 }
