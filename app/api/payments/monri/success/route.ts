@@ -27,6 +27,7 @@ export async function GET(request: NextRequest) {
   await fulfillPaidOrder(orderId, {
     provider: "monri",
     providerRef: request.nextUrl.searchParams.get("approval_code") ?? undefined,
+    baseUrl: process.env.NEXT_PUBLIC_APP_URL ?? request.nextUrl.origin,
   });
   return NextResponse.redirect(new URL("/nalog/projekti?placanje=uspesno", request.url));
 }

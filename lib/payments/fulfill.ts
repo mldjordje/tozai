@@ -1,5 +1,6 @@
 import "server-only";
 import { getSql } from "@/lib/db";
+import { queueQuietly, queueStudioNotice } from "@/lib/email";
 
 // The single point that turns a paid order into what the buyer bought.
 //
@@ -45,7 +46,7 @@ type OrderRow = {
 
 export async function fulfillPaidOrder(
   orderId: number,
-  options: { provider?: string; providerRef?: string } = {},
+  options: { provider?: string; providerRef?: string; baseUrl?: string } = {},
 ): Promise<FulfillResult> {
   const sql = getSql();
 
@@ -165,6 +166,63 @@ export async function fulfillPaidOrder(
         projectId = existing[0]?.id ?? null;
       }
     }
+  }
+
+  // --- notification -------------------------------------------------------
+  // Sent from here, not from the caller: the admin button, the Monri return and
+  // the mock provider all settle orders, and only one of them used to mail the
+  // buyer — so a card payment would have credited hours in silence. Guarded by
+  // the same transition check as everything else, so a repair re-run cannot
+  // mail twice.
+  if (!alreadyPaid && order.user_id) {
+    const buyer = (await sql`
+      SELECT email, name FROM users WHERE id = ${order.user_id}
+    `) as { email: string; name: string | null }[];
+    const baseUrl = options.baseUrl ?? process.env.NEXT_PUBLIC_APP_URL ?? "";
+    const destination = projectId
+      ? `/nalog/projekti/${projectId}`
+      : hoursCredited > 0
+        ? "/nalog/edukacija"
+        : "/nalog/porudzbine";
+    const total = `${order.amount.toLocaleString("sr-RS")} ${order.currency}`;
+
+    if (buyer[0]) {
+      await queueQuietly({
+        userId: order.user_id,
+        recipient: buyer[0].email,
+        templateKey: "order_paid",
+        subject: `Uplata je evidentirana — ${order.item}`,
+        body: [
+          `Zdravo ${buyer[0].name?.split(" ")[0] ?? ""},`,
+          "",
+          `Evidentirali smo uplatu za porudžbinu #${orderId} (${total}).`,
+          projectId
+            ? "Projekat je otvoren — pošalji materijale da krene izrada:"
+            : hoursCredited > 0
+              ? `Dodali smo ti ${hoursCredited} sati na nalog:`
+              : "Detalje vidiš na svom nalogu:",
+          `${baseUrl}${destination}`,
+          "",
+          "TOZA AI",
+        ].join("\n"),
+      });
+    }
+
+    await queueStudioNotice({
+      templateKey: "studio_order_paid",
+      subject: `Uplaćeno — porudžbina #${orderId} (${total})`,
+      body: [
+        `${buyer[0]?.name ?? "Kupac"} (${buyer[0]?.email ?? "—"}) — ${order.item}.`,
+        `Iznos: ${total}`,
+        `Način: ${options.provider ?? "—"}`,
+        projectId ? `Otvoren projekat #${projectId}.` : null,
+        hoursCredited > 0 ? `Dodato ${hoursCredited} sati na wallet.` : null,
+        "",
+        `${baseUrl}/admin/porudzbine`,
+      ]
+        .filter((line): line is string => line !== null)
+        .join("\n"),
+    });
   }
 
   return {

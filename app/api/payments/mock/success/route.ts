@@ -30,6 +30,7 @@ export async function GET(request: NextRequest) {
   const result = await fulfillPaidOrder(payload.orderId, {
     provider: "mock",
     providerRef: `TEST-${payload.orderId}`,
+    baseUrl: process.env.NEXT_PUBLIC_APP_URL ?? request.nextUrl.origin,
   });
 
   const destination = result.projectId

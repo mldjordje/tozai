@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSql } from "@/lib/db";
 import { fulfillPaidOrder } from "@/lib/payments/fulfill";
-import { queueTransactionalEmail } from "@/lib/email";
 import { cleanText } from "@/lib/video-requests";
 
 export const runtime = "nodejs";
@@ -81,38 +80,14 @@ export async function PATCH(request: Request) {
   // reference, or "test" while the flow is being walked through.
   const reference = cleanText(body.reference, 120) || null;
 
+  // The confirmation mail moved into fulfillPaidOrder(), so the card return and
+  // the mock provider send it too — this button is no longer the only way an
+  // order becomes paid.
   const result = await fulfillPaidOrder(id, {
     provider: "manual",
     providerRef: reference ?? `RUCNO-${id}`,
+    baseUrl: process.env.NEXT_PUBLIC_APP_URL ?? new URL(request.url).origin,
   });
-
-  // Only on the transition. Re-running to repair a half-finished fulfilment
-  // must not mail the customer a second time.
-  if (!result.alreadyPaid && order.user_id && order.user_email) {
-    const destination = result.projectId
-      ? `/nalog/projekti/${result.projectId}`
-      : result.hoursCredited > 0
-        ? "/nalog/edukacija"
-        : "/nalog/porudzbine";
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? new URL(request.url).origin;
-    await queueTransactionalEmail({
-      userId: order.user_id,
-      recipient: order.user_email,
-      templateKey: "order_paid",
-      subject: `Uplata je evidentirana — ${order.item}`,
-      body: [
-        `Zdravo ${order.user_name?.split(" ")[0] ?? ""},`,
-        "",
-        `Evidentirali smo uplatu za porudžbinu #${order.id} (${order.amount.toLocaleString("sr-RS")} ${order.currency}).`,
-        result.projectId
-          ? "Projekat je otvoren — pošalji materijale da krene izrada:"
-          : result.hoursCredited > 0
-            ? `Dodali smo ti ${result.hoursCredited} sati na nalog:`
-            : "Detalje vidiš na svom nalogu:",
-        `${baseUrl}${destination}`,
-      ].join("\n"),
-    });
-  }
 
   return NextResponse.json({ ...result, ok: true });
 }
