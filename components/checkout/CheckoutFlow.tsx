@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import InvoiceDocument from "@/components/nalog/InvoiceDocument";
 
 /**
  * Three steps, one screen: identity, billing, review. The order summary stays
@@ -45,6 +46,9 @@ type ManualIntent = {
   currency: string;
   payee: { name: string | null; account: string | null; pib: string | null; mb: string | null };
 };
+/** The proforma issued alongside a bank-transfer order, so the confirmation
+ *  screen can show the document itself rather than a promise of one. */
+type Proforma = { id: number; number: string };
 type RedirectIntent = { kind: "redirect"; redirectUrl: string };
 type FormIntent = { kind: "form"; action: string; fields: Record<string, string> };
 type Intent = ManualIntent | RedirectIntent | FormIntent;
@@ -92,7 +96,11 @@ export default function CheckoutFlow({
   const [consent, setConsent] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [placed, setPlaced] = useState<{ orderId: number; intent: Intent } | null>(null);
+  const [placed, setPlaced] = useState<{
+    orderId: number;
+    intent: Intent;
+    proforma: Proforma | null;
+  } | null>(null);
 
   const set = (key: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm((f) => ({ ...f, [key]: e.target.value }));
@@ -141,7 +149,7 @@ export default function CheckoutFlow({
         form.submit();
         return;
       }
-      setPlaced({ orderId: data.orderId, intent: data.intent });
+      setPlaced({ orderId: data.orderId, intent: data.intent, proforma: data.proforma ?? null });
     } catch {
       setError("Veza je prekinuta. Pokušaj ponovo.");
     } finally {
@@ -175,7 +183,12 @@ export default function CheckoutFlow({
             transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
           >
             {placed ? (
-              <Placed orderId={placed.orderId} intent={placed.intent} flow={pkg.flow} />
+              <Placed
+                orderId={placed.orderId}
+                intent={placed.intent}
+                proforma={placed.proforma}
+                flow={pkg.flow}
+              />
             ) : step === 0 ? (
               <SignIn slug={pkg.slug} />
             ) : step === 1 ? (
@@ -599,10 +612,12 @@ function Row({ k, v }: { k: string; v: string }) {
 function Placed({
   orderId,
   intent,
+  proforma,
   flow,
 }: {
   orderId: number;
   intent: Intent;
+  proforma: Proforma | null;
   flow: string;
 }) {
   const manual = intent.kind === "manual" ? intent : null;
@@ -612,6 +627,18 @@ function Placed({
       <h2 className="display mt-5 text-3xl md:text-5xl">
         Primljeno. <em>Hvala.</em>
       </h2>
+
+      {/* The document comes first: whoever placed the order usually has to hand
+          the proforma to whoever makes the transfer, and that should not require
+          finding it again somewhere else. */}
+      {proforma && (
+        <InvoiceDocument
+          invoiceId={proforma.id}
+          number={proforma.number}
+          kind="proforma"
+          className="mt-9"
+        />
+      )}
 
       {manual && (
         <div className="mt-9 rounded-2xl border border-line bg-bg-elev/40 p-7">

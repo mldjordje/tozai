@@ -3,7 +3,7 @@ import { getSql } from "@/lib/db";
 import { getSessionUser } from "@/lib/auth/user-session";
 import { getPackageBySlug } from "@/lib/packages";
 import { defaultPaymentMethod, getProviderFor } from "@/lib/payments/provider";
-import { issueInvoice } from "@/lib/invoices/issue";
+import { issueInvoice, renderStoredInvoice } from "@/lib/invoices/issue";
 import { queueQuietly, queueStudioNotice } from "@/lib/email";
 import {
   cleanText,
@@ -345,10 +345,27 @@ export async function PATCH(request: Request) {
       city: billing.city,
     },
   });
+  // Accepting a quote is the same commitment as placing an order, so it earns
+  // the same document — issued, attached to the mail and handed back so the
+  // dashboard can show it immediately. Issuing it and then dropping it on the
+  // floor, as this did, left the buyer with a payment slip and no proforma.
+  let proforma: { id: number; number: string } | null = null;
+  let proformaAttachment: { filename: string; content: string } | undefined;
   if (paymentMethod === "invoice") {
     try {
-      await issueInvoice(orderId, "proforma");
+      const issued = await issueInvoice(orderId, "proforma");
+      if (issued) {
+        proforma = { id: issued.id, number: issued.number };
+        const rendered = await renderStoredInvoice(issued.id);
+        if (rendered) {
+          proformaAttachment = {
+            filename: `${rendered.number}.pdf`,
+            content: Buffer.from(rendered.bytes).toString("base64"),
+          };
+        }
+      }
     } catch (error) {
+      // The order stands either way; the proforma can be reissued from admin.
       console.error("[video-zahtevi] proforma issue failed", orderId, error);
     }
   }
@@ -361,12 +378,15 @@ export async function PATCH(request: Request) {
   await queueQuietly({
     userId: user.uid,
     recipient: q.email,
-    templateKey: "order_created",
-    subject: `Porudžbina #${orderId} — ${q.project_title}`,
+    templateKey: proforma ? "proforma_issued" : "order_created",
+    subject: proforma
+      ? `Predračun ${proforma.number} — ${q.project_title}`
+      : `Porudžbina #${orderId} — ${q.project_title}`,
     body: [
       `Zdravo ${(q.name ?? billing.name).split(" ")[0]},`,
       "",
       `Ponuda je prihvaćena: ${q.service_name} — ${acceptTotal}.`,
+      ...(proforma ? ["", `Predračun ${proforma.number} je u prilogu.`] : []),
       ...(intent.kind === "manual"
         ? [
             "",
@@ -384,6 +404,7 @@ export async function PATCH(request: Request) {
       "",
       "TOZA AI",
     ].join("\n"),
+    attachments: proformaAttachment ? [proformaAttachment] : undefined,
   });
 
   await queueStudioNotice({
@@ -392,10 +413,11 @@ export async function PATCH(request: Request) {
     body: [
       `${q.name ?? billing.name} (${q.email}) je prihvatio ponudu za ${q.project_title}.`,
       `Iznos: ${acceptTotal}`,
+      ...(proforma ? [`Predračun: ${proforma.number}`] : []),
       "",
       `Potvrdi uplatu: ${acceptBase}/admin/porudzbine`,
     ].join("\n"),
   });
 
-  return NextResponse.json({ ok: true, orderId, intent });
+  return NextResponse.json({ ok: true, orderId, intent, proforma });
 }

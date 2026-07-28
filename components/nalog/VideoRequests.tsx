@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import InvoiceDocument from "@/components/nalog/InvoiceDocument";
 
 type RequestRow = {
   id: number;
@@ -50,7 +51,11 @@ export default function VideoRequests() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [payment, setPayment] = useState<{ orderId: number; intent: ManualIntent } | null>(null);
+  const [payment, setPayment] = useState<{
+    orderId: number;
+    intent: ManualIntent;
+    proforma: { id: number; number: string } | null;
+  } | null>(null);
 
   async function load() {
     try {
@@ -92,7 +97,7 @@ export default function VideoRequests() {
         return;
       }
       if (action === "accept" && data.intent?.kind === "manual") {
-        setPayment({ orderId: data.orderId, intent: data.intent });
+        setPayment({ orderId: data.orderId, intent: data.intent, proforma: data.proforma ?? null });
       }
       await load();
     } catch {
@@ -108,7 +113,9 @@ export default function VideoRequests() {
         <p className="text-xs uppercase tracking-[0.16em] text-accent-soft">Porudžbina #{payment.orderId}</p>
         <h2 className="mt-3 text-xl font-semibold text-fg">Ponuda je prihvaćena.</h2>
         <p className="mt-2 text-sm text-muted">
-          Monri nije podešen u ovom okruženju, pa su prikazani podaci za uplatu.
+          {payment.proforma
+            ? "Predračun je izdat i poslat ti je na mejl."
+            : "Podaci za uplatu su ispod — predračun ti stiže mejlom."}
         </p>
         <dl className="mt-5 space-y-3 text-sm">
           <Row label="Iznos" value={`${payment.intent.amount.toLocaleString("sr-RS")} ${payment.intent.currency}`} />
@@ -116,6 +123,18 @@ export default function VideoRequests() {
           {payment.intent.payee.name && <Row label="Primalac" value={payment.intent.payee.name} />}
           {payment.intent.payee.account && <Row label="Račun" value={payment.intent.payee.account} />}
         </dl>
+
+        {/* The document itself, not a pointer to it: whoever accepted the quote
+            usually has to forward the proforma to whoever pays. */}
+        {payment.proforma && (
+          <InvoiceDocument
+            invoiceId={payment.proforma.id}
+            number={payment.proforma.number}
+            kind="proforma"
+            className="mt-6"
+          />
+        )}
+
         <Link href="/nalog/porudzbine" className="mt-6 inline-flex rounded-full bg-fg px-5 py-2.5 text-sm font-medium text-bg">
           Moje porudžbine
         </Link>

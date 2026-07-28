@@ -6,10 +6,15 @@ import { renderStoredInvoice } from "@/lib/invoices/issue";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+// `?prikaz=1` serves the document inline so it can be shown in place — the
+// buyer sees the proforma the moment the order is placed, instead of being told
+// to go and download it from somewhere else. The default stays `attachment`, so
+// the "Preuzmi PDF" links keep saving a file.
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const inline = new URL(request.url).searchParams.get("prikaz") === "1";
   const user = await getSessionUser();
   if (!user) {
     return NextResponse.json({ ok: false, message: "Prijava je potrebna." }, { status: 401 });
@@ -39,7 +44,7 @@ export async function GET(
   return new NextResponse(Buffer.from(rendered.bytes), {
     headers: {
       "Content-Type": "application/pdf",
-      "Content-Disposition": `attachment; filename="${rendered.number}.pdf"`,
+      "Content-Disposition": `${inline ? "inline" : "attachment"}; filename="${rendered.number}.pdf"`,
       "Cache-Control": "private, no-store",
     },
   });
