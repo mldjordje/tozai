@@ -25,6 +25,17 @@ export type IssuedInvoice = {
   pdfUrl: string | null;
 };
 
+export type ManualInvoiceInput = {
+  kind: InvoiceKind;
+  scope: "domestic" | "foreign";
+  issuedAt: string;
+  dueDate: string | null;
+  item: string;
+  amount: number;
+  currency: string;
+  buyer: InvoiceParty;
+};
+
 /** Series are separate so a proforma and an invoice never share a number:
  *  PR-2026-0001 is a request to pay, TZ-2026-0001 is a tax document. */
 const PREFIX: Record<InvoiceKind, string> = { proforma: "PR", invoice: "TZ" };
@@ -233,6 +244,108 @@ export async function issueInvoice(
   }
 
   return { id, number, kind, scope, pdfUrl };
+}
+
+/**
+ * Issue a standalone document entered by an administrator. Manual documents
+ * deliberately have no order_id; that keeps customer fulfilment untouched
+ * while letting the shared invoice table, numbering and PDF renderer remain
+ * the single source of truth.
+ */
+export async function issueManualInvoice(
+  input: ManualInvoiceInput,
+): Promise<IssuedInvoice> {
+  const sql = getSql();
+  const settingsRows = (await sql`
+    SELECT name, company_name, address, city, email, phone, pib, mb,
+           bank_account, iban, swift, bank_name, bank_address,
+           vat_note_domestic, vat_note_foreign, invoice_due_days
+    FROM studio_settings WHERE id = 1
+  `) as SettingsRow[];
+  const settings = settingsRows[0] ?? ({} as SettingsRow);
+  const rate = await getMiddleRate(input.currency);
+  const year = Number(input.issuedAt.slice(0, 4));
+  const prefix = PREFIX[input.kind];
+
+  const inserted = (await sql`
+    INSERT INTO invoices (
+      order_id, kind, scope, number, amount, currency, item, buyer,
+      issued_at, due_date, amount_rsd, fx_rate, fx_date
+    )
+    SELECT NULL, ${input.kind}, ${input.scope},
+           ${prefix} || '-' || ${year}::text || '-' ||
+             LPAD((
+               COALESCE((
+                 SELECT MAX(SUBSTRING(i.number FROM ${`${prefix}-[0-9]{4}-([0-9]+)`})::int)
+                 FROM invoices i
+                 WHERE i.number LIKE ${`${prefix}-${year}-%`}
+               ), 0) + 1
+             )::text, 4, '0'),
+           ${input.amount}, ${input.currency}, ${input.item},
+           ${JSON.stringify(input.buyer)}::jsonb,
+           ${input.issuedAt}::date,
+           ${input.dueDate}::date,
+           ${rate ? input.amount * rate.rate : null},
+           ${rate?.rate ?? null},
+           ${rate?.date ?? null}
+    RETURNING id, number
+  `) as { id: number; number: string }[];
+
+  const { id, number } = inserted[0];
+  const issuedAt = new Date(`${input.issuedAt}T12:00:00Z`);
+  const dueDate = input.dueDate ? new Date(`${input.dueDate}T12:00:00Z`) : null;
+  const document: InvoiceDocument = {
+    kind: input.kind,
+    scope: input.scope,
+    number,
+    issuedAt,
+    dueDate,
+    item: input.item,
+    amount: input.amount,
+    currency: input.currency,
+    rsd: rate ? { amount: input.amount * rate.rate, rate: rate.rate, date: rate.date } : null,
+    seller: {
+      name: settings.name,
+      companyName: settings.company_name,
+      address: settings.address,
+      city: settings.city,
+      country: input.scope === "foreign" ? "Serbia" : null,
+      pib: settings.pib,
+      mb: settings.mb,
+      email: settings.email,
+      phone: settings.phone,
+      bankAccount: settings.bank_account,
+      iban: settings.iban,
+      swift: settings.swift,
+      bankName: settings.bank_name,
+      bankAddress: settings.bank_address,
+    },
+    buyer: input.buyer,
+    reference: number,
+    vatNote:
+      (input.scope === "foreign" ? settings.vat_note_foreign : settings.vat_note_domestic) ?? "",
+  };
+
+  let pdfUrl: string | null = null;
+  try {
+    const bytes = await renderInvoicePdf(document);
+    if (process.env.BLOB_READ_WRITE_TOKEN) {
+      const blob = await put(`fakture/${number}.pdf`, Buffer.from(bytes), {
+        access: "public",
+        addRandomSuffix: true,
+        contentType: "application/pdf",
+      });
+      pdfUrl = blob.url;
+      await sql`
+        UPDATE invoices SET pdf_url = ${blob.url}, blob_pathname = ${blob.pathname}
+        WHERE id = ${id}
+      `;
+    }
+  } catch (error) {
+    console.error("[invoices] Manual PDF render/upload failed", number, error);
+  }
+
+  return { id, number, kind: input.kind, scope: input.scope, pdfUrl };
 }
 
 /**

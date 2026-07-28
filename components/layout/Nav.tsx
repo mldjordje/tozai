@@ -124,7 +124,7 @@ export default function Nav({
             transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
             className="mx-6 overflow-hidden rounded-2xl border border-line bg-bg/95 p-2 backdrop-blur-xl md:hidden"
           >
-            <div className="px-3 pb-2 pt-1 sm:hidden">
+            <div className="px-3 pb-2 pt-1">
               <LanguageSwitch locale={locale} label={t.nav.language} mobile />
             </div>
             {[...links, { href: "/nalog", label: t.nav.account }].map((l) => (
@@ -172,7 +172,7 @@ function LanguageSwitch({
     <div
       aria-label={label}
       className={`items-center rounded-full border border-line bg-bg-elev/40 p-0.5 text-xs backdrop-blur-md ${
-        mobile ? "flex w-fit" : "hidden sm:flex"
+        mobile ? "flex w-fit" : "hidden md:flex"
       }`}
     >
       {(["sr", "en"] as const).map((option) => {
