@@ -8,9 +8,15 @@ import {
   signUserSessionToken,
   verifyOAuthTxnToken,
 } from "@/lib/auth/user-session";
-import { setSessionCookie, signSessionToken } from "@/lib/auth/session";
+import {
+  SESSION_COOKIE_NAME,
+  setSessionCookie,
+  signSessionToken,
+  verifySessionToken,
+} from "@/lib/auth/session";
 import { getStaffByEmail } from "@/lib/staff";
 import { isBootstrapAdmin, wantsAdminDestination } from "@/lib/auth/admin-access";
+import { saveCalendarCredentials } from "@/lib/google/calendar";
 
 export const runtime = "nodejs";
 
@@ -18,6 +24,16 @@ const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
 const GOOGLE_JWKS = createRemoteJWKSet(
   new URL("https://www.googleapis.com/oauth2/v3/certs"),
 );
+
+/** A failed calendar connect belongs back in the panel, not on the customer
+ *  login page — the person doing it is already signed in as staff. */
+function calendarRedirect(origin: string, reason: string) {
+  const url = new URL("/admin/termini", origin);
+  url.searchParams.set("kalendar", reason);
+  const response = NextResponse.redirect(url);
+  clearOAuthTxnCookie(response);
+  return response;
+}
 
 function failRedirect(origin: string, reason: string) {
   const url = new URL("/prijava", origin);
@@ -60,7 +76,10 @@ export async function GET(request: NextRequest) {
   if (!tokenResponse.ok) {
     return failRedirect(origin, "razmena");
   }
-  const tokens = (await tokenResponse.json()) as { id_token?: string };
+  const tokens = (await tokenResponse.json()) as {
+    id_token?: string;
+    refresh_token?: string;
+  };
   if (!tokens.id_token) {
     return failRedirect(origin, "razmena");
   }
@@ -82,6 +101,45 @@ export async function GET(request: NextRequest) {
   }
   const name = typeof claims.name === "string" ? claims.name : null;
   const avatar = typeof claims.picture === "string" ? claims.picture : null;
+
+  // --- studio connecting its calendar, not somebody signing in ------------
+  //
+  // Three things have to hold before a refresh token is stored: the txn cookie
+  // says "calendar" (and it is signed by us, so it can only come from the
+  // admin-gated start route), the browser still holds a valid admin session,
+  // and the Google account that came back is actually staff. Any one of them
+  // alone would be too weak — the last one is what stops an admin from wiring
+  // the studio's bookings into some unrelated calendar.
+  if (txn.mode === "calendar") {
+    const adminSession = await verifySessionToken(
+      request.cookies.get(SESSION_COOKIE_NAME)?.value,
+    );
+    const role = adminSession?.role === "admin" ? "owner" : adminSession?.role;
+    if (role !== "owner" && role !== "staff") {
+      return calendarRedirect(origin, "pristup");
+    }
+
+    let staff = null;
+    try {
+      staff = await getStaffByEmail(email);
+    } catch {
+      staff = null;
+    }
+    if (!staff && !isBootstrapAdmin(email)) {
+      return calendarRedirect(origin, "nalog");
+    }
+    if (!tokens.refresh_token) {
+      // Google only issues one on the first consent for a given client+account.
+      // `prompt=consent` on the start route forces a new one, so this means
+      // something else went wrong — say so instead of reporting success.
+      return calendarRedirect(origin, "bez-tokena");
+    }
+
+    await saveCalendarCredentials({ refreshToken: tokens.refresh_token, email });
+    const response = NextResponse.redirect(new URL("/admin/termini?kalendar=ok", origin));
+    clearOAuthTxnCookie(response);
+    return response;
+  }
 
   const sql = getSql();
   const rows = (await sql`

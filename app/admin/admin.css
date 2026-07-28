@@ -365,7 +365,17 @@ button.adm__chip:disabled{opacity:.3;cursor:default;text-decoration:line-through
 .adm__session-tools .adm__pf-row button{border-color:var(--line);background:none;color:var(--muted)}
 .adm__session-tools .adm__pf-row button:hover:not(:disabled){border-color:var(--neon);color:#fff;background:rgba(46,107,255,.14)}
 .adm__session-tools>p{margin:0}
-@media(max-width:700px){.adm__session{grid-template-columns:1fr}}
+.adm__gcal{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px 16px;border:1px solid var(--line);border-radius:6px;background:rgba(46,107,255,.05)}
+.adm__gcal strong{display:block;font-size:13px;margin-bottom:4px}
+.adm__gcal p{margin:0;max-width:56ch}
+.adm__gcal button{flex-shrink:0;padding:9px 18px;border:1px solid var(--neon);border-radius:999px;background:rgba(46,107,255,.16);color:#fff;font-size:10px;letter-spacing:.12em;text-transform:uppercase;cursor:pointer;transition:background .2s}
+.adm__gcal button:hover:not(:disabled){background:rgba(46,107,255,.3)}
+.adm__gcal button:disabled{opacity:.35;cursor:default}
+.adm__gcal-result{padding:10px 14px;border:1px solid rgba(108,148,255,.4);border-radius:4px;color:var(--neon)}
+.adm__gcal-make{align-self:flex-start;padding:6px 12px;border:1px solid var(--line);border-radius:999px;background:none;color:var(--muted);font-size:9px;letter-spacing:.1em;text-transform:uppercase;cursor:pointer;transition:all .2s}
+.adm__gcal-make:hover:not(:disabled){border-color:var(--neon);color:#fff}
+.adm__gcal-make:disabled{opacity:.35;cursor:default}
+@media(max-width:700px){.adm__session{grid-template-columns:1fr}.adm__gcal{flex-direction:column;align-items:flex-start}}
 
 /* ---- Sadržaj (CMS) ---- */
 .adm__content{display:flex;flex-direction:column;gap:24px;max-width:860px}

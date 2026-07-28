@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { fmtDate } from "./shared";
 
 // Booked sessions and everything the studio does around them: hand over the
@@ -24,6 +25,21 @@ type Booking = {
 };
 
 type Filter = "upcoming" | "past" | "all";
+
+type Calendar = {
+  connected: boolean;
+  configured: boolean;
+  email: string | null;
+  connectedAt: string | null;
+};
+
+/** Outcome of the Google consent round trip, reported back as ?kalendar=. */
+const CONNECT_RESULT: Record<string, string> = {
+  ok: "Google kalendar je povezan.",
+  pristup: "Nemaš admin sesiju — prijavi se pa probaj ponovo.",
+  nalog: "Taj Google nalog nije u timu. Poveži nalog studija.",
+  "bez-tokena": "Google nije vratio refresh token. Probaj ponovo i potvrdi pristup kalendaru.",
+};
 
 const FILTERS: { key: Filter; label: string }[] = [
   { key: "upcoming", label: "Predstoje" },
@@ -56,7 +72,11 @@ function endSlot(start: string, hours: number) {
 }
 
 export function TerminiTab() {
+  const params = useSearchParams();
+  const connectResult = CONNECT_RESULT[params.get("kalendar") ?? ""] ?? null;
   const [filter, setFilter] = useState<Filter>("upcoming");
+  const [calendar, setCalendar] = useState<Calendar | null>(null);
+  const [calendarBusy, setCalendarBusy] = useState(false);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -73,6 +93,7 @@ export function TerminiTab() {
       if (!data.ok) throw new Error();
       const list = data.bookings as Booking[];
       setBookings(list);
+      setCalendar(data.calendar as Calendar);
       setDrafts(
         Object.fromEntries(
           list.map((b) => [b.id, { meet: b.meet_url ?? "", rec: b.recording_url ?? "" }]),
@@ -112,12 +133,81 @@ export function TerminiTab() {
     }
   };
 
+  const connectCalendar = async () => {
+    setCalendarBusy(true);
+    try {
+      const res = await fetch("/api/admin/google-kalendar", { method: "POST" });
+      const data = await res.json();
+      if (data.ok && data.url) {
+        // Full navigation, not fetch: the consent screen is Google's page and
+        // the txn cookie has to travel with the browser.
+        window.location.href = data.url as string;
+        return;
+      }
+      setError(data.message ?? "Ne mogu da pokrenem povezivanje.");
+    } catch {
+      setError("Ne mogu da pokrenem povezivanje.");
+    } finally {
+      setCalendarBusy(false);
+    }
+  };
+
+  const disconnectCalendar = async () => {
+    setCalendarBusy(true);
+    try {
+      await fetch("/api/admin/google-kalendar", { method: "DELETE" });
+      await load(filter);
+    } finally {
+      setCalendarBusy(false);
+    }
+  };
+
   return (
     <div className="adm__sessions">
       <p className="adm__hint">
-        Termini koje su klijenti rezervisali iz svog naloga. Link za sastanak nalepiš ovde —
-        klijent ga odmah vidi na `/nalog/edukacija` i dobija mejl.
+        Termini koje su klijenti rezervisali iz svog naloga. Meet link se pravi sam ako je
+        Google kalendar povezan; u suprotnom ga nalepiš ručno.
       </p>
+
+      {connectResult && (
+        <p className="adm__hint adm__gcal-result" role="status">
+          {connectResult}
+        </p>
+      )}
+
+      <div className="adm__gcal">
+        <div>
+          <strong>Google kalendar</strong>
+          {calendar?.connected ? (
+            <p className="adm__hint">
+              Povezan{calendar.email ? ` — ${calendar.email}` : ""}. Svaka nova rezervacija
+              dobija Meet sobu i poziv u kalendaru.
+            </p>
+          ) : calendar?.configured === false ? (
+            <p className="adm__hint">
+              Nedostaju GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET u env-u.
+            </p>
+          ) : (
+            <p className="adm__hint">
+              Nije povezan — Meet linkovi se za sada lepe ručno. Poveži nalog studija
+              (isti onaj čiji kalendar koristiš).
+            </p>
+          )}
+        </div>
+        {calendar?.connected ? (
+          <button type="button" onClick={disconnectCalendar} disabled={calendarBusy}>
+            Prekini vezu
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={connectCalendar}
+            disabled={calendarBusy || calendar?.configured === false}
+          >
+            Poveži Google kalendar
+          </button>
+        )}
+      </div>
 
       <div className="adm__filters">
         {FILTERS.map((f) => (
@@ -176,6 +266,18 @@ export function TerminiTab() {
               <div className="adm__session-tools">
                 <div className="adm__session-field">
                   <label htmlFor={`meet-${b.id}`}>Link za sastanak</label>
+                  {open && !b.meet_url && calendar?.connected && (
+                    <button
+                      type="button"
+                      className="adm__gcal-make"
+                      disabled={busyId === b.id}
+                      onClick={() =>
+                        act(b.id, { action: "create-meet" }, "Meet soba napravljena, klijent obavešten.")
+                      }
+                    >
+                      Napravi Meet link
+                    </button>
+                  )}
                   <div className="adm__pf-row">
                     <input
                       id={`meet-${b.id}`}

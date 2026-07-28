@@ -94,12 +94,34 @@ Za svaki termin:
 - **Nije se pojavio** — isto otkazivanje, ali **bez** vraćanja sati.
 - **Snimak** — link na snimak sesije, vidi ga klijent u "Prethodni termini".
 
-Napomena: link se ne pravi sam. Google Meet soba se otvara preko Google
-Calendar API-ja, a za to trebaju Google OAuth kredencijali kojih još nema
-(vidi `docs/PLAN…` EPIC 0.2). Dok ne stignu, link se lepi ručno — kolona
-`gcal_event_id` u bazi već čeka automatiku.
+### Automatski Meet link — poveži Google kalendar
 
-Takođe još ne postoji automatski podsetnik 24h/1h pre termina — kolone su
+Na vrhu `/admin/termini` stoji **Poveži Google kalendar**. Klikneš, prijaviš se
+nalogom studija, odobriš pristup kalendaru — i od tog trenutka **svaka nova
+rezervacija sama dobija Meet sobu**: klijentu odmah stiže link u mejlu, tebi
+se termin upiše u Google kalendar, a klijent dobije i pravi kalendarski poziv.
+Otkazivanje briše događaj iz kalendara.
+
+Za stare termine (one zakazane pre povezivanja) stoji dugme **Napravi Meet
+link** na samoj kartici termina.
+
+Pre prvog povezivanja, u Google Cloud Console projektu:
+
+1. Uključi **Google Calendar API** (APIs & Services → Library → Calendar API →
+   Enable). Bez ovoga Google odbija pravljenje događaja.
+2. Na OAuth consent screen dodaj scope
+   `https://www.googleapis.com/auth/calendar.events`.
+3. Redirect URI **ne treba dodavati** — koristi se isti onaj koji već radi za
+   prijavu (`/api/auth/google/callback`).
+
+Povezivanje radi **samo sa produkcije** (`toza-ai.rs`), jer je taj redirect URI
+registrovan. Lokalni `localhost:3005` nije.
+
+Ako Google zakaže ili kalendar nije povezan, termin se svejedno rezerviše —
+samo piše "Bez linka" i nalepiš ga ručno. Rezervacija nikad ne pada zbog
+Google-a.
+
+Napomena: još ne postoji automatski podsetnik 24h/1h pre termina — kolone su
 spremne, ali treba cron da ih šalje.
 
 ## 3. Kako radi plaćanje preko predračuna

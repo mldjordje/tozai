@@ -652,6 +652,15 @@ await sql`
   WHERE id = 1
 `;
 
+// Google Calendar connection for automatic Meet rooms on booked sessions.
+// The refresh token belongs to the studio account and is what lets the server
+// create an event when nobody is logged in — the buyer books at 23:00 and the
+// link has to exist without a human present. Never leaves the server.
+await sql`ALTER TABLE studio_settings ADD COLUMN IF NOT EXISTS gcal_refresh_token TEXT`;
+await sql`ALTER TABLE studio_settings ADD COLUMN IF NOT EXISTS gcal_email TEXT`;
+await sql`ALTER TABLE studio_settings ADD COLUMN IF NOT EXISTS gcal_calendar_id TEXT NOT NULL DEFAULT 'primary'`;
+await sql`ALTER TABLE studio_settings ADD COLUMN IF NOT EXISTS gcal_connected_at TIMESTAMPTZ`;
+
 // Country decides which invoice template a buyer gets. Serbia (or unset) is
 // domestic; anything else is the foreign, English, EUR document.
 await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS country TEXT`;

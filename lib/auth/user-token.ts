@@ -18,7 +18,16 @@ export type SessionUser = {
   avatar: string | null;
 };
 
-export type OAuthTxn = { state: string; verifier: string; next: string };
+/** `mode` decides what the shared callback does with the code it gets back:
+ *  sign somebody in, or store the studio's Calendar refresh token. Both go
+ *  through one redirect URI because that URI has to be registered in the
+ *  Google console, and one registration is one thing that can be forgotten. */
+export type OAuthTxn = {
+  state: string;
+  verifier: string;
+  next: string;
+  mode?: "login" | "calendar";
+};
 
 function getSecret() {
   const secret = process.env.AUTH_JWT_SECRET;
@@ -68,7 +77,12 @@ export async function verifyOAuthTxnToken(
   ) {
     return null;
   }
-  return { state: payload.state, verifier: payload.verifier, next: payload.next };
+  return {
+    state: payload.state,
+    verifier: payload.verifier,
+    next: payload.next,
+    mode: payload.mode === "calendar" ? "calendar" : "login",
+  };
 }
 
 // `kind` is checked here, so an admin token dropped into the customer cookie

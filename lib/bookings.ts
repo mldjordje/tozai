@@ -2,6 +2,7 @@ import "server-only";
 import { getSql } from "@/lib/db";
 import { queueQuietly, queueStudioNotice } from "@/lib/email";
 import { formatDay, formatHours, HOUR_KIND_LABEL } from "@/lib/format";
+import { createMeetEvent, deleteCalendarEvent } from "@/lib/google/calendar";
 import {
   belgradeNow,
   CANCEL_CUTOFF_HOURS,
@@ -38,6 +39,9 @@ export type Booking = {
   hours: number;
   status: string;
   topic: string | null;
+  meet_url?: string | null;
+  /** Calendar event behind the Meet room, so cancelling can take it down. */
+  gcal_event_id?: string | null;
 };
 
 export type BookingFailure =
@@ -230,20 +234,95 @@ export async function createBooking(
     return { ok: false, code: "balance", message: "Nemaš dovoljno sati na stanju." };
   }
 
-  await notifyBooked(userId, {
-    id: bookingId,
+  // The Meet room. Deliberately after the booking is committed and never
+  // allowed to fail it: if Google is down the buyer keeps the session and the
+  // studio sees "Bez linka" in the panel, which is recoverable. Losing the
+  // booking because a third party had a bad minute is not.
+  const meet = await createMeetForBooking({
+    bookingId,
+    userId,
     kind,
     date,
-    start_slot: startSlot,
+    startSlot,
     hours,
-    status: "zakazano",
     topic,
-  }, options.baseUrl);
+  });
+
+  await notifyBooked(
+    userId,
+    {
+      id: bookingId,
+      kind,
+      date,
+      start_slot: startSlot,
+      hours,
+      status: "zakazano",
+      topic,
+    },
+    options.baseUrl,
+    meet,
+  );
 
   return {
     ok: true,
-    booking: { id: bookingId, kind, date, start_slot: startSlot, hours, status: "zakazano", topic },
+    booking: {
+      id: bookingId,
+      kind,
+      date,
+      start_slot: startSlot,
+      hours,
+      status: "zakazano",
+      topic,
+      meet_url: meet,
+    },
   };
+}
+
+/**
+ * Open the Meet room for a booking and record it. Returns the link, or null
+ * when the calendar is not connected or Google refused — every caller treats
+ * that as "no link yet", not as an error.
+ */
+export async function createMeetForBooking(input: {
+  bookingId: number;
+  userId: number;
+  kind: string;
+  date: string;
+  startSlot: string;
+  hours: number;
+  topic: string | null;
+}): Promise<string | null> {
+  const sql = getSql();
+  const buyers = (await sql`
+    SELECT email, name FROM users WHERE id = ${input.userId}
+  `) as { email: string; name: string | null }[];
+  const buyer = buyers[0];
+
+  const event = await createMeetEvent({
+    bookingId: input.bookingId,
+    date: input.date,
+    startSlot: input.startSlot,
+    hours: input.hours,
+    summary: `TOZA AI — ${HOUR_KIND_LABEL[input.kind] ?? input.kind}${
+      buyer?.name ? ` · ${buyer.name}` : ""
+    }`,
+    description: [
+      input.topic ? `Tema: ${input.topic}` : null,
+      buyer?.email ? `Klijent: ${buyer.email}` : null,
+      `Termin #${input.bookingId} · ${formatHours(input.hours)}`,
+    ]
+      .filter((line): line is string => line !== null)
+      .join("\n"),
+    attendeeEmail: buyer?.email ?? null,
+  });
+  if (!event) return null;
+
+  await sql`
+    UPDATE bookings
+    SET meet_url = ${event.meetUrl}, gcal_event_id = ${event.eventId}
+    WHERE id = ${input.bookingId}
+  `;
+  return event.meetUrl;
 }
 
 /**
@@ -257,7 +336,8 @@ export async function cancelBooking(
 ): Promise<BookingResult> {
   const sql = getSql();
   const rows = (await sql`
-    SELECT id, kind, date::text AS date, start_slot, hours::float8 AS hours, status, topic
+    SELECT id, kind, date::text AS date, start_slot, hours::float8 AS hours, status, topic,
+           meet_url, gcal_event_id
     FROM bookings WHERE id = ${bookingId} AND user_id = ${userId}
   `) as Booking[];
   const booking = rows[0];
@@ -320,6 +400,13 @@ async function releaseBooking(
   // Free the slot before crediting: a refunded wallet with a still-blocked hour
   // is the worse of the two half-finished states.
   await sql`DELETE FROM booking_slots WHERE booking_id = ${booking.id}`;
+  // Take the room down too, so neither side is left with a live Meet link for
+  // a session that is not happening. Best effort — a stale calendar entry must
+  // not hold up the refund.
+  if (booking.gcal_event_id) {
+    await deleteCalendarEvent(booking.gcal_event_id);
+    await sql`UPDATE bookings SET meet_url = NULL, gcal_event_id = NULL WHERE id = ${booking.id}`;
+  }
   if (refund) {
     await sql`
       INSERT INTO hour_entries (user_id, kind, hours, reason, booking_id, note)
@@ -346,7 +433,7 @@ export async function cancelBookingAsStudio(
   const sql = getSql();
   const rows = (await sql`
     SELECT b.id, b.user_id, b.kind, b.date::text AS date, b.start_slot,
-           b.hours::float8 AS hours, b.status, b.topic,
+           b.hours::float8 AS hours, b.status, b.topic, b.meet_url, b.gcal_event_id,
            u.email AS user_email, u.name AS user_name
     FROM bookings b
     LEFT JOIN users u ON u.id = b.user_id
@@ -426,30 +513,69 @@ export async function setBookingMeetUrl(
   // Mail only when a link actually appears, and only when it changed — saving
   // the same row twice must not send the client the same notice twice.
   const changed = meetUrl !== null && meetUrl !== booking.meet_url;
-  if (changed && options.notify !== false && booking.user_email && booking.status === "zakazano") {
-    const base = options.baseUrl ?? process.env.NEXT_PUBLIC_APP_URL ?? "";
-    await queueQuietly({
-      userId: booking.user_id,
-      recipient: booking.user_email,
-      templateKey: "booking_link_ready",
-      subject: `Link za termin ${formatDay(booking.date)} u ${booking.start_slot}`,
-      body: [
-        `Zdravo ${booking.user_name?.split(" ")[0] ?? ""},`,
-        "",
-        `Link za sastanak ${formatDay(booking.date)} u ${booking.start_slot}:`,
-        meetUrl,
-        "",
-        `Stoji ti i na nalogu: ${base}/nalog/edukacija`,
-        "",
-        "TOZA AI",
-      ].join("\n"),
-    });
+  if (changed && options.notify !== false) {
+    await notifyMeetLink(bookingId, meetUrl, options.baseUrl);
   }
 
   return { ok: true, booking: { ...booking, meet_url: meetUrl } as Booking };
 }
 
-async function notifyBooked(userId: number, booking: Booking, baseUrl?: string) {
+/**
+ * Tell the client their meeting link is ready.
+ *
+ * Split out from `setBookingMeetUrl` because the automatic path writes the row
+ * itself (from `createMeetForBooking`) and would otherwise see "nothing
+ * changed" on the follow-up save and stay silent — the client would end up
+ * with a link on the dashboard and no idea it was there.
+ */
+export async function notifyMeetLink(
+  bookingId: number,
+  meetUrl: string,
+  baseUrl?: string,
+): Promise<void> {
+  const sql = getSql();
+  const rows = (await sql`
+    SELECT b.user_id, b.date::text AS date, b.start_slot, b.status,
+           u.email AS user_email, u.name AS user_name
+    FROM bookings b
+    LEFT JOIN users u ON u.id = b.user_id
+    WHERE b.id = ${bookingId}
+  `) as {
+    user_id: number;
+    date: string;
+    start_slot: string;
+    status: string;
+    user_email: string | null;
+    user_name: string | null;
+  }[];
+  const booking = rows[0];
+  if (!booking?.user_email || booking.status !== "zakazano") return;
+
+  const base = baseUrl ?? process.env.NEXT_PUBLIC_APP_URL ?? "";
+  await queueQuietly({
+    userId: booking.user_id,
+    recipient: booking.user_email,
+    templateKey: "booking_link_ready",
+    subject: `Link za termin ${formatDay(booking.date)} u ${booking.start_slot}`,
+    body: [
+      `Zdravo ${booking.user_name?.split(" ")[0] ?? ""},`,
+      "",
+      `Link za sastanak ${formatDay(booking.date)} u ${booking.start_slot}:`,
+      meetUrl,
+      "",
+      `Stoji ti i na nalogu: ${base}/nalog/edukacija`,
+      "",
+      "TOZA AI",
+    ].join("\n"),
+  });
+}
+
+async function notifyBooked(
+  userId: number,
+  booking: Booking,
+  baseUrl?: string,
+  meetUrl?: string | null,
+) {
   const sql = getSql();
   const users = (await sql`
     SELECT email, name FROM users WHERE id = ${userId}
@@ -471,7 +597,9 @@ async function notifyBooked(userId: number, booking: Booking, baseUrl?: string) 
         booking.topic ? `Tema: ${booking.topic}` : null,
         `Sa stanja je skinuto ${formatHours(booking.hours)}.`,
         "",
-        `Link za sastanak stiže ovde pre termina: ${base}/nalog/edukacija`,
+        meetUrl ? "Link za sastanak:" : null,
+        meetUrl ?? `Link za sastanak stiže ovde pre termina: ${base}/nalog/edukacija`,
+        meetUrl ? `Termin i link su ti i na nalogu: ${base}/nalog/edukacija` : null,
         `Otkazivanje je moguće do ${CANCEL_CUTOFF_HOURS}h pre početka.`,
         "",
         "TOZA AI",

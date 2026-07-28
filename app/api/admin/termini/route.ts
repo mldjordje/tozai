@@ -1,6 +1,12 @@
 import { NextResponse } from "next/server";
 import { getSql } from "@/lib/db";
-import { cancelBookingAsStudio, setBookingMeetUrl } from "@/lib/bookings";
+import {
+  cancelBookingAsStudio,
+  createMeetForBooking,
+  notifyMeetLink,
+  setBookingMeetUrl,
+} from "@/lib/bookings";
+import { getCalendarStatus } from "@/lib/google/calendar";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -65,7 +71,12 @@ export async function GET(request: Request) {
             LIMIT 200
           `;
 
-  return NextResponse.json({ ok: true, filter, bookings: rows });
+  return NextResponse.json({
+    ok: true,
+    filter,
+    bookings: rows,
+    calendar: await getCalendarStatus(),
+  });
 }
 
 export async function PATCH(request: Request) {
@@ -101,6 +112,60 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ ok: false, message: result.message }, { status: 404 });
     }
     return NextResponse.json({ ok: true, meetUrl: url, notified: url !== null });
+  }
+
+  if (action === "create-meet") {
+    // For sessions booked before the calendar was connected, or where Google
+    // was unreachable at booking time. The requestId in createMeetEvent is
+    // derived from the booking id, so pressing this twice reuses the same room.
+    const rows = (await sql`
+      SELECT id, user_id, kind, date::text AS date, start_slot, hours::float8 AS hours, topic, status
+      FROM bookings WHERE id = ${id}
+    `) as {
+      id: number;
+      user_id: number;
+      kind: string;
+      date: string;
+      start_slot: string;
+      hours: number;
+      topic: string | null;
+      status: string;
+    }[];
+    const booking = rows[0];
+    if (!booking) {
+      return NextResponse.json({ ok: false, message: "Termin nije pronađen." }, { status: 404 });
+    }
+    if (booking.status !== "zakazano") {
+      return NextResponse.json(
+        { ok: false, message: "Termin nije aktivan." },
+        { status: 409 },
+      );
+    }
+    const status = await getCalendarStatus();
+    if (!status.connected) {
+      return NextResponse.json(
+        { ok: false, message: "Google kalendar nije povezan. Poveži ga pa probaj ponovo." },
+        { status: 409 },
+      );
+    }
+    const meetUrl = await createMeetForBooking({
+      bookingId: booking.id,
+      userId: booking.user_id,
+      kind: booking.kind,
+      date: booking.date,
+      startSlot: booking.start_slot,
+      hours: booking.hours,
+      topic: booking.topic,
+    });
+    if (!meetUrl) {
+      return NextResponse.json(
+        { ok: false, message: "Google nije vratio link. Probaj ponovo ili nalepi ručno." },
+        { status: 502 },
+      );
+    }
+    // Google's own invite carries the link, but the client reads our mail.
+    await notifyMeetLink(id, meetUrl, baseUrl);
+    return NextResponse.json({ ok: true, meetUrl });
   }
 
   if (action === "set-recording") {
