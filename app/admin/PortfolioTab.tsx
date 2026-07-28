@@ -4,8 +4,9 @@ import { useEffect, useRef, useState } from "react";
 import { Plus, Trash2, Upload } from "lucide-react";
 import { uploadToBlob } from "@/lib/blob-upload";
 import { parseYouTubeId, posterCandidates } from "@/lib/youtube";
+import { LocaleTabs } from "./LocaleTabs";
 
-type Category = { id: number; name: string; slug: string; sort: number };
+type Category = { id: number; name: string; name_en: string | null; slug: string; sort: number };
 type Work = {
   id: number;
   category_id: number | null;
@@ -19,6 +20,8 @@ type Work = {
   tags: string[];
   featured: boolean;
   sort: number;
+  title_en: string | null;
+  description_en: string | null;
 };
 type Draft = Omit<Work, "id"> & { id?: number };
 
@@ -36,6 +39,8 @@ const emptyDraft = (): Draft => ({
   tags: [],
   featured: true,
   sort: 0,
+  title_en: "",
+  description_en: "",
 });
 
 export function PortfolioTab() {
@@ -45,6 +50,8 @@ export function PortfolioTab() {
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState<Draft | null>(null);
   const [newCat, setNewCat] = useState("");
+  const [newCatEn, setNewCatEn] = useState("");
+  const [lang, setLang] = useState<"sr" | "en">("sr");
   const [busy, setBusy] = useState(false);
   /** Which YouTube still the preview is currently trying — reset per video. */
   const [posterIndex, setPosterIndex] = useState(0);
@@ -73,10 +80,20 @@ export function PortfolioTab() {
     await fetch("/api/admin/portfolio?type=category", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: newCat, sort: categories.length }),
+      body: JSON.stringify({ name: newCat, name_en: newCatEn, sort: categories.length }),
     });
     setNewCat("");
+    setNewCatEn("");
     await load();
+  };
+
+  const patchCategory = async (id: number, fields: Partial<Category>) => {
+    setCategories((items) => items.map((item) => (item.id === id ? { ...item, ...fields } : item)));
+    await fetch("/api/admin/portfolio?type=category", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, ...fields }),
+    });
   };
 
   const removeCategory = async (id: number) => {
@@ -160,16 +177,46 @@ export function PortfolioTab() {
 
       <section className="adm__pf-section">
         <h3>Kategorije</h3>
+        <LocaleTabs
+          value={lang}
+          onChange={setLang}
+          note={lang === "en" ? "Engleski nazivi kategorija i radova." : "Srpski nazivi kategorija i radova."}
+        />
         <div className="adm__pf-chips">
           {categories.map((c) => (
             <span key={c.id} className="adm__chip">
-              {c.name}
+              <input
+                type="text"
+                value={(lang === "en" ? c.name_en : c.name) ?? ""}
+                placeholder={lang === "en" ? c.name : undefined}
+                aria-label={`${lang === "en" ? "Engleski" : "Srpski"} naziv kategorije`}
+                onChange={(e) =>
+                  setCategories((items) =>
+                    items.map((item) =>
+                      item.id === c.id
+                        ? { ...item, [lang === "en" ? "name_en" : "name"]: e.target.value }
+                        : item,
+                    ),
+                  )
+                }
+                onBlur={(e) =>
+                  void patchCategory(c.id, {
+                    [lang === "en" ? "name_en" : "name"]: e.target.value,
+                  })
+                }
+              />
               <button onClick={() => removeCategory(c.id)} aria-label="Obriši">×</button>
             </span>
           ))}
         </div>
         <div className="adm__pf-row">
           <input type="text" placeholder="Nova kategorija" value={newCat} onChange={(e) => setNewCat(e.target.value)} />
+          <input
+            type="text"
+            placeholder="Naziv na engleskom (opciono)"
+            value={newCatEn}
+            onChange={(e) => setNewCatEn(e.target.value)}
+          />
           <button onClick={addCategory}>Dodaj</button>
         </div>
       </section>
@@ -177,7 +224,12 @@ export function PortfolioTab() {
       <section className="adm__pf-section">
         <h3>Radovi / Case studies</h3>
         <div className="adm__pf-row" style={{ marginBottom: 14 }}>
-          <button onClick={() => setEditing(emptyDraft())}>
+          <button
+            onClick={() => {
+              setLang("sr");
+              setEditing(emptyDraft());
+            }}
+          >
             <Plus size={13} style={{ verticalAlign: "-2px" }} /> Novi rad
           </button>
         </div>
@@ -205,14 +257,17 @@ export function PortfolioTab() {
               </div>
               <div className="adm__pf-card-actions">
                 <button
-                  onClick={() =>
+                  onClick={() => {
+                    setLang("sr");
                     setEditing({
                       ...w,
                       client: w.client ?? "",
                       poster_url: w.poster_url ?? "",
                       description: w.description ?? "",
+                      title_en: w.title_en ?? "",
+                      description_en: w.description_en ?? "",
                     })
-                  }
+                  }}
                 >
                   Uredi
                 </button>
@@ -230,10 +285,29 @@ export function PortfolioTab() {
           <div className="adm__modal-box" style={{ padding: 22 }}>
             <button className="adm__modal-x" onClick={() => setEditing(null)} aria-label="Zatvori">×</button>
             <h3 style={{ marginBottom: 16 }}>{editing.id ? "Uredi rad" : "Novi rad"}</h3>
+            <LocaleTabs
+              value={lang}
+              onChange={setLang}
+              note={
+                lang === "en"
+                  ? "Prevedi naslov i opis. Ostali podaci i medij su zajednički."
+                  : "Srpska verzija rada."
+              }
+            />
             <div className="adm__pf-form" style={{ border: 0, padding: 0 }}>
               <label className="adm__content-field">
                 <span>Naslov</span>
-                <input type="text" value={editing.title} onChange={(e) => setEditing({ ...editing, title: e.target.value })} />
+                <input
+                  type="text"
+                  value={(lang === "en" ? editing.title_en : editing.title) ?? ""}
+                  placeholder={lang === "en" ? editing.title : undefined}
+                  onChange={(e) =>
+                    setEditing({
+                      ...editing,
+                      [lang === "en" ? "title_en" : "title"]: e.target.value,
+                    })
+                  }
+                />
               </label>
               <div className="adm__pf-row">
                 <label className="adm__content-field" style={{ flex: 1 }}>
@@ -353,7 +427,17 @@ export function PortfolioTab() {
 
               <label className="adm__content-field">
                 <span>Opis</span>
-                <textarea rows={2} value={editing.description ?? ""} onChange={(e) => setEditing({ ...editing, description: e.target.value })} />
+                <textarea
+                  rows={2}
+                  value={(lang === "en" ? editing.description_en : editing.description) ?? ""}
+                  placeholder={lang === "en" ? editing.description ?? "" : undefined}
+                  onChange={(e) =>
+                    setEditing({
+                      ...editing,
+                      [lang === "en" ? "description_en" : "description"]: e.target.value,
+                    })
+                  }
+                />
               </label>
               <label className="adm__pf-feat">
                 <input type="checkbox" checked={editing.featured} onChange={(e) => setEditing({ ...editing, featured: e.target.checked })} />

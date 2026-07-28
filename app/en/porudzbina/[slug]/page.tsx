@@ -4,15 +4,15 @@ import CheckoutPage from "@/components/pages/CheckoutPage";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Porudžbina — TOZA AI",
+  title: "Order — TOZA AI",
   robots: { index: false, follow: false },
 };
 
-export default async function Checkout({
+export default async function CheckoutEn({
   params,
 }: {
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  return <CheckoutPage slug={slug} locale="sr" />;
+  return <CheckoutPage slug={slug} locale="en" />;
 }

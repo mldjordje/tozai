@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { revalidatePath } from "next/cache";
+import { revalidatePublic } from "@/lib/i18n/revalidate";
 import { del } from "@vercel/blob";
 import { getSql } from "@/lib/db";
 
@@ -18,7 +18,8 @@ const int = (v: unknown) => (Number.isFinite(Number(v)) ? Math.trunc(Number(v)) 
 export async function GET() {
   const sql = getSql();
   const shots = await sql`
-    SELECT id, image_url, blob_pathname, alt, handle, stat, width, height, wide, sort, active
+    SELECT id, image_url, blob_pathname, alt, handle, stat, width, height, wide, sort, active,
+           alt_en, stat_en
     FROM result_shots
     ORDER BY sort, id
   `;
@@ -48,7 +49,7 @@ export async function POST(request: Request) {
     RETURNING id
   `) as { id: number }[];
 
-  revalidatePath("/");
+  revalidatePublic("/");
   return NextResponse.json({ ok: true, id: row.id }, { status: 201 });
 }
 
@@ -64,7 +65,7 @@ export async function PATCH(request: Request) {
     for (let i = 0; i < ids.length; i++) {
       await sql`UPDATE result_shots SET sort = ${i} WHERE id = ${ids[i]}`;
     }
-    revalidatePath("/");
+    revalidatePublic("/");
     return NextResponse.json({ ok: true });
   }
 
@@ -78,6 +79,8 @@ export async function PATCH(request: Request) {
       alt = CASE WHEN ${"alt" in b} THEN ${str(b.alt, 300)} ELSE alt END,
       handle = CASE WHEN ${"handle" in b} THEN ${str(b.handle, 120)} ELSE handle END,
       stat = CASE WHEN ${"stat" in b} THEN ${str(b.stat, 160)} ELSE stat END,
+      alt_en = CASE WHEN ${"alt_en" in b} THEN ${str(b.alt_en, 300) || null} ELSE alt_en END,
+      stat_en = CASE WHEN ${"stat_en" in b} THEN ${str(b.stat_en, 160) || null} ELSE stat_en END,
       width = CASE WHEN ${"width" in b} THEN ${int(b.width)} ELSE width END,
       height = CASE WHEN ${"height" in b} THEN ${int(b.height)} ELSE height END,
       wide = CASE WHEN ${"wide" in b} THEN ${Boolean(b.wide)} ELSE wide END,
@@ -85,7 +88,7 @@ export async function PATCH(request: Request) {
     WHERE id = ${id}
   `;
 
-  revalidatePath("/");
+  revalidatePublic("/");
   return NextResponse.json({ ok: true });
 }
 
@@ -111,6 +114,6 @@ export async function DELETE(request: Request) {
     }
   }
 
-  revalidatePath("/");
+  revalidatePublic("/");
   return NextResponse.json({ ok: true });
 }

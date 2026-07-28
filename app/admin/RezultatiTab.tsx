@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ArrowDown, ArrowUp, Trash2, Upload } from "lucide-react";
 import { readImageSize, uploadToBlob } from "@/lib/blob-upload";
+import { LocaleTabs } from "./LocaleTabs";
 
 // Proof rail editor — the screenshots on the landing (#portfolio).
 //
@@ -23,6 +24,8 @@ type Shot = {
   wide: boolean;
   sort: number;
   active: boolean;
+  alt_en: string | null;
+  stat_en: string | null;
 };
 
 type Status = "idle" | "saving" | "saved";
@@ -32,6 +35,7 @@ export function RezultatiTab() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [lang, setLang] = useState<"sr" | "en">("sr");
   const [status, setStatus] = useState<Record<number, Status>>({});
   const fileRef = useRef<HTMLInputElement>(null);
   /** Last values known to be persisted, per row — the baseline blur compares
@@ -45,7 +49,10 @@ export function RezultatiTab() {
       if (!d.ok) throw new Error();
       setShots(d.shots);
       saved.current = Object.fromEntries(
-        (d.shots as Shot[]).map((s) => [s.id, { handle: s.handle, stat: s.stat, alt: s.alt }]),
+        (d.shots as Shot[]).map((s) => [
+          s.id,
+          { handle: s.handle, stat: s.stat, alt: s.alt, stat_en: s.stat_en, alt_en: s.alt_en },
+        ]),
       );
     } catch {
       setError("Ne mogu da učitam rezultate.");
@@ -113,7 +120,9 @@ export function RezultatiTab() {
    *  the pre-render state, and would persist the previous value. Skips the
    *  request when nothing actually changed, so tabbing through a card does not
    *  fire three writes. */
-  const commit = (id: number, field: "handle" | "stat" | "alt") => (value: string) => {
+  const commit =
+    (id: number, field: "handle" | "stat" | "alt" | "stat_en" | "alt_en") =>
+    (value: string) => {
     if (saved.current[id]?.[field] === value) return;
     void patch(id, { [field]: value });
   };
@@ -148,6 +157,15 @@ export function RezultatiTab() {
         Slike koje se vrte u sekciji „Rezultati“ na sajtu. Redosled ovde je redosled na sajtu.
         Naslov sekcije i tekst se menjaju u tabu Sadržaj.
       </p>
+      <LocaleTabs
+        value={lang}
+        onChange={setLang}
+        note={
+          lang === "en"
+            ? "Prevedi brojku i opis slike. Naziv naloga je zajednički."
+            : "Srpski tekst kartica rezultata."
+        }
+      />
       {error && (
         <p className="adm__err" role="alert">
           {error}
@@ -193,20 +211,28 @@ export function RezultatiTab() {
                   <span>Brojka ispod</span>
                   <input
                     type="text"
-                    placeholder="187K pratilaca · Instagram"
-                    value={shot.stat}
-                    onChange={(e) => edit(shot.id, { stat: e.target.value })}
-                    onBlur={(e) => commit(shot.id, "stat")(e.target.value)}
+                    placeholder={lang === "en" ? shot.stat : "187K pratilaca · Instagram"}
+                    value={(lang === "en" ? shot.stat_en : shot.stat) ?? ""}
+                    onChange={(e) =>
+                      edit(shot.id, { [lang === "en" ? "stat_en" : "stat"]: e.target.value })
+                    }
+                    onBlur={(e) =>
+                      commit(shot.id, lang === "en" ? "stat_en" : "stat")(e.target.value)
+                    }
                   />
                 </label>
                 <label className="adm__content-field">
                   <span>Opis slike (za čitače ekrana)</span>
                   <input
                     type="text"
-                    placeholder="Instagram profil, 187K pratilaca"
-                    value={shot.alt}
-                    onChange={(e) => edit(shot.id, { alt: e.target.value })}
-                    onBlur={(e) => commit(shot.id, "alt")(e.target.value)}
+                    placeholder={lang === "en" ? shot.alt : "Instagram profil, 187K pratilaca"}
+                    value={(lang === "en" ? shot.alt_en : shot.alt) ?? ""}
+                    onChange={(e) =>
+                      edit(shot.id, { [lang === "en" ? "alt_en" : "alt"]: e.target.value })
+                    }
+                    onBlur={(e) =>
+                      commit(shot.id, lang === "en" ? "alt_en" : "alt")(e.target.value)
+                    }
                   />
                 </label>
 

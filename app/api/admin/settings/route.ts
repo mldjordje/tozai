@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { revalidatePath } from "next/cache";
+import { revalidatePublic } from "@/lib/i18n/revalidate";
 import { getSql } from "@/lib/db";
 import { cleanSocialLinks } from "@/lib/socials";
 
@@ -109,8 +109,8 @@ export async function PUT(request: Request) {
 
   // Contact details and the icon row are rendered on the ISR landing and the
   // portfolio page; without this an edit sits invisible until the window ends.
-  revalidatePath("/");
-  revalidatePath("/portfolio");
+  revalidatePublic("/");
+  revalidatePublic("/portfolio");
 
   return NextResponse.json({ ok: true, socials });
 }

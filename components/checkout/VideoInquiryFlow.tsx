@@ -2,6 +2,10 @@
 
 import { useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { DEFAULT_LOCALE, type Locale } from "@/lib/i18n/config";
+import { ui, type UiStrings } from "@/lib/i18n/ui";
+
+type T = UiStrings["inquiry"];
 
 /**
  * The brief that starts an AI video job. There is no price here on purpose —
@@ -14,6 +18,12 @@ import { motion, AnimatePresence } from "framer-motion";
  * off a phone screen, to describe a service the buyer had just read about one
  * click earlier. Signed out, this page is a sign-in screen and nothing more;
  * the service is chosen inside the form, where it can actually be changed.
+ *
+ * WHY SERVICES ARE A MULTI-SELECT. A buyer who wants commercials and avatars
+ * used to have to send two briefs describing the same business twice, and the
+ * studio quoted them as two unrelated jobs. One brief now carries the whole
+ * list; the request keeps a primary package so the order and project it turns
+ * into still point at one row, and `service_name` carries the joined label.
  *
  * WHY THE SUBMIT BUTTON IS NEVER DISABLED. It used to be, and on a phone that
  * read as a dead button: the minimums are invisible, so a buyer who wrote two
@@ -49,6 +59,10 @@ const MIN = {
   idea: 50,
 } as const;
 
+/** Mirrors MAX_SERVICES_PER_REQUEST on the server. Past four this stops being
+ *  one brief the studio can price and starts being a catalogue. */
+const MAX_SERVICES = 4;
+
 const EMPTY = {
   buyerType: "individual" as "individual" | "company",
   name: "",
@@ -78,65 +92,74 @@ function fixedDigits(value: string, length: number) {
   return value.replace(/\D/g, "").slice(0, length);
 }
 
-function validate(form: FormState): Partial<Record<FieldKey, string>> {
+function validate(form: FormState, t: T): Partial<Record<FieldKey, string>> {
   const errors: Partial<Record<FieldKey, string>> = {};
   if (form.name.trim().length < MIN.name) {
-    errors.name = "Upiši ime i prezime kontakt osobe.";
+    errors.name = t.errors.name;
   }
   if (form.buyerType === "company") {
     if (form.companyName.trim().length < 2) {
-      errors.companyName = "Upiši pun naziv pravnog lica ili preduzetnika.";
+      errors.companyName = t.errors.companyName;
     }
     if (!/^\d{9}$/.test(form.pib.trim())) {
-      errors.pib = "PIB mora imati tačno 9 cifara.";
+      errors.pib = t.errors.pib;
     }
     if (!/^\d{8}$/.test(form.mb.trim())) {
-      errors.mb = "Matični broj mora imati tačno 8 cifara.";
+      errors.mb = t.errors.mb;
     }
     if (form.address.trim().length < 3) {
-      errors.address = "Upiši adresu sedišta.";
+      errors.address = t.errors.address;
     }
     if (form.city.trim().length < 2) {
-      errors.city = "Upiši grad.";
+      errors.city = t.errors.city;
     }
   }
   if (form.businessName.trim().length < MIN.businessName) {
-    errors.businessName = "Upiši naziv biznisa ili brenda.";
+    errors.businessName = t.errors.businessName;
   }
   if (form.businessDescription.trim().length < MIN.businessDescription) {
-    errors.businessDescription = `Još malo — treba nam najmanje ${MIN.businessDescription} karaktera.`;
+    errors.businessDescription = t.errors.businessDescription(MIN.businessDescription);
   }
   if (form.idea.trim().length < MIN.idea) {
-    errors.idea = `Opiši ideju sa najmanje ${MIN.idea} karaktera da bismo mogli da procenimo posao.`;
+    errors.idea = t.errors.idea(MIN.idea);
   }
   const clips = Number(form.clipCount);
   if (!Number.isInteger(clips) || clips < 1 || clips > 100) {
-    errors.clipCount = "Broj klipova mora biti između 1 i 100.";
+    errors.clipCount = t.errors.clipCount;
   }
   const budget = Number(form.budgetEur);
   if (!Number.isFinite(budget) || budget <= 0) {
-    errors.budgetEur = "Upiši okvirni budžet u evrima.";
+    errors.budgetEur = t.errors.budget;
   }
   return errors;
 }
 
 export default function VideoInquiryFlow({
   packages,
-  initialSlug,
+  initialSlugs = [],
+  nextPath,
+  locale = DEFAULT_LOCALE,
   user,
   profile,
 }: {
   /** Every AI video service the studio currently sells (admin → Paketi). */
   packages: PackageSummary[];
-  /** The one the buyer's CTA pointed at — a starting point, not a commitment. */
-  initialSlug: string;
+  /** Ticked on arrival — the service page passes its own, /upit passes none. */
+  initialSlugs?: string[];
+  /** Where Google sends the buyer back to. This flow renders on two routes. */
+  nextPath: string;
+  locale?: Locale;
   user: { email: string; name: string | null } | null;
   profile: ProfileSummary | null;
 }) {
-  const [slug, setSlug] = useState(initialSlug);
-  // The list is what decides; the URL only seeds it. A slug that has since been
-  // retired falls back to the first service rather than rendering an empty aside.
-  const pkg = packages.find((item) => item.slug === slug) ?? packages[0];
+  const copy = ui(locale).inquiry;
+  // Seeded from the URL, owned by the buyer from the first tap. A slug that has
+  // since been retired is dropped rather than kept as a ghost the server would
+  // reject on submit.
+  const [selected, setSelected] = useState<string[]>(() =>
+    initialSlugs.filter((slug) => packages.some((item) => item.slug === slug)),
+  );
+  const chosen = packages.filter((item) => selected.includes(item.slug));
   const [form, setForm] = useState<FormState>(() => ({
     ...EMPTY,
     buyerType: profile?.isCompany ? "company" : "individual",
@@ -154,12 +177,27 @@ export default function VideoInquiryFlow({
   const [touched, setTouched] = useState<Partial<Record<FieldKey, boolean>>>({});
   const [showAll, setShowAll] = useState(false);
   const fieldRefs = useRef<Partial<Record<FieldKey, HTMLElement | null>>>({});
+  const servicesRef = useRef<HTMLDivElement | null>(null);
 
-  const errors = validate(form);
-  const requiredCount = form.buyerType === "company" ? 11 : 6;
+  const errors = validate(form, copy);
+  const noService = selected.length === 0;
+  const requiredCount = (form.buyerType === "company" ? 11 : 6) + 1;
   const progress = Math.round(
-    ((requiredCount - Object.keys(errors).length) / requiredCount) * 100,
+    ((requiredCount - Object.keys(errors).length - (noService ? 1 : 0)) / requiredCount) * 100,
   );
+
+  /** Tick, untick, and refuse the tick that would push the brief past what the
+   *  studio can quote as one job. Never empties to nothing by accident — the
+   *  last remaining service is untickable, which is also what makes this a
+   *  "change" control on a page that arrived with one already chosen. */
+  const toggleService = (slug: string) =>
+    setSelected((current) =>
+      current.includes(slug)
+        ? current.filter((item) => item !== slug)
+        : current.length >= MAX_SERVICES
+          ? current
+          : [...current, slug],
+    );
 
   const set =
     (key: FieldKey, transform?: (value: string) => string) =>
@@ -180,7 +218,12 @@ export default function VideoInquiryFlow({
     event.preventDefault();
     setError(null);
 
-    const problems = validate(form);
+    const problems = validate(form, copy);
+    if (selected.length === 0) {
+      setShowAll(true);
+      servicesRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      return;
+    }
     if (Object.keys(problems).length > 0) {
       setShowAll(true);
       const first = ([
@@ -211,7 +254,7 @@ export default function VideoInquiryFlow({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          slug,
+          slugs: selected,
           ...form,
           clipCount: Number(form.clipCount),
           budgetEur: Number(form.budgetEur),
@@ -219,13 +262,13 @@ export default function VideoInquiryFlow({
       });
       const data = await response.json();
       if (!response.ok || !data.ok) {
-        setError(data.message ?? "Upit nije poslat. Pokušaj ponovo.");
+        setError(data.message ?? copy.errors.generic);
         return;
       }
       setRequestId(data.requestId);
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch {
-      setError("Veza je prekinuta. Proveri internet i pokušaj ponovo.");
+      setError(copy.errors.network);
     } finally {
       setBusy(false);
     }
@@ -237,17 +280,15 @@ export default function VideoInquiryFlow({
     return (
       <Reveal>
         <div className="mt-10 max-w-xl md:mt-14">
-          <p className="eyebrow">Prijava</p>
+          <p className="eyebrow">{copy.signInEyebrow}</p>
           <h2 className="display mt-5 text-3xl md:text-5xl">
-            Prijavi se da pošalješ upit.
+            {copy.signInTitle}
           </h2>
           <p className="mt-5 leading-relaxed text-muted">
-            Traje deset sekundi. Uslugu biraš u sledećem koraku, a procena,
-            plaćanje i porudžbina vezuju se za tvoj nalog — uvek vidiš šta je
-            sledeće, bez traženja po mejlu.
+            {copy.signInBody}
           </p>
           <a
-            href={`/api/auth/google?next=${encodeURIComponent(`/porudzbina/${slug}`)}`}
+            href={`/api/auth/google?next=${encodeURIComponent(nextPath)}`}
             className="mt-9 inline-flex min-h-12 w-full items-center justify-center gap-3 rounded-full bg-fg px-7 text-sm font-medium text-bg transition-colors duration-300 hover:bg-white active:scale-[0.99] sm:w-auto"
           >
             <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden>
@@ -256,11 +297,10 @@ export default function VideoInquiryFlow({
                 d="M21.35 11.1h-9.17v2.96h5.27c-.23 1.37-1.6 4.02-5.27 4.02-3.17 0-5.76-2.63-5.76-5.87s2.59-5.87 5.76-5.87c1.8 0 3.01.77 3.7 1.43l2.52-2.43C16.78 3.9 14.68 3 12.18 3 7.03 3 2.86 7.16 2.86 12.3s4.17 9.3 9.32 9.3c5.38 0 8.94-3.78 8.94-9.11 0-.61-.07-1.08-.17-1.39z"
               />
             </svg>
-            Nastavi sa Google nalogom
+            {copy.signInCta}
           </a>
           <p className="mt-5 text-xs leading-relaxed text-faint">
-            Upit je besplatan i ne obavezuje te. Cenu vidiš pre bilo kakvog
-            plaćanja.
+            {copy.signInNote}
           </p>
         </div>
       </Reveal>
@@ -282,22 +322,16 @@ export default function VideoInquiryFlow({
             aria-hidden
             className="pointer-events-none absolute -right-24 -top-24 h-64 w-64 rounded-full bg-[color:var(--color-accent)] opacity-[0.13] blur-3xl"
           />
-          <p className="eyebrow">Upit #{requestId}</p>
+          <p className="eyebrow">{copy.sentEyebrow(requestId)}</p>
           <h2 className="display mt-5 text-3xl sm:text-4xl md:text-5xl">
-            Upit je <em>stigao</em>.
+            {copy.sentTitle} <em>{copy.sentTitleAccent}</em>.
           </h2>
           <p className="mt-5 leading-relaxed text-muted">
-            Pregledaćemo ideju, broj klipova i budžet. Kada procena bude spremna,
-            stiže ti email — cena i vreme izrade pojaviće se na tvom nalogu. Tek
-            tada odlučuješ da li prihvataš.
+            {copy.sentBody}
           </p>
 
           <ol className="mt-8 space-y-4 border-t border-line pt-7">
-            {[
-              "Pregledamo upit i pripremamo procenu.",
-              "Cena i rok stižu na tvoj nalog.",
-              "Prihvataš, plaćaš i šalješ materijale.",
-            ].map((step, i) => (
+            {copy.sentSteps.map((step, i) => (
               <li key={step} className="flex gap-4 text-sm text-muted">
                 <span className="mt-px flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-line text-xs tabular-nums text-faint">
                   {i + 1}
@@ -311,7 +345,7 @@ export default function VideoInquiryFlow({
             href="/nalog/zahtevi"
             className="mt-9 inline-flex min-h-12 w-full items-center justify-center rounded-full bg-fg px-7 text-sm font-medium text-bg transition-colors duration-300 hover:bg-white sm:w-auto"
           >
-            Prati upit
+            {copy.sentCta}
           </a>
         </div>
       </motion.div>
@@ -321,16 +355,25 @@ export default function VideoInquiryFlow({
   /* ------------------------------------------------------------------ form */
 
   return (
-    <Shell aside={<Summary key={pkg.slug} pkg={pkg} />}>
+    <Shell
+      aside={
+        <Summary
+          copy={copy}
+          chosen={chosen}
+          onChange={() =>
+            servicesRef.current?.scrollIntoView({ behavior: "smooth", block: "center" })
+          }
+        />
+      }
+    >
       <form onSubmit={submit} noValidate className="pb-28 lg:pb-0">
         <Reveal>
-          <p className="eyebrow">Upit</p>
+          <p className="eyebrow">{copy.formEyebrow}</p>
           <h2 className="display mt-5 text-3xl sm:text-4xl md:text-5xl">
-            Reci nam šta <em>pravimo</em>.
+            {copy.formTitle} <em>{copy.formTitleAccent}</em>.
           </h2>
           <p className="mt-4 max-w-lg text-sm leading-relaxed text-muted">
-            Upit je besplatan i ne obavezuje te. Materijale ne tražimo dok ne
-            prihvatiš procenu.
+            {copy.formBody}
           </p>
         </Reveal>
 
@@ -351,21 +394,27 @@ export default function VideoInquiryFlow({
         </Reveal>
 
         <div className="mt-10 space-y-9">
-          {packages.length > 1 && (
-            <Reveal delay={0.08}>
-              <ServicePicker packages={packages} value={slug} onChange={setSlug} />
-            </Reveal>
-          )}
+          <Reveal delay={0.08}>
+            <div ref={servicesRef} className="scroll-mt-24">
+              <ServicePicker
+                copy={copy}
+                packages={packages}
+                selected={selected}
+                onToggle={toggleService}
+                error={showAll && noService ? copy.servicesRequired : undefined}
+              />
+            </div>
+          </Reveal>
 
           <Reveal delay={0.1}>
             <fieldset>
               <legend className="text-xs uppercase tracking-[0.18em] text-faint">
-                Tip kupca
+                {copy.buyerType}
               </legend>
               <div className="mt-3.5 inline-flex rounded-full border border-line bg-bg-elev/40 p-1 backdrop-blur-sm">
                 {[
-                  { value: "individual", label: "Fizičko lice" },
-                  { value: "company", label: "Pravno lice" },
+                  { value: "individual", label: copy.individual },
+                  { value: "company", label: copy.company },
                 ].map((option) => {
                   const active = form.buyerType === option.value;
                   return (
@@ -400,17 +449,17 @@ export default function VideoInquiryFlow({
           <Reveal delay={0.12}>
             <div className="grid gap-9 sm:grid-cols-2">
               <Field
-                label="Ime i prezime"
+                label={copy.fullName}
                 required
                 value={form.name}
                 onChange={set("name")}
                 onBlur={blur("name")}
-                placeholder="Kontakt osoba"
+                placeholder={copy.contactPerson}
                 error={errorFor("name")}
                 innerRef={(node) => (fieldRefs.current.name = node)}
               />
               <Field
-                label="Telefon"
+                label={copy.phone}
                 value={form.phone}
                 onChange={set("phone")}
                 inputMode="tel"
@@ -431,67 +480,66 @@ export default function VideoInquiryFlow({
               >
                 <div className="rounded-2xl border border-line bg-bg-elev/30 p-5 sm:p-6">
                   <p className="text-xs uppercase tracking-[0.18em] text-accent-soft">
-                    Podaci za fakturu
+                    {copy.billingTitle}
                   </p>
                   <p className="mt-2 text-sm leading-relaxed text-muted">
-                    Čuvamo ih uz ovaj upit, da faktura bude spremna kada prihvatiš
-                    procenu. Pečat nije potrebno slati.
+                    {copy.billingBody}
                   </p>
                   <div className="mt-7 space-y-7">
                     <Field
-                      label="Pun naziv pravnog lica / preduzetnika"
+                      label={copy.legalName}
                       required
                       value={form.companyName}
                       onChange={set("companyName")}
                       onBlur={blur("companyName")}
-                      placeholder="Naziv iz registra"
+                      placeholder={copy.legalNamePlaceholder}
                       error={errorFor("companyName")}
                       innerRef={(node) => (fieldRefs.current.companyName = node)}
                     />
                     <div className="grid gap-7 sm:grid-cols-2">
                       <Field
-                        label="PIB"
+                        label={copy.pib}
                         required
                         value={form.pib}
                         onChange={set("pib", (value) => fixedDigits(value, 9))}
                         onBlur={blur("pib")}
                         inputMode="numeric"
-                        placeholder="9 cifara"
-                        hint="Tačno 9 cifara"
+                        placeholder={copy.pibHint}
+                        hint={copy.pibHint}
                         error={errorFor("pib")}
                         innerRef={(node) => (fieldRefs.current.pib = node)}
                       />
                       <Field
-                        label="Matični broj"
+                        label={copy.mb}
                         required
                         value={form.mb}
                         onChange={set("mb", (value) => fixedDigits(value, 8))}
                         onBlur={blur("mb")}
                         inputMode="numeric"
-                        placeholder="8 cifara"
-                        hint="Tačno 8 cifara"
+                        placeholder={copy.mbHint}
+                        hint={copy.mbHint}
                         error={errorFor("mb")}
                         innerRef={(node) => (fieldRefs.current.mb = node)}
                       />
                     </div>
                     <div className="grid gap-7 sm:grid-cols-2">
                       <Field
-                        label="Adresa sedišta"
+                        label={copy.address}
                         required
                         value={form.address}
                         onChange={set("address")}
                         onBlur={blur("address")}
-                        placeholder="Ulica i broj"
+                        placeholder={copy.addressPlaceholder}
                         error={errorFor("address")}
                         innerRef={(node) => (fieldRefs.current.address = node)}
                       />
                       <Field
-                        label="Grad"
+                        label={copy.city}
                         required
                         value={form.city}
                         onChange={set("city")}
                         onBlur={blur("city")}
-                        placeholder="Mesto"
+                        placeholder={copy.cityPlaceholder}
                         error={errorFor("city")}
                         innerRef={(node) => (fieldRefs.current.city = node)}
                       />
@@ -504,12 +552,12 @@ export default function VideoInquiryFlow({
 
           <Reveal delay={0.14}>
             <Field
-              label="Biznis / brend"
+              label={copy.business}
               required
               value={form.businessName}
               onChange={set("businessName")}
               onBlur={blur("businessName")}
-              placeholder="Naziv biznisa ili brenda"
+              placeholder={copy.businessPlaceholder}
               error={errorFor("businessName")}
               innerRef={(node) => (fieldRefs.current.businessName = node)}
             />
@@ -517,15 +565,16 @@ export default function VideoInquiryFlow({
 
           <Reveal delay={0.18}>
             <Area
-              label="Kratko o biznisu"
+              label={copy.aboutBusiness}
               required
               value={form.businessDescription}
               onChange={set("businessDescription")}
               onBlur={blur("businessDescription")}
-              placeholder="Čime se bavite, šta prodajete i kome prodajete?"
+              placeholder={copy.aboutBusinessPlaceholder}
               rows={4}
               min={MIN.businessDescription}
-              hint="Par rečenica je dovoljno."
+              minChars={copy.minChars}
+              hint={copy.aboutBusinessHint}
               error={errorFor("businessDescription")}
               innerRef={(node) => (fieldRefs.current.businessDescription = node)}
             />
@@ -533,15 +582,16 @@ export default function VideoInquiryFlow({
 
           <Reveal delay={0.22}>
             <Area
-              label="Ideja za klipove"
+              label={copy.idea}
               required
               value={form.idea}
               onChange={set("idea")}
               onBlur={blur("idea")}
-              placeholder="Opiši poruku, proizvod, stil ili rezultat koji želiš…"
+              placeholder={copy.ideaPlaceholder}
               rows={6}
               min={MIN.idea}
-              hint="Što konkretnije, to je procena tačnija."
+              minChars={copy.minChars}
+              hint={copy.ideaHint}
               error={errorFor("idea")}
               innerRef={(node) => (fieldRefs.current.idea = node)}
             />
@@ -550,26 +600,26 @@ export default function VideoInquiryFlow({
           <Reveal delay={0.26}>
             <div className="grid gap-9 sm:grid-cols-2">
               <Field
-                label="Broj klipova"
+                label={copy.clips}
                 required
                 value={form.clipCount}
                 onChange={set("clipCount", digitsOnly)}
                 onBlur={blur("clipCount")}
                 inputMode="numeric"
                 placeholder="npr. 3"
-                hint="1 — 100"
+                hint={copy.clipsHint}
                 error={errorFor("clipCount")}
                 innerRef={(node) => (fieldRefs.current.clipCount = node)}
               />
               <Field
-                label="Budžet u evrima"
+                label={copy.budget}
                 required
                 value={form.budgetEur}
                 onChange={set("budgetEur", digitsOnly)}
                 onBlur={blur("budgetEur")}
                 inputMode="numeric"
                 placeholder="npr. 800"
-                hint="Okvirno — procenu radimo po ideji."
+                hint={copy.budgetHint}
                 error={errorFor("budgetEur")}
                 innerRef={(node) => (fieldRefs.current.budgetEur = node)}
               />
@@ -583,12 +633,10 @@ export default function VideoInquiryFlow({
                 className="pointer-events-none absolute -left-16 -top-16 h-40 w-40 rounded-full bg-[color:var(--color-accent)] opacity-[0.10] blur-3xl"
               />
               <p className="text-xs uppercase tracking-[0.18em] text-accent-soft">
-                Šta sledi
+                {copy.nextTitle}
               </p>
               <p className="mt-3 text-sm leading-relaxed text-muted">
-                Procena sadrži tačnu cenu i vreme izrade. Kad je prihvatiš,
-                otvara se plaćanje, a materijale šalješ iz svog naloga —
-                WeTransfer linkom ili preko WhatsApp kontakta.
+                {copy.nextBody}
               </p>
             </div>
           </Reveal>
@@ -618,10 +666,10 @@ export default function VideoInquiryFlow({
               disabled={busy}
               className="min-h-13 flex-1 rounded-full bg-fg px-8 py-3.5 text-sm font-medium text-bg transition-all duration-300 enabled:hover:bg-white enabled:active:scale-[0.99] disabled:opacity-50 lg:flex-none"
             >
-              {busy ? "Šaljem…" : "Pošalji upit"}
+              {busy ? copy.submitting : copy.submit}
             </button>
             <span className="hidden text-xs text-faint sm:block">
-              Bez obaveze — cenu vidiš pre plaćanja.
+              {copy.submitNote}
             </span>
           </div>
         </div>
@@ -660,64 +708,100 @@ function Reveal({
 }
 
 /**
- * Which AI video service the brief is for.
+ * Which AI video services the brief covers.
  *
  * Rows, not pricing cards: the landing already sold the service, and there is
- * no price to compare here anyway. All this has to do is show what was picked
- * and make changing it a single tap — the aside on the right carries the detail.
+ * no price to compare here anyway. All this has to do is show what is ticked
+ * and make changing it a single tap — the aside carries the detail.
+ *
+ * Multi-select, so this control is both halves of what the page needs: on /upit
+ * it is how the buyer picks anything at all, and on a single service page it is
+ * how they swap that service or add a second one to the same brief.
  */
 function ServicePicker({
+  copy,
   packages,
-  value,
-  onChange,
+  selected,
+  onToggle,
+  error,
 }: {
+  copy: T;
   packages: PackageSummary[];
-  value: string;
-  onChange: (slug: string) => void;
+  selected: string[];
+  onToggle: (slug: string) => void;
+  error?: string;
 }) {
+  const full = selected.length >= MAX_SERVICES;
   return (
     <fieldset>
-      <legend className="text-xs uppercase tracking-[0.18em] text-faint">Usluga</legend>
+      <legend className="text-xs uppercase tracking-[0.18em] text-faint">
+        {copy.services}<span className="ml-1 text-accent-soft">*</span>
+      </legend>
       <p className="mt-3 max-w-lg text-sm leading-relaxed text-muted">
-        Izaberi šta ti treba. Ne moraš da pogodiš iz prve — cena se ionako
-        procenjuje po ideji.
+        {copy.servicesHint}
+        {selected.length > 0 && (
+          <span className="text-faint">
+            {copy.servicesChosen(selected.length, MAX_SERVICES)}
+          </span>
+        )}
       </p>
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
         {packages.map((item) => {
-          const active = item.slug === value;
+          const active = selected.includes(item.slug);
+          // A full list greys out what cannot be added, rather than letting the
+          // tap do nothing and leaving the buyer to work out why.
+          const blocked = !active && full;
           return (
             <button
               key={item.slug}
               type="button"
-              aria-pressed={active}
-              onClick={() => onChange(item.slug)}
+              role="checkbox"
+              aria-checked={active}
+              disabled={blocked}
+              onClick={() => onToggle(item.slug)}
               className={`relative overflow-hidden rounded-2xl border p-4 text-left transition-colors duration-300 ${
                 active
                   ? "border-accent-soft/60 bg-bg-elev/60"
-                  : "border-line bg-bg-elev/20 hover:border-faint"
+                  : blocked
+                    ? "border-line bg-bg-elev/10 opacity-40"
+                    : "border-line bg-bg-elev/20 hover:border-faint"
               }`}
             >
               {active && (
                 <motion.span
-                  layoutId="service-pick-glow"
                   aria-hidden
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ duration: 0.45, ease: EASE }}
                   className="pointer-events-none absolute -right-10 -top-10 h-28 w-28 rounded-full bg-[color:var(--color-accent)] opacity-[0.16] blur-2xl"
-                  transition={{ type: "spring", stiffness: 320, damping: 34 }}
                 />
               )}
               <span className="relative flex items-start gap-3">
                 <span
-                  className={`mt-1 flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full border transition-colors duration-300 ${
-                    active ? "border-accent-soft" : "border-line"
+                  className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-[0.3rem] border transition-colors duration-300 ${
+                    active
+                      ? "border-accent-soft bg-[color:var(--color-accent-soft)]"
+                      : "border-faint"
                   }`}
                 >
                   {active && (
-                    <motion.span
+                    <motion.svg
+                      viewBox="0 0 12 12"
                       initial={{ scale: 0 }}
                       animate={{ scale: 1 }}
                       transition={{ duration: 0.25, ease: EASE }}
-                      className="h-1.5 w-1.5 rounded-full bg-[color:var(--color-accent-soft)]"
-                    />
+                      className="h-2.5 w-2.5 text-bg"
+                      aria-hidden
+                    >
+                      <path
+                        d="M2 6.2 4.6 8.8 10 3.4"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </motion.svg>
                   )}
                 </span>
                 <span className="min-w-0">
@@ -735,11 +819,31 @@ function ServicePicker({
           );
         })}
       </div>
+      <Note
+        error={error}
+        hint={full ? copy.servicesFull(MAX_SERVICES) : undefined}
+      />
     </fieldset>
   );
 }
 
-function Summary({ pkg }: { pkg: PackageSummary }) {
+/**
+ * What the brief is currently for.
+ *
+ * Features are listed only when a single service is ticked: four feature lists
+ * stacked in a sticky column is a wall, and by the time someone is comparing
+ * services they are reading the picker, not this.
+ */
+function Summary({
+  copy,
+  chosen,
+  onChange,
+}: {
+  copy: T;
+  chosen: PackageSummary[];
+  onChange: () => void;
+}) {
+  const single = chosen.length === 1 ? chosen[0] : null;
   return (
     <aside>
       <motion.div
@@ -752,30 +856,67 @@ function Summary({ pkg }: { pkg: PackageSummary }) {
           aria-hidden
           className="pointer-events-none absolute -right-20 -top-20 h-52 w-52 rounded-full bg-[color:var(--color-accent)] opacity-[0.12] blur-3xl"
         />
-        <p className="eyebrow">AI video usluga</p>
-        <h2 className="display mt-4 text-2xl">{pkg.name}</h2>
-        {pkg.description && (
-          <p className="mt-2 text-sm leading-relaxed text-muted">{pkg.description}</p>
-        )}
+        <p className="eyebrow">
+          {chosen.length > 1 ? copy.summaryMany : copy.summaryOne}
+        </p>
 
-        {pkg.features.length > 0 && (
-          <ul className="mt-6 space-y-3 border-t border-line pt-6">
-            {pkg.features.map((feature) => (
-              <li key={feature} className="flex gap-3 text-sm text-muted">
-                <span className="mt-2 h-px w-3 shrink-0 bg-faint" />
-                {feature}
+        {chosen.length === 0 ? (
+          <p className="mt-4 text-sm leading-relaxed text-muted">
+            {copy.summaryEmpty}
+          </p>
+        ) : single ? (
+          <>
+            <h2 className="display mt-4 text-2xl">{single.name}</h2>
+            {single.description && (
+              <p className="mt-2 text-sm leading-relaxed text-muted">
+                {single.description}
+              </p>
+            )}
+            {single.features.length > 0 && (
+              <ul className="mt-6 space-y-3 border-t border-line pt-6">
+                {single.features.map((feature) => (
+                  <li key={feature} className="flex gap-3 text-sm text-muted">
+                    <span className="mt-2 h-px w-3 shrink-0 bg-faint" />
+                    {feature}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </>
+        ) : (
+          <ul className="mt-5 space-y-3.5 border-t border-line pt-5">
+            {chosen.map((item) => (
+              <li key={item.slug} className="flex gap-3 text-sm text-fg">
+                <span className="mt-2 h-px w-3 shrink-0 bg-accent-soft" />
+                <span>
+                  {item.name}
+                  {item.description && (
+                    <span className="mt-1 block text-xs leading-relaxed text-faint">
+                      {item.description}
+                    </span>
+                  )}
+                </span>
               </li>
             ))}
           </ul>
         )}
 
+        {/* The way out of a page that arrived with one service already chosen:
+            nothing else on it says the brief can carry more than that one. */}
+        <button
+          type="button"
+          onClick={onChange}
+          className="mt-6 inline-flex min-h-11 items-center rounded-full border border-line bg-bg-elev/50 px-5 text-sm text-muted transition-colors duration-300 hover:border-accent-soft hover:text-fg"
+        >
+          {chosen.length === 0 ? copy.pickService : copy.changeService}
+        </button>
+
         <div className="mt-7 border-t border-line pt-6">
           <p className="text-xs uppercase tracking-[0.18em] text-accent-soft">
-            Privatna procena
+            {copy.quoteTitle}
           </p>
           <p className="mt-2 text-sm leading-relaxed text-faint">
-            Cena nije javna — svaki posao se procenjuje po ideji, broju klipova i
-            roku.
+            {copy.quoteBody}
           </p>
         </div>
       </motion.div>
@@ -846,12 +987,8 @@ function Field({
         onChange={onChange}
         onBlur={onBlur}
         placeholder={placeholder}
-        aria-invalid={Boolean(error)}
-        /* text-base, not text-sm: iOS Safari zooms the whole page in on focus
-           for anything under 16px, and the buyer never zooms back out. */
-        className={`mt-3 w-full border-b bg-transparent pb-3 text-base text-fg outline-none transition-colors duration-300 placeholder:text-faint ${
-          error ? "border-red-400/50" : "border-line focus:border-accent-soft"
-        }`}
+        aria-invalid={error ? true : undefined}
+        className="field mt-3"
       />
       <Note error={error} hint={hint} />
     </label>
@@ -866,6 +1003,7 @@ function Area({
   placeholder,
   rows,
   min,
+  minChars,
   hint,
   error,
   required,
@@ -878,6 +1016,7 @@ function Area({
   placeholder: string;
   rows: number;
   min: number;
+  minChars: (min: number) => string;
   hint?: string;
   error?: string;
   required?: boolean;
@@ -903,12 +1042,10 @@ function Area({
         onBlur={onBlur}
         placeholder={placeholder}
         rows={rows}
-        aria-invalid={Boolean(error)}
-        className={`mt-3 w-full resize-y rounded-2xl border bg-bg-elev/30 p-4 text-base leading-relaxed text-fg outline-none transition-colors duration-300 placeholder:text-faint ${
-          error ? "border-red-400/50" : "border-line focus:border-accent-soft"
-        }`}
+        aria-invalid={error ? true : undefined}
+        className="field mt-3"
       />
-      <Note error={error} hint={hint ? `Minimum ${min} karaktera. ${hint}` : undefined} />
+      <Note error={error} hint={hint ? `${minChars(min)} ${hint}` : undefined} />
     </label>
   );
 }

@@ -3,6 +3,8 @@ import BrandLogo from "@/components/brand/Logo";
 import { type PublicContact } from "@/lib/settings";
 import SocialLinks from "@/components/ui/SocialLinks";
 import { DEFAULTS } from "@/lib/content/landing";
+import { DEFAULT_LOCALE, localePath, type Locale } from "@/lib/i18n/config";
+import { ui } from "@/lib/i18n/ui";
 
 /**
  * The page used to end on a pinned CTA and nothing else: a buyer who scrolled
@@ -14,51 +16,55 @@ import { DEFAULTS } from "@/lib/content/landing";
  * so the footer never shows an empty "Email:" label or a mailto: to nowhere.
  */
 export default function Footer({
+  locale = DEFAULT_LOCALE,
   contact,
   inquiryHref,
   tagline = DEFAULTS.footer_tagline,
   response = DEFAULTS.footer_response,
 }: {
+  locale?: Locale;
   contact: PublicContact;
   inquiryHref: string;
   tagline?: string;
   response?: string;
 }) {
   const socials = contact.socials;
+  const t = ui(locale);
 
   return (
     <footer className="relative z-10 border-t border-line bg-bg/80 px-6 py-16 backdrop-blur-md md:px-12">
       <div className="mx-auto max-w-6xl">
         <div className="grid gap-12 md:grid-cols-[1.4fr_1fr_1fr_1fr]">
           <div>
-            <Link href="/#top" aria-label="TOZA AI — početna" className="inline-block">
+            <Link
+              href={localePath(locale, "/#top")}
+              aria-label={t.nav.home}
+              className="inline-block"
+            >
               <BrandLogo markClassName="size-8" />
             </Link>
             <p className="mt-5 max-w-xs text-sm leading-relaxed text-muted">{tagline}</p>
           </div>
 
           <FooterCol
-            title="Ponuda"
+            title={t.footer.offer}
             links={[
-              { label: "AI video paketi", href: "/#paketi" },
-              { label: "Privatna edukacija", href: "/#edukacija" },
-              { label: "Rezultati", href: "/#portfolio" },
-              { label: "Pošalji upit", href: inquiryHref },
+              ...t.footer.offerLinks.map((link) => ({
+                ...link,
+                href: localePath(locale, link.href),
+              })),
+              { label: t.nav.cta, href: inquiryHref },
             ]}
           />
 
-          <FooterCol
-            title="Nalog"
-            links={[
-              { label: "Moj nalog", href: "/nalog" },
-              { label: "Moji upiti", href: "/nalog/zahtevi" },
-              { label: "Porudžbine", href: "/nalog/porudzbine" },
-              { label: "Prijava", href: "/prijava" },
-            ]}
-          />
+          {/* The account area is Serbian-only for now, so its links are left
+              unprefixed rather than pointing at /en pages that do not exist. */}
+          <FooterCol title={t.footer.account} links={t.footer.accountLinks} />
 
           <div>
-            <h3 className="text-xs uppercase tracking-[0.2em] text-faint">Kontakt</h3>
+            <h3 className="text-xs uppercase tracking-[0.2em] text-faint">
+              {t.footer.contact}
+            </h3>
             <ul className="mt-5 space-y-3 text-sm">
               {contact.email && (
                 <li>
@@ -94,7 +100,7 @@ export default function Footer({
                     href={inquiryHref}
                     className="transition-colors duration-300 hover:text-fg"
                   >
-                    Piši nam kroz upit →
+                    {t.footer.writeUs}
                   </Link>
                 </li>
               )}
@@ -103,7 +109,9 @@ export default function Footer({
         </div>
 
         <div className="mt-14 flex flex-col gap-3 border-t border-line pt-7 text-xs text-faint sm:flex-row sm:items-center sm:justify-between">
-          <p>© {new Date().getFullYear()} TOZA AI. Sva prava zadržana.</p>
+          <p>
+            © {new Date().getFullYear()} TOZA AI. {t.footer.rights}
+          </p>
           <p>{response}</p>
         </div>
       </div>

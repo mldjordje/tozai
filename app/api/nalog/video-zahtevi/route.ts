@@ -21,6 +21,9 @@ export const dynamic = "force-dynamic";
 
 const MAX_OPEN_REQUESTS = 5;
 
+/** Mirrors MAX_SERVICES in VideoInquiryFlow. */
+const MAX_SERVICES_PER_REQUEST = 4;
+
 type BillingSnapshot = {
   name: string;
   phone: string;
@@ -32,6 +35,24 @@ type BillingSnapshot = {
   city: string;
   email: string;
 };
+
+/**
+ * The services a brief covers, de-duplicated and capped.
+ *
+ * Accepts either shape: `slugs: string[]` from the current form, or a lone
+ * `slug` from a tab that was opened before multi-service briefs existed. The
+ * cap is there because the list is turned into one quote — a buyer ticking the
+ * whole catalogue is not a brief anyone can price.
+ */
+function readSlugs(body: Record<string, unknown>): string[] {
+  const raw = Array.isArray(body.slugs) ? body.slugs : [body.slug];
+  const out: string[] = [];
+  for (const value of raw) {
+    const clean = cleanText(value, 120, 1);
+    if (clean && !out.includes(clean)) out.push(clean);
+  }
+  return out.slice(0, MAX_SERVICES_PER_REQUEST);
+}
 
 export async function GET() {
   const user = await getSessionUser();
@@ -54,7 +75,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, message: "Neispravan zahtev." }, { status: 400 });
   }
 
-  const slug = cleanText(body.slug, 120, 1);
+  // One brief can cover several services — the buyer ticks them in the form and
+  // the studio quotes the lot as one job. `slug` is still read for briefs sent
+  // from an older tab that only knows how to send one.
+  const slugs = readSlugs(body);
   const buyerType = body.buyerType === "company" ? "company" : body.buyerType === "individual" ? "individual" : null;
   // Minimums are mirrored in VideoInquiryFlow (MIN) so the hint text, the live
   // counter and this check agree. A two-word "idea" cannot be quoted from.
@@ -72,7 +96,7 @@ export async function POST(request: Request) {
   const address = cleanText(body.address, 200) ?? "";
   const city = cleanText(body.city, 120) ?? "";
   if (
-    !slug || !buyerType || !name || !idea || !businessName || !businessDescription ||
+    slugs.length === 0 || !buyerType || !name || !idea || !businessName || !businessDescription ||
     !Number.isInteger(clipCount) || clipCount < 1 || clipCount > 100 ||
     !Number.isFinite(budgetEur) || budgetEur <= 0 || budgetEur > 1_000_000
   ) {
@@ -95,13 +119,23 @@ export async function POST(request: Request) {
     );
   }
 
-  const pkg = await getPackageBySlug(slug);
-  if (!pkg || pkg.flow !== "project") {
+  const found = await Promise.all(slugs.map((item) => getPackageBySlug(item)));
+  const chosen = found.filter(
+    (item): item is NonNullable<typeof item> => item !== null && item.flow === "project",
+  );
+  if (chosen.length !== slugs.length) {
     return NextResponse.json({ ok: false, message: "AI video usluga nije pronađena." }, { status: 404 });
   }
 
+  // The first pick stands in wherever a single package is needed — the order
+  // and the project it turns into still point at one row. Everything the buyer
+  // sees says all of them, because `service_name` is what is read back.
+  const pkg = chosen[0];
+  const serviceName = chosen.map((item) => item.name).join(" + ");
+  const packageIds = chosen.map((item) => item.id);
+
   const brief: VideoRequestBrief = { idea };
-  const projectTitle = `${businessName} — ${pkg.name}`;
+  const projectTitle = `${businessName} — ${serviceName}`;
   const billing: BillingSnapshot = {
     name,
     phone,
@@ -142,14 +176,15 @@ export async function POST(request: Request) {
 
   const rows = (await sql`
     INSERT INTO video_requests (
-      user_id, package_id, service_name, project_title, brief, buyer_type,
+      user_id, package_id, package_ids, service_name, project_title, brief, buyer_type,
       clip_count, business_name, business_description, budget_eur, currency, revisions,
       billing
     )
     VALUES (
-      ${user.uid}, ${pkg.id}, ${pkg.name}, ${projectTitle},
+      ${user.uid}, ${pkg.id}, ${packageIds}::int[], ${serviceName}, ${projectTitle},
       ${JSON.stringify(brief)}::jsonb, ${buyerType}, ${clipCount}, ${businessName},
-      ${businessDescription}, ${budgetEur}, ${pkg.currency}, ${pkg.revisions},
+      ${businessDescription}, ${budgetEur}, ${pkg.currency},
+      ${Math.max(...chosen.map((item) => item.revisions))},
       ${JSON.stringify(billing)}::jsonb
     )
     RETURNING id
@@ -165,11 +200,11 @@ export async function POST(request: Request) {
     userId: user.uid,
     recipient: user.email,
     templateKey: "inquiry_received",
-    subject: `Upit #${requestId} je stigao — ${pkg.name}`,
+    subject: `Upit #${requestId} je stigao — ${serviceName}`,
     body: [
       `Zdravo ${name.split(" ")[0]},`,
       "",
-      `Primili smo tvoj upit za ${pkg.name} (${clipCount} ${clipCount === 1 ? "klip" : "klipova"}).`,
+      `Primili smo tvoj upit za ${serviceName} (${clipCount} ${clipCount === 1 ? "klip" : "klipova"}).`,
       "",
       "Šta sledi:",
       "1. Pregledamo ideju, broj klipova i budžet.",
@@ -187,7 +222,7 @@ export async function POST(request: Request) {
     templateKey: "studio_new_inquiry",
     subject: `Novi upit #${requestId} — ${businessName}`,
     body: [
-      `${name} (${user.email}) je poslao upit za ${pkg.name}.`,
+      `${name} (${user.email}) je poslao upit za ${serviceName}.`,
       "",
       `Biznis: ${businessName}`,
       `Klipova: ${clipCount}`,

@@ -2,17 +2,34 @@
 
 import { useEffect, useState } from "react";
 import { Plus, Trash2, Eye, EyeOff } from "lucide-react";
+import { LocaleTabs } from "./LocaleTabs";
 
-type Faq = { id: number; question: string; answer: string; sort: number; active: boolean };
-type Draft = { id?: number; question: string; answer: string; sort: number; active: boolean };
+type Faq = {
+  id: number;
+  question: string;
+  answer: string;
+  question_en: string | null;
+  answer_en: string | null;
+  sort: number;
+  active: boolean;
+};
+type Draft = Omit<Faq, "id"> & { id?: number };
 
-const empty: Draft = { question: "", answer: "", sort: 0, active: true };
+const empty: Draft = {
+  question: "",
+  answer: "",
+  question_en: "",
+  answer_en: "",
+  sort: 0,
+  active: true,
+};
 
 export function FaqTab() {
   const [items, setItems] = useState<Faq[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState<Draft | null>(null);
+  const [lang, setLang] = useState<"sr" | "en">("sr");
   const [busy, setBusy] = useState(false);
 
   const load = async () => {
@@ -71,7 +88,12 @@ export function FaqTab() {
       {error && <p className="adm__err" role="alert">{error}</p>}
 
       <div className="adm__pf-row">
-        <button onClick={() => setEditing({ ...empty, sort: items.length })}>
+        <button
+          onClick={() => {
+            setLang("sr");
+            setEditing({ ...empty, sort: items.length });
+          }}
+        >
           <Plus size={13} style={{ verticalAlign: "-2px" }} /> Novo pitanje
         </button>
       </div>
@@ -87,7 +109,14 @@ export function FaqTab() {
               <p>{f.answer}</p>
             </div>
             <div className="adm__btns">
-              <button onClick={() => setEditing({ ...f })}>Uredi</button>
+              <button
+                onClick={() => {
+                  setLang("sr");
+                  setEditing({ ...f });
+                }}
+              >
+                Uredi
+              </button>
               <button onClick={() => patch(f.id, { active: !f.active })}>
                 {f.active ? <EyeOff size={12} /> : <Eye size={12} />}
               </button>
@@ -104,13 +133,42 @@ export function FaqTab() {
           <div className="adm__modal-box" style={{ padding: 22 }}>
             <button className="adm__modal-x" onClick={() => setEditing(null)} aria-label="Zatvori">×</button>
             <h3 style={{ marginBottom: 16 }}>{editing.id ? "Uredi pitanje" : "Novo pitanje"}</h3>
+            <LocaleTabs
+              value={lang}
+              onChange={setLang}
+              note={
+                lang === "en"
+                  ? "Engleska verzija. Prazno polje koristi srpski tekst."
+                  : "Srpska verzija pitanja."
+              }
+            />
             <div className="adm__content-field" style={{ marginBottom: 12 }}>
               <span>Pitanje</span>
-              <input type="text" value={editing.question} onChange={(e) => setEditing({ ...editing, question: e.target.value })} />
+              <input
+                type="text"
+                value={(lang === "en" ? editing.question_en : editing.question) ?? ""}
+                placeholder={lang === "en" ? editing.question : undefined}
+                onChange={(e) =>
+                  setEditing({
+                    ...editing,
+                    [lang === "en" ? "question_en" : "question"]: e.target.value,
+                  })
+                }
+              />
             </div>
             <div className="adm__content-field" style={{ marginBottom: 12 }}>
               <span>Odgovor</span>
-              <textarea rows={5} value={editing.answer} onChange={(e) => setEditing({ ...editing, answer: e.target.value })} />
+              <textarea
+                rows={5}
+                value={(lang === "en" ? editing.answer_en : editing.answer) ?? ""}
+                placeholder={lang === "en" ? editing.answer : undefined}
+                onChange={(e) =>
+                  setEditing({
+                    ...editing,
+                    [lang === "en" ? "answer_en" : "answer"]: e.target.value,
+                  })
+                }
+              />
             </div>
             <button className="adm__pf-submit" onClick={save} disabled={busy}>
               {busy ? "Čuvam…" : "Sačuvaj"}

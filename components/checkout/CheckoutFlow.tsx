@@ -317,7 +317,7 @@ function Field({
         onChange={onChange}
         placeholder={placeholder}
         inputMode={inputMode}
-        className="mt-2.5 w-full border-b border-line bg-transparent pb-2.5 text-fg outline-none transition-colors duration-300 placeholder:text-faint focus:border-accent-soft"
+        className="field mt-2.5"
       />
       {hint && <span className="mt-1.5 block text-xs text-faint">{hint}</span>}
     </label>

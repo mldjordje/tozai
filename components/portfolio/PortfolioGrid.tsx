@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { Play, X } from "lucide-react";
 import { embedUrl, posterCandidates } from "@/lib/youtube";
+import { DEFAULT_LOCALE, type Locale } from "@/lib/i18n/config";
+import { ui } from "@/lib/i18n/ui";
 
 /**
  * Portfolio grid of published Shorts.
@@ -74,10 +76,13 @@ function Poster({ work }: { work: Work }) {
 export default function PortfolioGrid({
   works,
   categories,
+  locale = DEFAULT_LOCALE,
 }: {
   works: Work[];
   categories: Category[];
+  locale?: Locale;
 }) {
+  const t = ui(locale).portfolio;
   const [filter, setFilter] = useState<number | null>(null);
   const [open, setOpen] = useState<Work | null>(null);
 
@@ -100,7 +105,7 @@ export default function PortfolioGrid({
   if (works.length === 0) {
     return (
       <p className="text-muted">
-        Radovi stižu uskoro. U međuvremenu pogledaj rezultate na početnoj.
+        {t.empty}
       </p>
     );
   }
@@ -119,7 +124,7 @@ export default function PortfolioGrid({
                 : "border-line text-muted hover:border-accent-soft hover:text-fg"
             }`}
           >
-            Sve
+            {t.all}
           </button>
           {categories.map((c) => (
             <button
@@ -192,7 +197,7 @@ export default function PortfolioGrid({
           <button
             type="button"
             onClick={() => setOpen(null)}
-            aria-label="Zatvori"
+            aria-label={t.back}
             className="absolute right-5 top-5 grid h-11 w-11 place-items-center rounded-full border border-white/20 text-white/80 transition-colors duration-300 hover:border-white/50 hover:text-white"
           >
             <X size={18} />

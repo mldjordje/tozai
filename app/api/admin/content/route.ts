@@ -1,24 +1,43 @@
 import { NextResponse } from "next/server";
-import { revalidatePath } from "next/cache";
+import { revalidatePublic } from "@/lib/i18n/revalidate";
 import { getSql } from "@/lib/db";
 import { getLandingOverrides } from "@/lib/content/landing.server";
-import { DEFAULTS, TEXT_FIELDS, type LandingContent } from "@/lib/content/landing";
+import {
+  landingContentKey,
+  landingDefaults,
+  TEXT_FIELDS,
+  type LandingContent,
+} from "@/lib/content/landing";
+import { isLocale, DEFAULT_LOCALE, type Locale } from "@/lib/i18n/config";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// Editable landing copy, stored as one JSONB row under key 'landing'. The public
-// site merges these over its defaults (lib/content/landing.ts).
+// Editable landing copy, stored as one JSONB row per language ('landing' and
+// 'landing_en'). The public site merges these over its defaults
+// (lib/content/landing.ts).
+//
+// ?locale= picks which row is being edited. The two are separate documents
+// rather than one row of translated fields, because the editor swaps the whole
+// form between languages and a half-translated page falls back to the English
+// defaults rather than to Serbian sentences.
 //
 // The editor is handed the RAW overrides plus the defaults, not the merged
 // result: a field the studio has never touched shows up empty with the default
 // as its placeholder, so "revert to default" is just clearing the box.
 
-export async function GET() {
+function readLocale(request: Request): Locale {
+  const value = new URL(request.url).searchParams.get("locale");
+  return isLocale(value) ? value : DEFAULT_LOCALE;
+}
+
+export async function GET(request: Request) {
+  const locale = readLocale(request);
   return NextResponse.json({
     ok: true,
-    content: await getLandingOverrides(),
-    defaults: DEFAULTS,
+    locale,
+    content: await getLandingOverrides(locale),
+    defaults: landingDefaults(locale),
   });
 }
 
@@ -71,17 +90,18 @@ export async function PUT(request: Request) {
     return NextResponse.json({ ok: false, message: "values mora biti objekat" }, { status: 400 });
   }
 
+  const locale = readLocale(request);
   const values = sanitize(body.values as Record<string, unknown>);
   const sql = getSql();
   await sql`
     INSERT INTO site_content (key, value, updated_at)
-    VALUES ('landing', ${JSON.stringify(values)}::jsonb, now())
+    VALUES (${landingContentKey(locale)}, ${JSON.stringify(values)}::jsonb, now())
     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()
   `;
 
   // The landing is ISR (revalidate = 60). Without this an edit sits invisible
   // for up to a minute and the studio saves again thinking it failed.
-  revalidatePath("/");
+  revalidatePublic("/");
 
   return NextResponse.json({ ok: true, values });
 }

@@ -1,5 +1,6 @@
 import "server-only";
 import { getSql } from "@/lib/db";
+import { DEFAULT_LOCALE, type Locale } from "@/lib/i18n/config";
 
 // The proof rail on the landing (#portfolio). Rows are uploaded from
 // /admin/rezultati; the section renders whatever is active, in `sort` order.
@@ -36,15 +37,24 @@ export function shotSize(shot: Pick<ResultShot, "width" | "height" | "wide">) {
  * Landing-safe: an unreachable database reads as "no shots" and the section
  * renders its static fallback rather than taking the homepage down.
  */
-export async function getPublicResultShots(): Promise<ResultShot[]> {
+export async function getPublicResultShots(
+  locale: Locale = DEFAULT_LOCALE,
+): Promise<ResultShot[]> {
   try {
     const sql = getSql();
-    return (await sql`
-      SELECT id, image_url, alt, handle, stat, width, height, wide
+    // `handle` is a username — the one field on the card that must not be
+    // translated, in either direction.
+    const columns =
+      locale === "en"
+        ? `COALESCE(NULLIF(btrim(alt_en), ''), alt) AS alt,
+           COALESCE(NULLIF(btrim(stat_en), ''), stat) AS stat`
+        : `alt, stat`;
+    return (await sql.query(`
+      SELECT id, image_url, ${columns}, handle, width, height, wide
       FROM result_shots
       WHERE active
       ORDER BY sort, id
-    `) as ResultShot[];
+    `)) as ResultShot[];
   } catch {
     return [];
   }

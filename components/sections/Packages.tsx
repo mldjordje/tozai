@@ -5,6 +5,8 @@ import KineticTitle from "@/components/ui/KineticTitle";
 import CTAButton from "@/components/ui/CTAButton";
 import { CLIP_PACKAGES, type ClipPackage } from "@/lib/content/offerings";
 import { DEFAULTS } from "@/lib/content/landing";
+import { DEFAULT_LOCALE, localePath, type Locale } from "@/lib/i18n/config";
+import { ui } from "@/lib/i18n/ui";
 
 /**
  * #paketi — choose an AI-video scope and send a brief. Project pricing is
@@ -15,18 +17,21 @@ import { DEFAULTS } from "@/lib/content/landing";
  * site_content['landing'] (see lib/content/landing.ts).
  */
 export default function Packages({
+  locale = DEFAULT_LOCALE,
   packages = CLIP_PACKAGES,
   eyebrow = DEFAULTS.packages_eyebrow,
   title = DEFAULTS.packages_title,
   body = DEFAULTS.packages_body,
   note = DEFAULTS.packages_note,
 }: {
+  locale?: Locale;
   packages?: ClipPackage[];
   eyebrow?: string;
   title?: string;
   body?: string;
   note?: string;
 }) {
+  const t = ui(locale).packages;
   return (
     <section
       id="paketi"
@@ -51,7 +56,7 @@ export default function Packages({
               >
                 {pkg.featured && (
                   <span className="absolute -top-3 left-7 rounded-full bg-accent px-3 py-1 text-xs font-semibold text-white">
-                    Najpopularnije
+                    {t.popular}
                   </span>
                 )}
 
@@ -61,7 +66,7 @@ export default function Packages({
 
                 <div className="mt-5">
                   <span className="inline-flex rounded-full border border-line px-3 py-1.5 text-xs uppercase tracking-[0.16em] text-accent-soft">
-                    Privatna procena
+                    {t.privateQuote}
                   </span>
                 </div>
 
@@ -89,7 +94,7 @@ export default function Packages({
 
                 <div className="mt-8">
                   <CTAButton
-                    href={pkg.slug ? `/porudzbina/${pkg.slug}` : "#booking"}
+                    href={pkg.slug ? localePath(locale, `/porudzbina/${pkg.slug}`) : "#booking"}
                     variant={pkg.featured ? "primary" : "ghost"}
                   >
                     {pkg.cta}

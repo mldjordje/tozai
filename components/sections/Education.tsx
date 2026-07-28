@@ -5,6 +5,8 @@ import KineticTitle from "@/components/ui/KineticTitle";
 import CTAButton from "@/components/ui/CTAButton";
 import { HOUR_PACKS, type HourPack } from "@/lib/content/offerings";
 import { DEFAULTS } from "@/lib/content/landing";
+import { DEFAULT_LOCALE, localePath, type Locale } from "@/lib/i18n/config";
+import { ui } from "@/lib/i18n/ui";
 
 /**
  * #edukacija — 1-on-1 education sold as hour-packs. Tiers come from the admin
@@ -13,18 +15,21 @@ import { DEFAULTS } from "@/lib/content/landing";
  * Copy comes from site_content['landing'] the same way.
  */
 export default function Education({
+  locale = DEFAULT_LOCALE,
   packs = HOUR_PACKS,
   eyebrow = DEFAULTS.education_eyebrow,
   title = DEFAULTS.education_title,
   body = DEFAULTS.education_body,
   pills = DEFAULTS.education_pills,
 }: {
+  locale?: Locale;
   packs?: HourPack[];
   eyebrow?: string;
   title?: string;
   body?: string;
   pills?: string[];
 }) {
+  const t = ui(locale).education;
   return (
     <section
       id="edukacija"
@@ -63,7 +68,7 @@ export default function Education({
                   </span>
                   <span className="text-sm text-accent-soft">
                     {pack.hours}
-                    {pack.hours === 1 ? " sat" : " sati"}
+                    {pack.hours === 1 ? ` ${t.hour}` : ` ${t.hours}`}
                   </span>
                 </div>
 
@@ -84,10 +89,10 @@ export default function Education({
 
                 <div className="mt-8">
                   <CTAButton
-                    href={pack.slug ? `/porudzbina/${pack.slug}` : "#booking"}
+                    href={pack.slug ? localePath(locale, `/porudzbina/${pack.slug}`) : "#booking"}
                     variant={pack.featured ? "primary" : "ghost"}
                   >
-                    {pack.slug ? "Kupi sate" : "Rezerviši"}
+                    {pack.slug ? t.buy : t.reserve}
                   </CTAButton>
                 </div>
               </div>

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Plus, Trash2, Star, Eye, EyeOff } from "lucide-react";
+import { LocaleTabs } from "./LocaleTabs";
 
 type Pkg = {
   id: number;
@@ -18,6 +19,14 @@ type Pkg = {
   cta_href: string | null;
   sort: number;
   active: boolean;
+  // The English side of the same row. Empty means "not translated" and the
+  // English site falls back to the Serbian value for that one field.
+  name_en: string | null;
+  category_en: string | null;
+  unit_en: string | null;
+  description_en: string | null;
+  cta_label_en: string | null;
+  features_en: string[];
 };
 
 type Draft = Omit<Pkg, "id"> & { id?: number };
@@ -41,6 +50,12 @@ const emptyDraft = (grp: string): Draft => ({
   cta_href: "",
   sort: 0,
   active: true,
+  name_en: "",
+  category_en: "",
+  unit_en: "",
+  description_en: "",
+  cta_label_en: "",
+  features_en: [],
 });
 
 export function PaketiTab() {
@@ -48,6 +63,9 @@ export function PaketiTab() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState<Draft | null>(null);
+  // Which language the text fields in the modal are bound to. Price, order and
+  // visibility are shared, so they stay put while this flips.
+  const [lang, setLang] = useState<"sr" | "en">("sr");
   const [busy, setBusy] = useState(false);
 
   const load = async () => {
@@ -147,7 +165,14 @@ export function PaketiTab() {
                     )}
                   </div>
                   <div className="adm__pf-card-actions">
-                    <button onClick={() => setEditing({ ...p })}>Uredi</button>
+                    <button
+                      onClick={() => {
+                        setLang("sr");
+                        setEditing({ ...p });
+                      }}
+                    >
+                      Uredi
+                    </button>
                     <button onClick={() => patch(p.id, { highlighted: !p.highlighted })}>
                       <Star size={12} /> {p.highlighted ? "Skini" : "Istakni"}
                     </button>
@@ -162,7 +187,12 @@ export function PaketiTab() {
               ))}
             </div>
             <div className="adm__pf-row" style={{ marginTop: 12 }}>
-              <button onClick={() => setEditing(emptyDraft(g.key))}>
+              <button
+                onClick={() => {
+                  setLang("sr");
+                  setEditing(emptyDraft(g.key));
+                }}
+              >
                 <Plus size={13} style={{ verticalAlign: "-2px" }} /> Novi paket ({g.label})
               </button>
             </div>
@@ -176,12 +206,27 @@ export function PaketiTab() {
               ×
             </button>
             <h3 style={{ marginBottom: 16 }}>{editing.id ? "Uredi paket" : "Novi paket"}</h3>
+            <LocaleTabs
+              value={lang}
+              onChange={setLang}
+              note={
+                lang === "en"
+                  ? "Engleska verzija (/en). Prazno polje = koristi se srpski tekst."
+                  : "Srpska verzija (/). Cena, redosled i vidljivost su zajednički za oba jezika."
+              }
+            />
             <div className="adm__pf-form" style={{ border: 0, padding: 0 }}>
               <Field label="Naziv">
                 <input
                   type="text"
-                  value={editing.name}
-                  onChange={(e) => setEditing({ ...editing, name: e.target.value })}
+                  value={(lang === "en" ? editing.name_en : editing.name) ?? ""}
+                  placeholder={lang === "en" ? editing.name : undefined}
+                  onChange={(e) =>
+                    setEditing({
+                      ...editing,
+                      [lang === "en" ? "name_en" : "name"]: e.target.value,
+                    })
+                  }
                 />
               </Field>
               <div className="adm__pf-row">
@@ -202,31 +247,59 @@ export function PaketiTab() {
                 <Field label="Jedinica (npr. / mesečno)">
                   <input
                     type="text"
-                    value={editing.unit ?? ""}
-                    onChange={(e) => setEditing({ ...editing, unit: e.target.value })}
+                    value={(lang === "en" ? editing.unit_en : editing.unit) ?? ""}
+                    placeholder={lang === "en" ? editing.unit ?? "" : undefined}
+                    onChange={(e) =>
+                      setEditing({
+                        ...editing,
+                        [lang === "en" ? "unit_en" : "unit"]: e.target.value,
+                      })
+                    }
                   />
                 </Field>
               </div>
               <Field label="Kategorija">
                 <input
                   type="text"
-                  value={editing.category ?? ""}
-                  onChange={(e) => setEditing({ ...editing, category: e.target.value })}
+                  value={(lang === "en" ? editing.category_en : editing.category) ?? ""}
+                  placeholder={lang === "en" ? editing.category ?? "" : undefined}
+                  onChange={(e) =>
+                    setEditing({
+                      ...editing,
+                      [lang === "en" ? "category_en" : "category"]: e.target.value,
+                    })
+                  }
                 />
               </Field>
               <Field label="Opis">
                 <textarea
                   rows={2}
-                  value={editing.description ?? ""}
-                  onChange={(e) => setEditing({ ...editing, description: e.target.value })}
+                  value={(lang === "en" ? editing.description_en : editing.description) ?? ""}
+                  placeholder={lang === "en" ? editing.description ?? "" : undefined}
+                  onChange={(e) =>
+                    setEditing({
+                      ...editing,
+                      [lang === "en" ? "description_en" : "description"]: e.target.value,
+                    })
+                  }
                   style={textareaStyle}
                 />
               </Field>
               <Field label="Stavke (jedna po redu)">
                 <textarea
                   rows={5}
-                  value={editing.features.join("\n")}
-                  onChange={(e) => setEditing({ ...editing, features: e.target.value.split("\n") })}
+                  value={(lang === "en" ? editing.features_en : editing.features).join("\n")}
+                  placeholder={
+                    lang === "en" && editing.features.length > 0
+                      ? editing.features.join("\n")
+                      : undefined
+                  }
+                  onChange={(e) =>
+                    setEditing({
+                      ...editing,
+                      [lang === "en" ? "features_en" : "features"]: e.target.value.split("\n"),
+                    })
+                  }
                   style={textareaStyle}
                 />
               </Field>
@@ -234,8 +307,14 @@ export function PaketiTab() {
                 <Field label="CTA tekst">
                   <input
                     type="text"
-                    value={editing.cta_label ?? ""}
-                    onChange={(e) => setEditing({ ...editing, cta_label: e.target.value })}
+                    value={(lang === "en" ? editing.cta_label_en : editing.cta_label) ?? ""}
+                    placeholder={lang === "en" ? editing.cta_label ?? "" : undefined}
+                    onChange={(e) =>
+                      setEditing({
+                        ...editing,
+                        [lang === "en" ? "cta_label_en" : "cta_label"]: e.target.value,
+                      })
+                    }
                   />
                 </Field>
                 <Field label="CTA link">

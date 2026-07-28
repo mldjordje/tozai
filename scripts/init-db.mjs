@@ -434,6 +434,15 @@ await sql`ALTER TABLE video_requests ADD COLUMN IF NOT EXISTS clip_count INT NOT
 await sql`ALTER TABLE video_requests ADD COLUMN IF NOT EXISTS business_name TEXT NOT NULL DEFAULT ''`;
 await sql`ALTER TABLE video_requests ADD COLUMN IF NOT EXISTS business_description TEXT NOT NULL DEFAULT ''`;
 await sql`ALTER TABLE video_requests ADD COLUMN IF NOT EXISTS budget_eur NUMERIC`;
+// One brief can now cover several services. `package_id` stays the primary —
+// the order and the project it becomes still point at a single row — and the
+// full list rides alongside it, with `service_name` holding the joined label
+// everyone actually reads.
+await sql`ALTER TABLE video_requests ADD COLUMN IF NOT EXISTS package_ids INT[] NOT NULL DEFAULT '{}'`;
+await sql`
+  UPDATE video_requests SET package_ids = ARRAY[package_id]
+  WHERE package_ids = '{}' AND package_id IS NOT NULL
+`;
 await sql`ALTER TABLE video_requests ADD COLUMN IF NOT EXISTS turnaround_days INT`;
 // Invoice details are frozen when the request is sent. A later profile edit
 // must not silently change the buyer attached to an already accepted quote.
@@ -624,6 +633,34 @@ await sql`
   UPDATE studio_settings SET notify_email = email
   WHERE id = 1 AND notify_email IS NULL AND email IS NOT NULL
 `;
+
+/* ------------------------------------------------------------- english copy --- */
+// The public site is bilingual (sr at "/", en at "/en"). Everything the studio
+// writes gets a parallel `_en` column rather than a translations table: there
+// are exactly two languages, the admin panel edits them side by side, and a
+// join per row on the landing would cost more than the column does.
+//
+// Empty means "not translated yet" and the English page falls back to the
+// Serbian value — a product name in the wrong language still sells; a blank
+// card does not. The landing copy is the one exception (see landing.server.ts):
+// it is a whole page of prose, kept in its own site_content row, and falls back
+// to the English defaults instead.
+await sql`ALTER TABLE packages ADD COLUMN IF NOT EXISTS name_en TEXT`;
+await sql`ALTER TABLE packages ADD COLUMN IF NOT EXISTS description_en TEXT`;
+await sql`ALTER TABLE packages ADD COLUMN IF NOT EXISTS unit_en TEXT`;
+await sql`ALTER TABLE packages ADD COLUMN IF NOT EXISTS category_en TEXT`;
+await sql`ALTER TABLE packages ADD COLUMN IF NOT EXISTS cta_label_en TEXT`;
+await sql`ALTER TABLE packages ADD COLUMN IF NOT EXISTS features_en TEXT[] NOT NULL DEFAULT '{}'`;
+
+await sql`ALTER TABLE result_shots ADD COLUMN IF NOT EXISTS alt_en TEXT`;
+await sql`ALTER TABLE result_shots ADD COLUMN IF NOT EXISTS stat_en TEXT`;
+
+await sql`ALTER TABLE portfolio_works ADD COLUMN IF NOT EXISTS title_en TEXT`;
+await sql`ALTER TABLE portfolio_works ADD COLUMN IF NOT EXISTS description_en TEXT`;
+await sql`ALTER TABLE portfolio_categories ADD COLUMN IF NOT EXISTS name_en TEXT`;
+
+await sql`ALTER TABLE faq ADD COLUMN IF NOT EXISTS question_en TEXT`;
+await sql`ALTER TABLE faq ADD COLUMN IF NOT EXISTS answer_en TEXT`;
 
 /* ----------------------------------------------------------- social links --- */
 // One column per network meant a new platform was a migration and a deploy. The

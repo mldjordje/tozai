@@ -359,3 +359,77 @@ textarea,
   background: currentColor;
   opacity: 0.5;
 }
+
+/* ---------------------------------------------------------------------------
+   Form fields — the brief and the checkout.
+
+   The rest of the site is hairlines on near-black, and the inputs inherited
+   that: a 1px #1b1b20 rule under transparent, with a #4a4a54 placeholder. On a
+   phone in daylight that is invisible, and buyers could not tell an empty
+   required field from a caption. So the fields step off the ground instead:
+   their own surface, a border bright enough to trace, and a placeholder at
+   muted rather than faint.
+
+   The focus state is the one place this design lets the accent act as light —
+   a tight ring plus a short outward bloom, so the field being typed into is
+   obvious even in peripheral vision on a long form. It is bound to :focus, so
+   nothing glows while the page is at rest and the "light comes from the
+   particle field" rule still holds everywhere it is being looked at.
+--------------------------------------------------------------------------- */
+.field {
+  width: 100%;
+  border-radius: 0.875rem;
+  border: 1px solid #2a2a33;
+  background: rgba(19, 19, 24, 0.72);
+  color: var(--color-fg);
+  /* 16px minimum: iOS Safari zooms the page in on focus for anything smaller
+     and the buyer never zooms back out. */
+  font-size: 1rem;
+  line-height: 1.6;
+  padding: 0.875rem 1rem;
+  outline: none;
+  transition:
+    border-color 0.3s var(--ease-out-expo),
+    background-color 0.3s var(--ease-out-expo),
+    box-shadow 0.3s var(--ease-out-expo);
+}
+
+.field::placeholder {
+  color: #6f6f7c;
+}
+
+.field:hover:not(:focus) {
+  border-color: #3a3a46;
+  background: rgba(23, 23, 29, 0.8);
+}
+
+.field:focus {
+  border-color: var(--color-accent-soft);
+  background: rgba(24, 24, 32, 0.9);
+  box-shadow:
+    0 0 0 3px rgba(74, 118, 216, 0.16),
+    0 10px 34px -14px rgba(74, 118, 216, 0.75);
+}
+
+/* Invalid beats focus: a buyer correcting a rejected field must keep seeing
+   why it was rejected while they type in it. */
+.field[aria-invalid="true"] {
+  border-color: rgba(248, 113, 113, 0.55);
+}
+.field[aria-invalid="true"]:focus {
+  border-color: rgba(248, 113, 113, 0.8);
+  box-shadow:
+    0 0 0 3px rgba(248, 113, 113, 0.14),
+    0 10px 34px -14px rgba(248, 113, 113, 0.6);
+}
+
+textarea.field {
+  resize: vertical;
+  min-height: 7rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .field {
+    transition: none;
+  }
+}

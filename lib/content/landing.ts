@@ -116,6 +116,69 @@ export const DEFAULTS: LandingContent = {
   footer_response: "Odgovaramo u roku od 24h.",
 };
 
+/**
+ * The English landing, out of the box.
+ *
+ * Not a translation of the Serbian row — a starting point the studio edits in
+ * /admin/sadrzaj under the EN tab, the same way it edits the Serbian one. The
+ * two are stored under separate site_content keys and never fall back to each
+ * other: an English page rendering half in Serbian is worse than one rendering
+ * the English default.
+ *
+ * Numbers, brand names and the marquee stay as they are — they read the same in
+ * both languages and translating them would only make them wrong.
+ */
+export const DEFAULTS_EN: LandingContent = {
+  hero_eyebrow: "AI Video Studio",
+  hero_title: "Build Your Business\nWith *AI*.",
+  hero_lead_1: "We don't teach AI. We build businesses with it.",
+  hero_lead_2: "Smarter. Faster. More profitable.",
+  hero_body:
+    "We make AI video ads and run private AI training — content that stops the scroll, and the skills to make it yourself.",
+  hero_cta_primary: "Order an AI video",
+  hero_cta_secondary: "See the packages",
+
+  stats_eyebrow: "01 — Numbers",
+  stats_title: "Numbers that speak *for themselves*.",
+  stats: [
+    { value: "16M+", label: "Monthly Views" },
+    { value: "5000+", label: "AI Videos Created" },
+    { value: "100+", label: "Clients" },
+    { value: "2+", label: "Years Creating Content" },
+  ],
+
+  strip_items: ["AI VIDEO", "VIRAL CONTENT", "AI EDUCATION", "TOZA AI"],
+
+  results_eyebrow: "Real results",
+  results_title: "Every frame is AI. Every number is *real*.",
+  results_body:
+    "300K+ followers and 100M+ views on the profiles we run — scroll through the proof.",
+  results_card_title: "Want numbers *like these*?",
+  results_cta: "Send a brief",
+
+  packages_eyebrow: "02 — Packages",
+  packages_title: "AI video, made to order. *Quoted from your brief*.",
+  packages_body:
+    "Pick a direction and send the idea. You get a private price and a realistic turnaround before you commit to anything.",
+  packages_note:
+    "Sending a brief is free and commits you to nothing. The price is visible only in your account, after we quote it.",
+
+  education_eyebrow: "03 — Private education",
+  education_title: "Learn to make content *that sells*.",
+  education_body:
+    "1-on-1 mentoring. Buy hours, book a slot, learn exactly what your business needs.",
+  education_pills: ["1-on-1 mentoring", "Your pace", "Built around your business"],
+
+  booking_badge: "We reply within 24h",
+  booking_title: "Let's make *your content*.",
+  booking_cta_primary: "Send a brief",
+  booking_note: "The brief is free and commits you to nothing.",
+
+  footer_tagline:
+    "AI video ads and private AI training. Sending a brief is free and commits you to nothing.",
+  footer_response: "We reply within 24h.",
+};
+
 /** Fields the admin editor renders as free text, in the order it renders them.
  *  Structured fields (stats, pills, strip) get their own editors. */
 export const TEXT_FIELDS = Object.keys(DEFAULTS).filter(
@@ -159,9 +222,12 @@ function statList(value: unknown): Stat[] | null {
  * stored JSON produces a complete, renderable LandingContent, because a typo in
  * the database must not be able to take the landing page down.
  */
-export function mergeLandingContent(stored: unknown): LandingContent {
+export function mergeLandingContent(
+  stored: unknown,
+  base: LandingContent = DEFAULTS,
+): LandingContent {
   const raw = (typeof stored === "object" && stored !== null ? stored : {}) as Record<string, unknown>;
-  const merged = { ...DEFAULTS };
+  const merged = { ...base };
 
   for (const key of TEXT_FIELDS) {
     const alias = LEGACY_ALIASES[key];
@@ -169,9 +235,19 @@ export function mergeLandingContent(stored: unknown): LandingContent {
     if (value) (merged[key] as string) = value;
   }
 
-  merged.stats = statList(raw.stats) ?? DEFAULTS.stats;
-  merged.strip_items = stringList(raw.strip_items) ?? DEFAULTS.strip_items;
-  merged.education_pills = stringList(raw.education_pills) ?? DEFAULTS.education_pills;
+  merged.stats = statList(raw.stats) ?? base.stats;
+  merged.strip_items = stringList(raw.strip_items) ?? base.strip_items;
+  merged.education_pills = stringList(raw.education_pills) ?? base.education_pills;
 
   return merged;
+}
+
+/** Which set of defaults a locale starts from. */
+export function landingDefaults(locale: string): LandingContent {
+  return locale === "en" ? DEFAULTS_EN : DEFAULTS;
+}
+
+/** The site_content row a locale's overrides live in. */
+export function landingContentKey(locale: string): string {
+  return locale === "en" ? "landing_en" : "landing";
 }

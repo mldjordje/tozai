@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { revalidatePath } from "next/cache";
+import { revalidatePublic } from "@/lib/i18n/revalidate";
 import { getSql } from "@/lib/db";
 import { parseYouTubeId } from "@/lib/youtube";
 
@@ -22,10 +22,13 @@ function youtubeFields(mediaUrl: string, declaredType: string) {
 
 export async function GET() {
   const sql = getSql();
-  const categories = await sql`SELECT id, name, slug, sort FROM portfolio_categories ORDER BY sort, id`;
+  const categories = await sql`
+    SELECT id, name, name_en, slug, sort
+    FROM portfolio_categories ORDER BY sort, id
+  `;
   const works = await sql`
     SELECT id, category_id, title, client, media_url, media_type, youtube_id, poster_url,
-           description, tags, featured, sort
+           description, tags, featured, sort, title_en, description_en
     FROM portfolio_works ORDER BY sort, id
   `;
   return NextResponse.json({ ok: true, categories, works });
@@ -41,9 +44,11 @@ export async function POST(request: Request) {
     if (!name) return NextResponse.json({ ok: false, message: "Naziv je obavezan." }, { status: 400 });
     const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || `kat-${Date.now()}`;
     const [row] = (await sql`
-      INSERT INTO portfolio_categories (name, slug, sort)
-      VALUES (${name}, ${slug}, ${Number(b.sort) || 0})
-      ON CONFLICT (slug) DO UPDATE SET name = EXCLUDED.name
+      INSERT INTO portfolio_categories (name, name_en, slug, sort)
+      VALUES (${name}, ${str(b.name_en, 80) || null}, ${slug}, ${Number(b.sort) || 0})
+      ON CONFLICT (slug) DO UPDATE SET
+        name = EXCLUDED.name,
+        name_en = COALESCE(EXCLUDED.name_en, portfolio_categories.name_en)
       RETURNING id
     `) as { id: number }[];
     return NextResponse.json({ ok: true, id: row.id }, { status: 201 });
@@ -54,24 +59,42 @@ export async function POST(request: Request) {
   if (!title || !media_url) return NextResponse.json({ ok: false, message: "Naslov i medij su obavezni." }, { status: 400 });
   const yt = youtubeFields(media_url, str(b.media_type, 12));
   const [row] = (await sql`
-    INSERT INTO portfolio_works (category_id, title, client, media_url, media_type, youtube_id, poster_url, description, tags, featured, sort)
+    INSERT INTO portfolio_works (
+      category_id, title, client, media_url, media_type, youtube_id, poster_url,
+      description, tags, featured, sort, title_en, description_en
+    )
     VALUES (
       ${b.category_id ? Number(b.category_id) : null}, ${title}, ${str(b.client, 120) || null},
       ${media_url}, ${yt.media_type}, ${yt.youtube_id}, ${str(b.poster_url, 600) || null},
       ${str(b.description, 600) || null}, ${tags(b.tags)}, ${b.featured === undefined ? true : Boolean(b.featured)},
-      COALESCE((SELECT MAX(sort) + 1 FROM portfolio_works), 0)
+      COALESCE((SELECT MAX(sort) + 1 FROM portfolio_works), 0),
+      ${str(b.title_en, 160) || null}, ${str(b.description_en, 600) || null}
     )
     RETURNING id
   `) as { id: number }[];
-  revalidatePath("/portfolio");
+  revalidatePublic("/portfolio");
   return NextResponse.json({ ok: true, id: row.id }, { status: 201 });
 }
 
 export async function PATCH(request: Request) {
+  const type = new URL(request.url).searchParams.get("type");
   const b = (await request.json().catch(() => ({}))) as Record<string, unknown>;
   const id = Number(b.id);
   if (!Number.isInteger(id)) return NextResponse.json({ ok: false, message: "Bad id" }, { status: 400 });
   const sql = getSql();
+
+  if (type === "category") {
+    await sql`
+      UPDATE portfolio_categories SET
+        name = CASE WHEN ${"name" in b} THEN ${str(b.name, 80)} ELSE name END,
+        name_en = CASE WHEN ${"name_en" in b} THEN ${str(b.name_en, 80) || null} ELSE name_en END,
+        sort = CASE WHEN ${"sort" in b} THEN ${Number(b.sort) || 0} ELSE sort END
+      WHERE id = ${id}
+    `;
+    revalidatePublic("/portfolio");
+    return NextResponse.json({ ok: true });
+  }
+
   const edit = youtubeFields(str(b.media_url, 600), str(b.media_type, 12));
   await sql`
     UPDATE portfolio_works SET
@@ -85,12 +108,14 @@ export async function PATCH(request: Request) {
       youtube_id = CASE WHEN ${"media_url" in b} THEN ${edit.youtube_id} ELSE youtube_id END,
       poster_url = CASE WHEN ${"poster_url" in b} THEN ${str(b.poster_url, 600) || null} ELSE poster_url END,
       description = CASE WHEN ${"description" in b} THEN ${str(b.description, 600) || null} ELSE description END,
+      title_en = CASE WHEN ${"title_en" in b} THEN ${str(b.title_en, 160) || null} ELSE title_en END,
+      description_en = CASE WHEN ${"description_en" in b} THEN ${str(b.description_en, 600) || null} ELSE description_en END,
       tags = CASE WHEN ${"tags" in b} THEN ${"tags" in b ? tags(b.tags) : []} ELSE tags END,
       featured = CASE WHEN ${"featured" in b} THEN ${Boolean(b.featured)} ELSE featured END,
       sort = CASE WHEN ${"sort" in b} THEN ${Number(b.sort) || 0} ELSE sort END
     WHERE id = ${id}
   `;
-  revalidatePath("/portfolio");
+  revalidatePublic("/portfolio");
   return NextResponse.json({ ok: true });
 }
 
@@ -105,6 +130,6 @@ export async function DELETE(request: Request) {
   } else {
     await sql`DELETE FROM portfolio_works WHERE id = ${id}`;
   }
-  revalidatePath("/portfolio");
+  revalidatePublic("/portfolio");
   return NextResponse.json({ ok: true });
 }

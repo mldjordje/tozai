@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { LocaleTabs } from "./LocaleTabs";
 import { Plus, Trash2 } from "lucide-react";
 import type { LandingContent, Stat } from "@/lib/content/landing";
 
@@ -91,6 +92,10 @@ const GROUPS: Group[] = [
 type Values = Record<string, unknown>;
 
 export function SadrzajTab() {
+  // Which language is being edited. The two documents are independent, so
+  // switching reloads rather than merging — what is on screen is always what is
+  // stored for that language.
+  const [locale, setLocale] = useState<"sr" | "en">("sr");
   const [values, setValues] = useState<Values | null>(null);
   const [defaults, setDefaults] = useState<LandingContent | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -98,15 +103,22 @@ export function SadrzajTab() {
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
-    fetch("/api/admin/content", { cache: "no-store" })
+    let live = true;
+    setValues(null);
+    setSaved(false);
+    fetch(`/api/admin/content?locale=${locale}`, { cache: "no-store" })
       .then((r) => r.json())
       .then((d) => {
+        if (!live) return;
         if (!d.ok) throw new Error();
         setValues(d.content ?? {});
         setDefaults(d.defaults ?? null);
       })
-      .catch(() => setError("Ne mogu da učitam sadržaj."));
-  }, []);
+      .catch(() => live && setError("Ne mogu da učitam sadržaj."));
+    return () => {
+      live = false;
+    };
+  }, [locale]);
 
   const put = (key: string, value: unknown) => {
     setValues((prev) => ({ ...(prev ?? {}), [key]: value }));
@@ -119,7 +131,7 @@ export function SadrzajTab() {
     setError(null);
     setSaved(false);
     try {
-      const res = await fetch("/api/admin/content", {
+      const res = await fetch(`/api/admin/content?locale=${locale}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ values }),
@@ -149,9 +161,11 @@ export function SadrzajTab() {
 
   return (
     <div className="adm__content" style={{ maxWidth: 860 }}>
+      <LocaleTabs value={locale} onChange={setLocale} />
       <p className="adm__hint" style={{ marginBottom: 4 }}>
-        Tekst landing stranice. Prazno polje koristi podrazumevani tekst (vidi se kao siva
-        sugestija u polju). Izmene su vidljive na sajtu odmah po čuvanju.
+        Tekst landing stranice{locale === "en" ? " na engleskom (/en)" : " na srpskom (/)"}.
+        Prazno polje koristi podrazumevani tekst (vidi se kao siva sugestija u polju).
+        Izmene su vidljive na sajtu odmah po čuvanju.
       </p>
       {error && (
         <p className="adm__err" role="alert">
