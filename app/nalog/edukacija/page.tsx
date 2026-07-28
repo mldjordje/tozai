@@ -116,7 +116,7 @@ export default async function EdukacijaPage() {
                     tone={bookingTone(b.status)}
                   />
                 </div>
-                {b.meet_url && (
+                {b.meet_url ? (
                   <a
                     href={b.meet_url}
                     target="_blank"
@@ -125,6 +125,12 @@ export default async function EdukacijaPage() {
                   >
                     Otvori link za sastanak
                   </a>
+                ) : (
+                  b.status === "zakazano" && (
+                    <p className="mt-3 text-sm text-faint">
+                      Link za sastanak stiže ovde i na mejl pre termina.
+                    </p>
+                  )
                 )}
                 {b.status === "zakazano" &&
                   (cancellable(b.date, b.start_slot) ? (

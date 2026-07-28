@@ -277,26 +277,10 @@ export async function cancelBooking(
     };
   }
 
-  const closed = (await sql`
-    UPDATE bookings SET status = 'otkazano'
-    WHERE id = ${bookingId} AND user_id = ${userId} AND status = 'zakazano'
-    RETURNING id
-  `) as { id: number }[];
-  if (closed.length === 0) {
+  const released = await releaseBooking(booking, userId, true);
+  if (!released) {
     return { ok: false, code: "not_found", message: "Termin je već zatvoren." };
   }
-
-  // Free the hours for someone else before crediting — a refunded wallet with a
-  // still-blocked slot is the worse of the two failure states.
-  await sql`DELETE FROM booking_slots WHERE booking_id = ${bookingId}`;
-  await sql`
-    INSERT INTO hour_entries (user_id, kind, hours, reason, booking_id, note)
-    SELECT ${userId}, ${booking.kind}, ${booking.hours}, 'refund', ${bookingId},
-           ${`otkazan termin ${booking.date} ${booking.start_slot}`}
-    WHERE NOT EXISTS (
-      SELECT 1 FROM hour_entries WHERE booking_id = ${bookingId} AND reason = 'refund'
-    )
-  `;
 
   await queueStudioNotice({
     templateKey: "studio_booking_canceled",
@@ -309,6 +293,160 @@ export async function cancelBooking(
   });
 
   return { ok: true, booking: { ...booking, status: "otkazano" } };
+}
+
+/**
+ * Flip a booking to `otkazano`, free its slots and — unless the studio decides
+ * the session is being written off — put the hours back.
+ *
+ * The status guard on the UPDATE is the whole safety mechanism: only the caller
+ * that actually performs the transition gets to refund, so a double-click or a
+ * buyer and the studio cancelling at the same moment cannot credit twice. The
+ * refund insert carries its own NOT EXISTS guard for the same reason.
+ */
+async function releaseBooking(
+  booking: Booking,
+  userId: number,
+  refund: boolean,
+): Promise<boolean> {
+  const sql = getSql();
+  const closed = (await sql`
+    UPDATE bookings SET status = 'otkazano'
+    WHERE id = ${booking.id} AND status = 'zakazano'
+    RETURNING id
+  `) as { id: number }[];
+  if (closed.length === 0) return false;
+
+  // Free the slot before crediting: a refunded wallet with a still-blocked hour
+  // is the worse of the two half-finished states.
+  await sql`DELETE FROM booking_slots WHERE booking_id = ${booking.id}`;
+  if (refund) {
+    await sql`
+      INSERT INTO hour_entries (user_id, kind, hours, reason, booking_id, note)
+      SELECT ${userId}, ${booking.kind}, ${booking.hours}, 'refund', ${booking.id},
+             ${`otkazan termin ${booking.date} ${booking.start_slot}`}
+      WHERE NOT EXISTS (
+        SELECT 1 FROM hour_entries WHERE booking_id = ${booking.id} AND reason = 'refund'
+      )
+    `;
+  }
+  return true;
+}
+
+/**
+ * The studio cancels. No cutoff — the 24h rule exists to protect the studio's
+ * calendar from last-minute buyer changes, not to stop the studio itself.
+ * `refund` is a choice here: a no-show that is being charged keeps the hours
+ * spent, and the panel says which one happened.
+ */
+export async function cancelBookingAsStudio(
+  bookingId: number,
+  options: { refund?: boolean; reason?: string | null; baseUrl?: string } = {},
+): Promise<BookingResult> {
+  const sql = getSql();
+  const rows = (await sql`
+    SELECT b.id, b.user_id, b.kind, b.date::text AS date, b.start_slot,
+           b.hours::float8 AS hours, b.status, b.topic,
+           u.email AS user_email, u.name AS user_name
+    FROM bookings b
+    LEFT JOIN users u ON u.id = b.user_id
+    WHERE b.id = ${bookingId}
+  `) as (Booking & { user_id: number; user_email: string | null; user_name: string | null })[];
+  const booking = rows[0];
+  if (!booking) return { ok: false, code: "not_found", message: "Termin nije pronađen." };
+  if (booking.status !== "zakazano") {
+    return { ok: false, code: "not_found", message: "Termin je već zatvoren." };
+  }
+
+  const refund = options.refund !== false;
+  const released = await releaseBooking(booking, booking.user_id, refund);
+  if (!released) return { ok: false, code: "not_found", message: "Termin je već zatvoren." };
+
+  if (booking.user_email) {
+    const base = options.baseUrl ?? process.env.NEXT_PUBLIC_APP_URL ?? "";
+    await queueQuietly({
+      userId: booking.user_id,
+      recipient: booking.user_email,
+      templateKey: "booking_canceled",
+      subject: `Otkazan termin — ${formatDay(booking.date)} u ${booking.start_slot}`,
+      body: [
+        `Zdravo ${booking.user_name?.split(" ")[0] ?? ""},`,
+        "",
+        `Termin ${formatDay(booking.date)} u ${booking.start_slot} je otkazan.`,
+        options.reason ? `Razlog: ${options.reason}` : null,
+        refund
+          ? `Vraćeno ti je ${formatHours(booking.hours)} na stanje — izaberi novi termin:`
+          : "Novi termin biraš ovde:",
+        `${base}/nalog/edukacija`,
+        "",
+        "TOZA AI",
+      ]
+        .filter((line): line is string => line !== null)
+        .join("\n"),
+    });
+  }
+
+  return { ok: true, booking: { ...booking, status: "otkazano" } };
+}
+
+/**
+ * Attach the meeting link and tell the client it is there.
+ *
+ * The link is pasted by the studio rather than generated: creating a Google
+ * Meet room needs a Calendar API token for the studio account, and the Google
+ * OAuth credentials are still missing (see docs/PLAN — EPIC 0.2). The
+ * `gcal_event_id` column is already in place for when they arrive; until then
+ * this is the whole flow, and the client is not left waiting on a link that
+ * nothing produces.
+ */
+export async function setBookingMeetUrl(
+  bookingId: number,
+  meetUrl: string | null,
+  options: { baseUrl?: string; notify?: boolean } = {},
+): Promise<BookingResult> {
+  const sql = getSql();
+  const rows = (await sql`
+    SELECT b.id, b.user_id, b.kind, b.date::text AS date, b.start_slot,
+           b.hours::float8 AS hours, b.status, b.topic, b.meet_url,
+           u.email AS user_email, u.name AS user_name
+    FROM bookings b
+    LEFT JOIN users u ON u.id = b.user_id
+    WHERE b.id = ${bookingId}
+  `) as (Booking & {
+    user_id: number;
+    meet_url: string | null;
+    user_email: string | null;
+    user_name: string | null;
+  })[];
+  const booking = rows[0];
+  if (!booking) return { ok: false, code: "not_found", message: "Termin nije pronađen." };
+
+  await sql`UPDATE bookings SET meet_url = ${meetUrl} WHERE id = ${bookingId}`;
+
+  // Mail only when a link actually appears, and only when it changed — saving
+  // the same row twice must not send the client the same notice twice.
+  const changed = meetUrl !== null && meetUrl !== booking.meet_url;
+  if (changed && options.notify !== false && booking.user_email && booking.status === "zakazano") {
+    const base = options.baseUrl ?? process.env.NEXT_PUBLIC_APP_URL ?? "";
+    await queueQuietly({
+      userId: booking.user_id,
+      recipient: booking.user_email,
+      templateKey: "booking_link_ready",
+      subject: `Link za termin ${formatDay(booking.date)} u ${booking.start_slot}`,
+      body: [
+        `Zdravo ${booking.user_name?.split(" ")[0] ?? ""},`,
+        "",
+        `Link za sastanak ${formatDay(booking.date)} u ${booking.start_slot}:`,
+        meetUrl,
+        "",
+        `Stoji ti i na nalogu: ${base}/nalog/edukacija`,
+        "",
+        "TOZA AI",
+      ].join("\n"),
+    });
+  }
+
+  return { ok: true, booking: { ...booking, meet_url: meetUrl } as Booking };
 }
 
 async function notifyBooked(userId: number, booking: Booking, baseUrl?: string) {

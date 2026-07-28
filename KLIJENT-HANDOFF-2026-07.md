@@ -77,6 +77,31 @@ odakle je koji sat došao.
    vraćaju, a termin se oslobađa. Posle toga otkazivanje ide preko tebe.
 5. Svako zakazivanje i otkazivanje ti stiže na mejl studija.
 
+### Šta radiš kad neko zakaže — `/admin/termini`
+
+Sve rezervisane sesije su ovde. U meniju stoji brojač koliko predstojećih
+termina **još nema link** — to je jedina stvar koju klijent ne može sam.
+
+Za svaki termin:
+
+- **Link za sastanak** — otvoriš Google Meet (ili Zoom, svejedno), nalepiš
+  link i klikneš Sačuvaj. Klijent ga istog trena vidi na `/nalog/edukacija`
+  i dobija mejl sa linkom. Prazno polje + Sačuvaj briše link.
+- **Održano** — posle sesije. Sati ostaju potrošeni, klijentu u istoriji piše
+  "Održano" umesto "Zakazano".
+- **Otkaži + vrati sate** — termin se oslobađa, sati se vraćaju klijentu na
+  stanje, klijent dobija mejl.
+- **Nije se pojavio** — isto otkazivanje, ali **bez** vraćanja sati.
+- **Snimak** — link na snimak sesije, vidi ga klijent u "Prethodni termini".
+
+Napomena: link se ne pravi sam. Google Meet soba se otvara preko Google
+Calendar API-ja, a za to trebaju Google OAuth kredencijali kojih još nema
+(vidi `docs/PLAN…` EPIC 0.2). Dok ne stignu, link se lepi ručno — kolona
+`gcal_event_id` u bazi već čeka automatiku.
+
+Takođe još ne postoji automatski podsetnik 24h/1h pre termina — kolone su
+spremne, ali treba cron da ih šalje.
+
 ## 3. Kako radi plaćanje preko predračuna
 
 Dok čekamo Monri, uplata na račun je glavni način plaćanja.

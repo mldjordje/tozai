@@ -11,6 +11,7 @@ import {
   HelpCircle,
   Mail,
   CalendarDays,
+  CalendarClock,
   FileText,
   BarChart3,
   Settings,
@@ -22,7 +23,7 @@ import {
   X,
 } from "lucide-react";
 
-type BadgeKey = "newMaterials" | "newRequests" | "unpaidOrders";
+type BadgeKey = "newMaterials" | "newRequests" | "unpaidOrders" | "sessionsNoLink";
 
 type NavItem = {
   href: string;
@@ -37,6 +38,7 @@ const NAV: NavItem[] = [
   { href: "/admin/projekti", label: "Projekti", icon: FolderKanban, badge: "newMaterials" },
   { href: "/admin/video-zahtevi", label: "Video upiti", icon: ClipboardList, badge: "newRequests" },
   { href: "/admin/porudzbine", label: "Porudžbine", icon: Receipt, badge: "unpaidOrders" },
+  { href: "/admin/termini", label: "Termini", icon: CalendarClock, badge: "sessionsNoLink" },
   { href: "/admin/klijenti", label: "Klijenti", icon: Users },
   { href: "/admin/paketi", label: "Paketi", icon: Tag },
   { href: "/admin/portfolio", label: "Portfolio", icon: Images },
@@ -82,7 +84,10 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
   }, [pathname]);
 
   const totalBadge =
-    (badges.newMaterials ?? 0) + (badges.newRequests ?? 0) + (badges.unpaidOrders ?? 0);
+    (badges.newMaterials ?? 0) +
+    (badges.newRequests ?? 0) +
+    (badges.unpaidOrders ?? 0) +
+    (badges.sessionsNoLink ?? 0);
 
   useEffect(() => {
     if (!menuOpen) return;

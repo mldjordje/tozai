@@ -355,6 +355,18 @@ button.adm__chip:disabled{opacity:.3;cursor:default;text-decoration:line-through
 .adm__grant>p{margin:12px 0 0}
 @media(max-width:700px){.adm__client-main{grid-template-columns:40px 1fr}.adm__client-meta{white-space:normal}.adm__client-cols{grid-template-columns:1fr}.adm__grant-cols{grid-template-columns:1fr}.adm__ledger li{grid-template-columns:56px 1fr}}
 
+/* ---- Termini (zakazane sesije) ---- */
+.adm__sessions{display:flex;flex-direction:column;gap:16px;max-width:900px}
+.adm__session{grid-template-columns:110px 1fr auto;row-gap:14px}
+.adm__session-tools{grid-column:1/-1;display:flex;flex-direction:column;gap:12px;padding-top:12px;border-top:1px dashed var(--line)}
+.adm__session-field{display:flex;flex-direction:column;gap:6px}
+.adm__session-field label{color:var(--muted);font-size:10px;letter-spacing:.14em;text-transform:uppercase}
+.adm__session-tools .adm__pf-row input{font-size:13px}
+.adm__session-tools .adm__pf-row button{border-color:var(--line);background:none;color:var(--muted)}
+.adm__session-tools .adm__pf-row button:hover:not(:disabled){border-color:var(--neon);color:#fff;background:rgba(46,107,255,.14)}
+.adm__session-tools>p{margin:0}
+@media(max-width:700px){.adm__session{grid-template-columns:1fr}}
+
 /* ---- Sadržaj (CMS) ---- */
 .adm__content{display:flex;flex-direction:column;gap:24px;max-width:860px}
 .adm__content-section{padding:20px;border:1px solid var(--line);border-radius:6px;background:rgba(255,255,255,.02)}
