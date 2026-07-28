@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import CheckoutFlow from "@/components/checkout/CheckoutFlow";
 import VideoInquiryFlow from "@/components/checkout/VideoInquiryFlow";
-import { getPackageBySlug } from "@/lib/packages";
+import { getPackageBySlug, getPublicPackages } from "@/lib/packages";
 import { getSessionUser } from "@/lib/auth/user-session";
 import { getProfile } from "@/lib/account";
 import { paymentAvailability } from "@/lib/payments/provider";
@@ -31,6 +31,35 @@ export default async function CheckoutPage({
 
   const user = await getSessionUser();
   const profile = user ? await getProfile(user.uid) : null;
+
+  // The brief lets the buyer switch service inside the form, so the whole
+  // quotable catalogue comes along. Built from the same `packages` rows the
+  // owner edits in /admin/paketi — a service added there shows up here without
+  // a code change. The requested one is prepended if the list somehow misses
+  // it, so the page can never render a picker without its own selection.
+  const services =
+    pkg.flow === "project"
+      ? (await getPublicPackages())
+          .filter((item) => item.flow === "project" && item.slug)
+          .map((item) => ({
+            slug: item.slug as string,
+            name: item.name,
+            description: item.description,
+            features: item.features,
+          }))
+      : [];
+  const inquirySlug = pkg.slug ?? slug;
+  const inquiryPackages = services.some((item) => item.slug === inquirySlug)
+    ? services
+    : [
+        {
+          slug: inquirySlug,
+          name: pkg.name,
+          description: pkg.description,
+          features: pkg.features,
+        },
+        ...services,
+      ];
 
   return (
     <main className="relative min-h-svh px-6 pb-24 pt-28 md:px-12">
@@ -63,12 +92,8 @@ export default async function CheckoutPage({
 
         {pkg.flow === "project" ? (
           <VideoInquiryFlow
-            pkg={{
-              slug: pkg.slug ?? slug,
-              name: pkg.name,
-              description: pkg.description,
-              features: pkg.features,
-            }}
+            packages={inquiryPackages}
+            initialSlug={inquirySlug}
             user={user ? { email: user.email, name: user.name ?? null } : null}
             profile={
               profile

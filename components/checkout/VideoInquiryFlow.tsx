@@ -8,6 +8,13 @@ import { motion, AnimatePresence } from "framer-motion";
  * the studio quotes each job by hand, so this form's only job is to collect
  * enough to quote from, and to make that obvious while the buyer types.
  *
+ * WHY THE SIGNED-OUT SCREEN SHOWS NOTHING ELSE. Every "Pošalji upit" on the
+ * landing arrives here, and most of the people who click it have no account. A
+ * service card sitting above the sign-in button pushed the only useful control
+ * off a phone screen, to describe a service the buyer had just read about one
+ * click earlier. Signed out, this page is a sign-in screen and nothing more;
+ * the service is chosen inside the form, where it can actually be changed.
+ *
  * WHY THE SUBMIT BUTTON IS NEVER DISABLED. It used to be, and on a phone that
  * read as a dead button: the minimums are invisible, so a buyer who wrote two
  * short sentences tapped a button that simply did nothing and left. Now the tap
@@ -114,14 +121,22 @@ function validate(form: FormState): Partial<Record<FieldKey, string>> {
 }
 
 export default function VideoInquiryFlow({
-  pkg,
+  packages,
+  initialSlug,
   user,
   profile,
 }: {
-  pkg: PackageSummary;
+  /** Every AI video service the studio currently sells (admin → Paketi). */
+  packages: PackageSummary[];
+  /** The one the buyer's CTA pointed at — a starting point, not a commitment. */
+  initialSlug: string;
   user: { email: string; name: string | null } | null;
   profile: ProfileSummary | null;
 }) {
+  const [slug, setSlug] = useState(initialSlug);
+  // The list is what decides; the URL only seeds it. A slug that has since been
+  // retired falls back to the first service rather than rendering an empty aside.
+  const pkg = packages.find((item) => item.slug === slug) ?? packages[0];
   const [form, setForm] = useState<FormState>(() => ({
     ...EMPTY,
     buyerType: profile?.isCompany ? "company" : "individual",
@@ -196,7 +211,7 @@ export default function VideoInquiryFlow({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          slug: pkg.slug,
+          slug,
           ...form,
           clipCount: Number(form.clipCount),
           budgetEur: Number(form.budgetEur),
@@ -220,24 +235,35 @@ export default function VideoInquiryFlow({
 
   if (!user) {
     return (
-      <Shell aside={<Summary pkg={pkg} />}>
-        <Reveal>
-          <p className="eyebrow">01 — Prijava</p>
-          <h2 className="display mt-5 max-w-xl text-3xl md:text-5xl">
+      <Reveal>
+        <div className="mt-10 max-w-xl md:mt-14">
+          <p className="eyebrow">Prijava</p>
+          <h2 className="display mt-5 text-3xl md:text-5xl">
             Prijavi se da pošalješ upit.
           </h2>
-          <p className="mt-5 max-w-xl leading-relaxed text-muted">
-            Procena, plaćanje i porudžbina vezuju se za tvoj nalog, tako da uvek
-            vidiš šta je sledeće — bez traženja po mejlu.
+          <p className="mt-5 leading-relaxed text-muted">
+            Traje deset sekundi. Uslugu biraš u sledećem koraku, a procena,
+            plaćanje i porudžbina vezuju se za tvoj nalog — uvek vidiš šta je
+            sledeće, bez traženja po mejlu.
           </p>
           <a
-            href={`/api/auth/google?next=${encodeURIComponent(`/porudzbina/${pkg.slug}`)}`}
-            className="mt-9 inline-flex min-h-12 items-center justify-center gap-3 rounded-full bg-fg px-7 text-sm font-medium text-bg transition-colors duration-300 hover:bg-white active:scale-[0.99]"
+            href={`/api/auth/google?next=${encodeURIComponent(`/porudzbina/${slug}`)}`}
+            className="mt-9 inline-flex min-h-12 w-full items-center justify-center gap-3 rounded-full bg-fg px-7 text-sm font-medium text-bg transition-colors duration-300 hover:bg-white active:scale-[0.99] sm:w-auto"
           >
+            <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden>
+              <path
+                fill="currentColor"
+                d="M21.35 11.1h-9.17v2.96h5.27c-.23 1.37-1.6 4.02-5.27 4.02-3.17 0-5.76-2.63-5.76-5.87s2.59-5.87 5.76-5.87c1.8 0 3.01.77 3.7 1.43l2.52-2.43C16.78 3.9 14.68 3 12.18 3 7.03 3 2.86 7.16 2.86 12.3s4.17 9.3 9.32 9.3c5.38 0 8.94-3.78 8.94-9.11 0-.61-.07-1.08-.17-1.39z"
+              />
+            </svg>
             Nastavi sa Google nalogom
           </a>
-        </Reveal>
-      </Shell>
+          <p className="mt-5 text-xs leading-relaxed text-faint">
+            Upit je besplatan i ne obavezuje te. Cenu vidiš pre bilo kakvog
+            plaćanja.
+          </p>
+        </div>
+      </Reveal>
     );
   }
 
@@ -295,10 +321,10 @@ export default function VideoInquiryFlow({
   /* ------------------------------------------------------------------ form */
 
   return (
-    <Shell aside={<Summary pkg={pkg} />}>
+    <Shell aside={<Summary key={pkg.slug} pkg={pkg} />}>
       <form onSubmit={submit} noValidate className="pb-28 lg:pb-0">
         <Reveal>
-          <p className="eyebrow">02 — Upit</p>
+          <p className="eyebrow">Upit</p>
           <h2 className="display mt-5 text-3xl sm:text-4xl md:text-5xl">
             Reci nam šta <em>pravimo</em>.
           </h2>
@@ -325,6 +351,12 @@ export default function VideoInquiryFlow({
         </Reveal>
 
         <div className="mt-10 space-y-9">
+          {packages.length > 1 && (
+            <Reveal delay={0.08}>
+              <ServicePicker packages={packages} value={slug} onChange={setSlug} />
+            </Reveal>
+          )}
+
           <Reveal delay={0.1}>
             <fieldset>
               <legend className="text-xs uppercase tracking-[0.18em] text-faint">
@@ -624,6 +656,86 @@ function Reveal({
     >
       {children}
     </motion.div>
+  );
+}
+
+/**
+ * Which AI video service the brief is for.
+ *
+ * Rows, not pricing cards: the landing already sold the service, and there is
+ * no price to compare here anyway. All this has to do is show what was picked
+ * and make changing it a single tap — the aside on the right carries the detail.
+ */
+function ServicePicker({
+  packages,
+  value,
+  onChange,
+}: {
+  packages: PackageSummary[];
+  value: string;
+  onChange: (slug: string) => void;
+}) {
+  return (
+    <fieldset>
+      <legend className="text-xs uppercase tracking-[0.18em] text-faint">Usluga</legend>
+      <p className="mt-3 max-w-lg text-sm leading-relaxed text-muted">
+        Izaberi šta ti treba. Ne moraš da pogodiš iz prve — cena se ionako
+        procenjuje po ideji.
+      </p>
+      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+        {packages.map((item) => {
+          const active = item.slug === value;
+          return (
+            <button
+              key={item.slug}
+              type="button"
+              aria-pressed={active}
+              onClick={() => onChange(item.slug)}
+              className={`relative overflow-hidden rounded-2xl border p-4 text-left transition-colors duration-300 ${
+                active
+                  ? "border-accent-soft/60 bg-bg-elev/60"
+                  : "border-line bg-bg-elev/20 hover:border-faint"
+              }`}
+            >
+              {active && (
+                <motion.span
+                  layoutId="service-pick-glow"
+                  aria-hidden
+                  className="pointer-events-none absolute -right-10 -top-10 h-28 w-28 rounded-full bg-[color:var(--color-accent)] opacity-[0.16] blur-2xl"
+                  transition={{ type: "spring", stiffness: 320, damping: 34 }}
+                />
+              )}
+              <span className="relative flex items-start gap-3">
+                <span
+                  className={`mt-1 flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full border transition-colors duration-300 ${
+                    active ? "border-accent-soft" : "border-line"
+                  }`}
+                >
+                  {active && (
+                    <motion.span
+                      initial={{ scale: 0 }}
+                      animate={{ scale: 1 }}
+                      transition={{ duration: 0.25, ease: EASE }}
+                      className="h-1.5 w-1.5 rounded-full bg-[color:var(--color-accent-soft)]"
+                    />
+                  )}
+                </span>
+                <span className="min-w-0">
+                  <span className={`block text-sm ${active ? "text-fg" : "text-muted"}`}>
+                    {item.name}
+                  </span>
+                  {item.description && (
+                    <span className="mt-1.5 block text-xs leading-relaxed text-faint">
+                      {item.description}
+                    </span>
+                  )}
+                </span>
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </fieldset>
   );
 }
 
