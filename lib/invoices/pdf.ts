@@ -112,6 +112,38 @@ const LABELS = {
   },
 } as const;
 
+// Brand mark, drawn as vector paths rather than embedded as an image: the same
+// geometry as components/brand/Logo.tsx, so the document cannot drift from the
+// site, and there is no asset to ship, fetch or fail to find at runtime.
+//
+// The web mark is near-white on a dark tile. On paper that would be invisible,
+// so the bird takes the document's ink colour and only the accent diamond keeps
+// the brand purple.
+const LOGO_SIZE = 34;
+const LOGO_VIEWBOX = 64;
+const LOGO_ACCENT = rgb(0.61, 0.49, 1);
+const LOGO_PATHS = [
+  "M30.2 24.9C24.4 20.4 16.3 15.8 5.5 11l6.8 17.2 15.4 8.2 2.5-11.5Z",
+  "m27.3 34-14.9-6 5.5 12.1 11.7 5.4L27.3 34Z",
+  "m29.2 43-10.8-3.4 5.9 9.2 7 4.3L29.2 43Z",
+  "M33.8 24.9C39.6 20.4 47.7 15.8 58.5 11l-6.8 17.2-15.4 8.2-2.5-11.5Z",
+  "m36.7 34 14.9-6-5.5 12.1-11.7 5.4 2.3-11.5Z",
+  "m34.8 43 10.8-3.4-5.9 9.2-7 4.3 2.1-10.1Z",
+  "m31.8 6.5 7.4 4.8-5 .6c-2.2 2.5-2.4 5.7-.8 9.5l2 4.8L32 43.8l-3.4-17.6 2-4.8c1.2-3 .9-5.5-.8-7.5l-5.3 2.4 3.2-6.4 4.1-3.4Z",
+];
+const LOGO_ACCENT_PATH = "m32 46 5.1 8.1L32 63l-5.1-8.9L32 46Z";
+
+/** `top` is the y of the mark's top edge — drawSvgPath anchors the viewBox
+ *  origin at the given point and grows downward, the opposite of every other
+ *  measurement in this file. */
+function drawLogo(page: PDFPage, x: number, top: number) {
+  const scale = LOGO_SIZE / LOGO_VIEWBOX;
+  for (const path of LOGO_PATHS) {
+    page.drawSvgPath(path, { x, y: top, scale, color: INK, borderWidth: 0 });
+  }
+  page.drawSvgPath(LOGO_ACCENT_PATH, { x, y: top, scale, color: LOGO_ACCENT, borderWidth: 0 });
+}
+
 let fontCache: { regular: Uint8Array; bold: Uint8Array } | null = null;
 
 async function loadFonts() {
@@ -196,7 +228,12 @@ export async function renderInvoicePdf(doc: InvoiceDocument): Promise<Uint8Array
     });
 
   // ---- header: who is issuing, and what this document is -------------------
-  text(doc.seller.companyName ?? doc.seller.name ?? "TOZA AI", MARGIN, 16, { font: bold });
+  // The mark sits in the top-left corner and the issuer block is indented past
+  // it, so the two never collide however many address lines are filled in.
+  drawLogo(page, MARGIN, y + LOGO_SIZE - 12);
+  const headerLeft = MARGIN + LOGO_SIZE + 12;
+
+  text(doc.seller.companyName ?? doc.seller.name ?? "TOZA AI", headerLeft, 16, { font: bold });
   text(doc.kind === "proforma" ? t.proforma : t.invoice, right, 16, { font: bold, align: "right", color: ACCENT });
   y -= 18;
   text(`${t.number}: ${doc.number}`, right, 10, { align: "right", color: MUTED });
@@ -209,7 +246,7 @@ export async function renderInvoicePdf(doc: InvoiceDocument): Promise<Uint8Array
     doc.seller.email,
   ]) {
     if (!line) continue;
-    text(line, MARGIN, 9, { color: MUTED });
+    text(line, headerLeft, 9, { color: MUTED });
     y -= 12;
   }
 
