@@ -9,7 +9,7 @@ const EMPTY: Settings = {
   name: "TOZA AI", logo_url: "", currency: "EUR", locale: "sr", phone: "", email: "",
   notify_email: "",
   address: "", city: "", company_name: "", pib: "", mb: "", bank_account: "",
-  iban: "", swift: "", bank_name: "", bank_address: "",
+  eur_account: "", usd_account: "", iban: "", swift: "", bank_name: "", bank_address: "",
   vat_note_domestic: "", vat_note_foreign: "", invoice_due_days: "5",
   activity_code: "", registration_number: "",
 };
@@ -50,7 +50,7 @@ const SECTIONS: {
       { key: "company_name", label: "Pun naziv firme" },
       { key: "pib", label: "PIB" },
       { key: "mb", label: "Matični broj" },
-      { key: "bank_account", label: "Žiro račun" },
+      { key: "bank_account", label: "RSD račun (domaći)" },
       { key: "activity_code", label: "Šifra delatnosti" },
       { key: "registration_number", label: "Broj rešenja / registracije" },
       { key: "invoice_due_days", label: "Rok plaćanja (dana)", placeholder: "5" },
@@ -58,8 +58,10 @@ const SECTIONS: {
   },
   {
     title: "Devizno plaćanje",
+    hint: "Na fakturi se automatski prikazuje račun koji odgovara izabranoj valuti.",
     fields: [
-      { key: "iban", label: "IBAN" },
+      { key: "eur_account", label: "EUR račun (IBAN)" },
+      { key: "usd_account", label: "USD račun (IBAN / broj računa)" },
       { key: "swift", label: "SWIFT / BIC" },
       { key: "bank_name", label: "Naziv banke" },
       { key: "bank_address", label: "Adresa banke" },

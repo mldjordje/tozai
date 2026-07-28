@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import fontkit from "@pdf-lib/fontkit";
 import { PDFDocument, rgb, type PDFFont, type PDFPage } from "pdf-lib";
+import { paymentAccountForCurrency } from "./rules";
 
 // Invoice / proforma renderer.
 //
@@ -43,6 +44,8 @@ export type InvoiceDocument = {
   rsd?: { amount: number; rate: number; date: string } | null;
   seller: InvoiceParty & {
     bankAccount?: string | null;
+    eurAccount?: string | null;
+    usdAccount?: string | null;
     iban?: string | null;
     swift?: string | null;
     bankName?: string | null;
@@ -101,7 +104,7 @@ const LABELS = {
     grandTotal: "TOTAL DUE",
     payment: "Payment details",
     recipient: "Beneficiary",
-    account: "IBAN",
+    account: "Account / IBAN",
     reference: "Payment reference",
     pib: "Tax ID",
     mb: "Company No.",
@@ -330,10 +333,14 @@ export async function renderInvoicePdf(doc: InvoiceDocument): Promise<Uint8Array
   y -= 20;
 
   // ---- how to pay ----------------------------------------------------------
-  // The foreign document prints IBAN + SWIFT: a transfer from abroad cannot be
-  // made against a domestic dinar account number.
-  const accountValue =
-    doc.scope === "foreign" ? doc.seller.iban : doc.seller.bankAccount ?? doc.seller.iban;
+  // The payment account follows the invoice currency. Foreign documents also
+  // print the shared SWIFT and bank details needed for an international transfer.
+  const accountValue = paymentAccountForCurrency(doc.currency, {
+    domestic: doc.seller.bankAccount,
+    eur: doc.seller.eurAccount,
+    usd: doc.seller.usdAccount,
+    legacyForeign: doc.seller.iban,
+  });
 
   text(t.payment, MARGIN, 8, { color: MUTED });
   y -= 15;

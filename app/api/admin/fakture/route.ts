@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSql } from "@/lib/db";
 import {
+  InvoiceConfigurationError,
   issueManualInvoice,
   type ManualInvoiceInput,
 } from "@/lib/invoices/issue";
@@ -86,6 +87,13 @@ export async function POST(request: Request) {
     currency,
     buyer,
   };
-  const document = await issueManualInvoice(input);
-  return NextResponse.json({ ok: true, document }, { status: 201 });
+  try {
+    const document = await issueManualInvoice(input);
+    return NextResponse.json({ ok: true, document }, { status: 201 });
+  } catch (error) {
+    if (error instanceof InvoiceConfigurationError) {
+      return NextResponse.json({ ok: false, message: error.message }, { status: 400 });
+    }
+    throw error;
+  }
 }

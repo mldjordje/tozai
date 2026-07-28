@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 const FIELDS = [
   "name", "logo_url", "currency", "locale", "phone", "email", "notify_email", "address", "city",
   "company_name", "pib", "mb", "bank_account", "instagram", "tiktok", "youtube", "linkedin",
-  "iban", "swift", "bank_name", "bank_address", "vat_note_domestic", "vat_note_foreign",
+  "eur_account", "usd_account", "iban", "swift", "bank_name", "bank_address", "vat_note_domestic", "vat_note_foreign",
   "invoice_due_days",
   "activity_code", "registration_number",
 ] as const;
@@ -20,7 +20,7 @@ export async function GET() {
   const rows = (await sql`
     SELECT name, logo_url, currency, locale, phone, email, notify_email, address, city,
            company_name, pib, mb, bank_account, instagram, tiktok, youtube, linkedin
-           , iban, swift, bank_name, bank_address, vat_note_domestic, vat_note_foreign,
+           , eur_account, usd_account, iban, swift, bank_name, bank_address, vat_note_domestic, vat_note_foreign,
            invoice_due_days::text AS invoice_due_days
            , activity_code, registration_number, social_links
     FROM studio_settings WHERE id = 1
@@ -81,6 +81,8 @@ export async function PUT(request: Request) {
       pib = CASE WHEN ${"pib" in v} THEN ${v.pib ?? null} ELSE pib END,
       mb = CASE WHEN ${"mb" in v} THEN ${v.mb ?? null} ELSE mb END,
       bank_account = CASE WHEN ${"bank_account" in v} THEN ${v.bank_account ?? null} ELSE bank_account END,
+      eur_account = CASE WHEN ${"eur_account" in v} THEN ${v.eur_account ?? null} ELSE eur_account END,
+      usd_account = CASE WHEN ${"usd_account" in v} THEN ${v.usd_account ?? null} ELSE usd_account END,
       activity_code = CASE WHEN ${"activity_code" in v} THEN ${v.activity_code ?? null} ELSE activity_code END,
       registration_number = CASE WHEN ${"registration_number" in v} THEN ${v.registration_number ?? null} ELSE registration_number END,
       iban = CASE WHEN ${"iban" in v} THEN ${v.iban ?? null} ELSE iban END,

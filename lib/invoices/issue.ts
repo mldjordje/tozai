@@ -4,8 +4,10 @@ import { getSql } from "@/lib/db";
 import { paymentReference } from "@/lib/payments/manual";
 import { getMiddleRate } from "./fx";
 import { renderInvoicePdf, type InvoiceDocument, type InvoiceParty } from "./pdf";
-import { invoiceScope, type InvoiceKind } from "./rules";
+import { invoiceScope, paymentAccountForCurrency, type InvoiceKind } from "./rules";
 export type { InvoiceKind } from "./rules";
+
+export class InvoiceConfigurationError extends Error {}
 
 // Issuing a document: allocate the number, freeze the figures, render the PDF.
 //
@@ -62,6 +64,8 @@ type SettingsRow = {
   pib: string | null;
   mb: string | null;
   bank_account: string | null;
+  eur_account: string | null;
+  usd_account: string | null;
   iban: string | null;
   swift: string | null;
   bank_name: string | null;
@@ -124,7 +128,7 @@ export async function issueInvoice(
 
   const settingsRows = (await sql`
     SELECT name, company_name, address, city, email, phone, pib, mb,
-           bank_account, iban, swift, bank_name, bank_address,
+           bank_account, eur_account, usd_account, iban, swift, bank_name, bank_address,
            vat_note_domestic, vat_note_foreign, invoice_due_days
     FROM studio_settings WHERE id = 1
   `) as SettingsRow[];
@@ -206,6 +210,8 @@ export async function issueInvoice(
       email: settings.email,
       phone: settings.phone,
       bankAccount: settings.bank_account,
+      eurAccount: settings.eur_account,
+      usdAccount: settings.usd_account,
       iban: settings.iban,
       swift: settings.swift,
       bankName: settings.bank_name,
@@ -258,11 +264,22 @@ export async function issueManualInvoice(
   const sql = getSql();
   const settingsRows = (await sql`
     SELECT name, company_name, address, city, email, phone, pib, mb,
-           bank_account, iban, swift, bank_name, bank_address,
+           bank_account, eur_account, usd_account, iban, swift, bank_name, bank_address,
            vat_note_domestic, vat_note_foreign, invoice_due_days
     FROM studio_settings WHERE id = 1
   `) as SettingsRow[];
   const settings = settingsRows[0] ?? ({} as SettingsRow);
+  const paymentAccount = paymentAccountForCurrency(input.currency, {
+    domestic: settings.bank_account,
+    eur: settings.eur_account,
+    usd: settings.usd_account,
+    legacyForeign: settings.iban,
+  });
+  if (!paymentAccount) {
+    throw new InvoiceConfigurationError(
+      `U Podešavanjima prvo unesi račun za valutu ${input.currency}.`,
+    );
+  }
   const rate = await getMiddleRate(input.currency);
   const year = Number(input.issuedAt.slice(0, 4));
   const prefix = PREFIX[input.kind];
@@ -315,6 +332,8 @@ export async function issueManualInvoice(
       email: settings.email,
       phone: settings.phone,
       bankAccount: settings.bank_account,
+      eurAccount: settings.eur_account,
+      usdAccount: settings.usd_account,
       iban: settings.iban,
       swift: settings.swift,
       bankName: settings.bank_name,
@@ -385,7 +404,7 @@ export async function renderStoredInvoice(invoiceId: number): Promise<{ bytes: U
 
   const settingsRows = (await sql`
     SELECT name, company_name, address, city, email, phone, pib, mb,
-           bank_account, iban, swift, bank_name, bank_address, vat_note_domestic, vat_note_foreign
+           bank_account, eur_account, usd_account, iban, swift, bank_name, bank_address, vat_note_domestic, vat_note_foreign
     FROM studio_settings WHERE id = 1
   `) as SettingsRow[];
   const settings = settingsRows[0] ?? ({} as SettingsRow);
@@ -414,6 +433,8 @@ export async function renderStoredInvoice(invoiceId: number): Promise<{ bytes: U
       email: settings.email,
       phone: settings.phone,
       bankAccount: settings.bank_account,
+      eurAccount: settings.eur_account,
+      usdAccount: settings.usd_account,
       iban: settings.iban,
       swift: settings.swift,
       bankName: settings.bank_name,

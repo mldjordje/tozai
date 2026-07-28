@@ -222,23 +222,23 @@ export function FaktureTab() {
           <Field label="Ime i prezime">
             <input value={form.buyerName} onChange={(event) => set("buyerName", event.target.value)} />
           </Field>
-          <Field label="Naziv firme">
-            <input value={form.companyName} onChange={(event) => set("companyName", event.target.value)} />
+          <Field label="Naziv firme / pravnog lica">
+            <input value={form.companyName} onChange={(event) => set("companyName", event.target.value)} placeholder="NAJMODAVAC d.o.o." />
           </Field>
           <Field label="Adresa">
             <input value={form.address} onChange={(event) => set("address", event.target.value)} />
           </Field>
-          <Field label="Grad">
-            <input value={form.city} onChange={(event) => set("city", event.target.value)} />
+          <Field label="Poštanski broj i grad">
+            <input value={form.city} onChange={(event) => set("city", event.target.value)} placeholder="10000 Zagreb" />
           </Field>
           <Field label="Država">
-            <input value={form.country} onChange={(event) => set("country", event.target.value)} />
+            <input value={form.country} onChange={(event) => set("country", event.target.value)} placeholder="Hrvatska / Croatia" />
           </Field>
           <Field label="Email">
             <input type="email" value={form.email} onChange={(event) => set("email", event.target.value)} />
           </Field>
-          <Field label="PIB / Tax ID">
-            <input value={form.pib} onChange={(event) => set("pib", event.target.value)} />
+          <Field label="VAT ID / PIB kupca">
+            <input value={form.pib} onChange={(event) => set("pib", event.target.value)} placeholder="HR78356616526" />
           </Field>
           <Field label="Matični broj">
             <input value={form.mb} onChange={(event) => set("mb", event.target.value)} />

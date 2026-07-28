@@ -613,10 +613,12 @@ await sql`UPDATE invoices SET issued_at = created_at::date WHERE issued_at IS NU
 // re-running fulfilment idempotent.
 await sql`CREATE UNIQUE INDEX IF NOT EXISTS invoices_order_kind ON invoices (order_id, kind)`;
 
-// Payee details. `bank_account` is the domestic dinar account; IBAN/SWIFT are
-// the foreign-currency ones, which a Serbian flat-tax business needs before it
-// can be paid from abroad at all.
+// Payee details. `bank_account` is the domestic dinar account; EUR and USD have
+// dedicated accounts. The legacy IBAN remains as a fallback for older settings.
 await sql`ALTER TABLE studio_settings ADD COLUMN IF NOT EXISTS iban TEXT`;
+await sql`ALTER TABLE studio_settings ADD COLUMN IF NOT EXISTS eur_account TEXT`;
+await sql`ALTER TABLE studio_settings ADD COLUMN IF NOT EXISTS usd_account TEXT`;
+await sql`UPDATE studio_settings SET eur_account = iban WHERE eur_account IS NULL AND iban IS NOT NULL`;
 await sql`ALTER TABLE studio_settings ADD COLUMN IF NOT EXISTS swift TEXT`;
 await sql`ALTER TABLE studio_settings ADD COLUMN IF NOT EXISTS bank_name TEXT`;
 await sql`ALTER TABLE studio_settings ADD COLUMN IF NOT EXISTS bank_address TEXT`;
