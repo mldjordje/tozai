@@ -25,7 +25,7 @@ type OrderRow = {
   invoice_number: string | null;
   proforma_number: string | null;
   proforma_id: number | null;
-  payment_method: "card" | "invoice" | null;
+  payment_method: "card" | "invoice" | "cash" | null;
   payment_reference: string | null;
   project_id: number | null;
   project_status: string | null;

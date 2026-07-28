@@ -25,7 +25,35 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     FROM education_wallet WHERE user_id = ${id}
   `) as { purchased: number; used: number }[];
 
-  return NextResponse.json({ ok: true, client, orders, wallet: wallet ?? null });
+  // Per-kind balances, the ledger behind them and the sessions they paid for.
+  // Education and consulting hours are separate pots, so a single "hours left"
+  // number would be wrong the moment a client holds both.
+  // Refunds are positive rows; excluding them from `purchased` (and deriving
+  // `used` from the balance) keeps a cancelled session from inflating both
+  // numbers. Same reasoning as getWalletBalances().
+  const wallets = (await sql`
+    SELECT kind,
+           COALESCE(SUM(hours) FILTER (WHERE hours > 0 AND reason <> 'refund'), 0)::float8 AS purchased,
+           COALESCE(SUM(hours) FILTER (WHERE hours > 0 AND reason <> 'refund'), 0)::float8
+             - COALESCE(SUM(hours), 0)::float8 AS used,
+           COALESCE(SUM(hours), 0)::float8 AS remaining
+    FROM hour_entries WHERE user_id = ${id}
+    GROUP BY kind ORDER BY kind
+  `) as unknown[];
+
+  const entries = (await sql`
+    SELECT id, kind, hours::float8 AS hours, reason, note, order_id, booking_id, created_at
+    FROM hour_entries WHERE user_id = ${id}
+    ORDER BY created_at DESC, id DESC LIMIT 50
+  `) as unknown[];
+
+  const bookings = (await sql`
+    SELECT id, kind, date::text AS date, start_slot, hours::float8 AS hours, status, topic
+    FROM bookings WHERE user_id = ${id}
+    ORDER BY date DESC, start_slot DESC LIMIT 50
+  `) as unknown[];
+
+  return NextResponse.json({ ok: true, client, orders, wallet: wallet ?? null, wallets, entries, bookings });
 }
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {

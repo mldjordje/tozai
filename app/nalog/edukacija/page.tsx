@@ -2,6 +2,9 @@ import Link from "next/link";
 import { getSessionUser } from "@/lib/auth/user-session";
 import { getPastBookings, getUpcomingBookings, getWalletBalances } from "@/lib/account";
 import { Card, EmptyState, SectionTitle, StatusBadge } from "@/components/nalog/ui";
+import { BookingCalendar } from "@/components/nalog/BookingCalendar";
+import { CancelBooking } from "@/components/nalog/CancelBooking";
+import { belgradeNow, CANCEL_CUTOFF_HOURS, minutesUntil } from "@/lib/booking-slots";
 import {
   BOOKING_STATUS_LABEL,
   HOUR_KIND_LABEL,
@@ -22,6 +25,12 @@ export default async function EdukacijaPage() {
 
   const withHours = wallets.filter((w) => w.purchased > 0);
   const totalLeft = wallets.reduce((sum, w) => sum + w.remaining, 0);
+
+  // The cancel cutoff is decided here rather than in the browser: the client's
+  // clock is whatever the device says, and the API refuses on Belgrade time.
+  const now = belgradeNow();
+  const cancellable = (date: string, slot: string) =>
+    (minutesUntil(date, slot, now) ?? -1) >= CANCEL_CUTOFF_HOURS * 60;
 
   return (
     <div className="space-y-10">
@@ -71,12 +80,13 @@ export default async function EdukacijaPage() {
         </div>
       )}
 
-      {totalLeft > 0 && (
+      {totalLeft >= 1 && <BookingCalendar wallets={wallets} />}
+      {totalLeft > 0 && totalLeft < 1 && (
         <Card className="border-accent/30 bg-accent/5">
           <p className="font-medium text-fg">Zakazivanje termina</p>
           <p className="mt-2 text-sm text-muted">
-            Kalendar sa slobodnim terminima stiže u sledećoj fazi. Do tada javi se za
-            termin i sati će biti skinuti sa stanja ručno.
+            Na stanju ti je ostalo manje od sat vremena — dopuni wallet da bi mogao da
+            zakažeš termin.
           </p>
         </Card>
       )}
@@ -116,6 +126,14 @@ export default async function EdukacijaPage() {
                     Otvori link za sastanak
                   </a>
                 )}
+                {b.status === "zakazano" &&
+                  (cancellable(b.date, b.start_slot) ? (
+                    <CancelBooking id={b.id} />
+                  ) : (
+                    <p className="mt-3 text-sm text-faint">
+                      Termin je bliži od {CANCEL_CUTOFF_HOURS}h — za izmenu nam se javi direktno.
+                    </p>
+                  ))}
               </Card>
             ))}
           </div>

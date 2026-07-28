@@ -46,13 +46,18 @@ export function formatDateShort(value: string | Date | null | undefined) {
   return d.toLocaleDateString("sr-RS", { day: "2-digit", month: "2-digit", year: "numeric" });
 }
 
-// "2 sata" / "5 sati" — Serbian plural for hours, incl. the 21/31 case.
+// "1 sat" / "2 sata" / "5 sati" — Serbian has three forms, keyed on the last
+// digit, with the teens as the exception (12 is "sati", not "sata"). Fractions
+// take the plural: "1,5 sati".
 export function formatHours(hours: number) {
   const rounded = Math.round(hours * 100) / 100;
+  const value = rounded.toLocaleString("sr-RS", { maximumFractionDigits: 2 });
+  if (!Number.isInteger(rounded)) return `${value} sati`;
   const whole = Math.abs(rounded) % 100;
   const last = whole % 10;
-  const word = last === 1 && whole !== 11 ? "sat" : "sati";
-  return `${rounded.toLocaleString("sr-RS", { maximumFractionDigits: 2 })} ${word}`;
+  const teen = whole >= 11 && whole <= 14;
+  const word = teen ? "sati" : last === 1 ? "sat" : last >= 2 && last <= 4 ? "sata" : "sati";
+  return `${value} ${word}`;
 }
 
 /* ------------------------------------------------------------------ status --- */

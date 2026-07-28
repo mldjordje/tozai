@@ -31,6 +31,8 @@ Klijent se prijavljuje Google nalogom. Posle prijave dobija:
 - Slike rezultata: `/admin/rezultati`
 - Tekstovi početne strane: `/admin/sadrzaj`
 - Porudžbine i potvrda uplata: `/admin/porudzbine`
+- Klijenti, ručno dodavanje sati i keš uplata: `/admin/klijenti`
+- Slobodni termini za zakazivanje: `/admin/dostupnost`
 - Podaci firme, banke i faktura: `/admin/podesavanja`
 - Email tekstovi: `/admin/email-sabloni`
 
@@ -46,6 +48,34 @@ Klijent se prijavljuje Google nalogom. Posle prijave dobija:
 7. Klijent na `/nalog/edukacija` vidi raspoložive sate i bira termin.
 
 Pakete, broj sati, cenu, opis i vidljivost menjaš u `/admin/paketi`.
+
+### Kad neko plati kešom
+
+Klijent koji plati na ruke nema porudžbinu u sistemu — upisuješ je ti, u
+`/admin/klijenti`. Otvori klijenta (mora bar jednom da se prijavio Google
+nalogom da bi postojao) i imaš dva dugmeta:
+
+- **Dodaj sate** — sati odmah ulaze u wallet i klijent može da bira termin.
+  Bez fakture, bez porudžbine. Za brz upis kad se dogovorite na licu mesta.
+  Negativan broj je korekcija (skidanje sati koje si dodao greškom).
+- **Evidentiraj paket** — pravi porudžbinu označenu kao plaćenu: izdaje se
+  faktura sa brojem, dodaju se sati ili se otvara projekat, i klijent dobija
+  isti mejl kao da je platio karticom. Ovo koristi kad keš treba da uđe u
+  knjige. Iznos možeš da promeniš ako si dao popust.
+
+Oba upisa se vide u istoriji wallet-a ispod klijenta, tako da se uvek zna
+odakle je koji sat došao.
+
+### Termini i kalendar
+
+1. U `/admin/dostupnost` klikneš dan i uključiš sate koje klijent može da
+   rezerviše. Prazan dan = zatvoreno.
+2. Klijent sa satima na stanju u `/nalog/edukacija` vidi kalendar, bira dan,
+   trajanje (1–4h) i početak. Nudi mu se samo ono što je zaista slobodno.
+3. Rezervacija skida sate sa stanja i zaključava te termine za sve ostale.
+4. Klijent može sam da otkaže najkasnije 24h pre početka — sati mu se tada
+   vraćaju, a termin se oslobađa. Posle toga otkazivanje ide preko tebe.
+5. Svako zakazivanje i otkazivanje ti stiže na mejl studija.
 
 ## 3. Kako radi plaćanje preko predračuna
 

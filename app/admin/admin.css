@@ -328,7 +328,32 @@ button.adm__chip:disabled{opacity:.3;cursor:default;text-decoration:line-through
 .adm__client-note{margin-top:18px}
 .adm__client-note textarea{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:4px;background:rgba(255,255,255,.03);color:#fff;font:inherit;font-size:13px;resize:vertical;margin-bottom:10px}
 .adm__client-note textarea:focus{outline:none;border-color:var(--neon)}
-@media(max-width:700px){.adm__client-main{grid-template-columns:40px 1fr}.adm__client-meta{white-space:normal}.adm__client-cols{grid-template-columns:1fr}}
+.adm__client-bookings{margin-top:18px}
+.adm__client-bookings h4{margin:0 0 10px;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.adm__ledger{list-style:none;margin:10px 0 0;padding:0;display:flex;flex-direction:column;gap:1px;border:1px solid var(--line);border-radius:4px;overflow:hidden}
+.adm__ledger li{display:grid;grid-template-columns:64px 1fr auto;align-items:baseline;gap:10px;padding:8px 12px;background:rgba(255,255,255,.02);font-size:12px}
+.adm__ledger em{font-style:normal;font-variant-numeric:tabular-nums;color:#fff}
+.adm__ledger--plus{color:#7ee2a0!important}
+.adm__ledger--minus{color:#e0837f!important}
+.adm__ledger span{color:#cfc9d8;line-height:1.4}
+.adm__ledger small{color:var(--muted);font-size:11px;white-space:nowrap}
+
+/* Ručno dodavanje sati/paketa — keš plaćanja koja ne prolaze kroz checkout. */
+.adm__grant{margin:0 0 18px;padding:16px;border:1px dashed var(--line);border-radius:6px;background:rgba(46,107,255,.04)}
+.adm__grant h4{margin:0 0 12px;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.adm__grant-cols{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.adm__grant-card{display:flex;flex-direction:column;gap:8px;padding:14px;border:1px solid var(--line);border-radius:4px;background:rgba(255,255,255,.02)}
+.adm__grant-card strong{font-size:13px}
+.adm__grant-card p{margin:0}
+.adm__grant-card input,.adm__grant-card select{width:100%;padding:9px 12px;border:1px solid var(--line);border-radius:4px;background:rgba(255,255,255,.03);color:#fff;font:inherit;font-size:13px}
+.adm__grant-card input:focus,.adm__grant-card select:focus{outline:none;border-color:var(--neon)}
+.adm__grant-row{display:flex;gap:8px;align-items:center}
+.adm__grant-row .adm__hint{white-space:nowrap}
+.adm__grant-card>button{align-self:flex-start;margin-top:2px;padding:9px 18px;border:1px solid var(--neon);border-radius:999px;background:rgba(46,107,255,.16);color:#fff;font-size:10px;letter-spacing:.12em;text-transform:uppercase;cursor:pointer;transition:background .2s}
+.adm__grant-card>button:hover:not(:disabled){background:rgba(46,107,255,.3)}
+.adm__grant-card>button:disabled{opacity:.35;cursor:default}
+.adm__grant>p{margin:12px 0 0}
+@media(max-width:700px){.adm__client-main{grid-template-columns:40px 1fr}.adm__client-meta{white-space:normal}.adm__client-cols{grid-template-columns:1fr}.adm__grant-cols{grid-template-columns:1fr}.adm__ledger li{grid-template-columns:56px 1fr}}
 
 /* ---- Sadržaj (CMS) ---- */
 .adm__content{display:flex;flex-direction:column;gap:24px;max-width:860px}

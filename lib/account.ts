@@ -46,7 +46,9 @@ export type AccountOrder = {
   currency: string;
   status: string;
   flow: string;
-  payment_method: "card" | "invoice" | null;
+  /** `cash` is recorded by the studio for money taken in person — it is never
+   *  selectable at checkout. */
+  payment_method: "card" | "invoice" | "cash" | null;
   payment_reference: string | null;
   payee_name: string | null;
   bank_account: string | null;
@@ -71,10 +73,15 @@ export type AccountInvoice = {
 // so they are separate pots and must never be spent against each other.
 export async function getWalletBalances(userId: number): Promise<WalletBalance[]> {
   const sql = getSql();
+  // A refund is a positive row too, so counting every positive as "purchased"
+  // would inflate the total every time a session is cancelled. Refunds are
+  // excluded from the top line and `used` is derived from the balance, which
+  // makes a booked-then-cancelled hour net out to nothing.
   const rows = (await sql`
     SELECT kind,
-           COALESCE(SUM(hours) FILTER (WHERE hours > 0), 0)::float8 AS purchased,
-           COALESCE(-SUM(hours) FILTER (WHERE hours < 0), 0)::float8 AS used,
+           COALESCE(SUM(hours) FILTER (WHERE hours > 0 AND reason <> 'refund'), 0)::float8 AS purchased,
+           COALESCE(SUM(hours) FILTER (WHERE hours > 0 AND reason <> 'refund'), 0)::float8
+             - COALESCE(SUM(hours), 0)::float8 AS used,
            COALESCE(SUM(hours), 0)::float8 AS remaining
     FROM hour_entries
     WHERE user_id = ${userId}
