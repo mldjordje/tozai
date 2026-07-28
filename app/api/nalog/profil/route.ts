@@ -31,6 +31,7 @@ export async function PATCH(request: Request) {
   const phone = text(body.phone, 40);
   const address = text(body.address, 200);
   const city = text(body.city, 80);
+  const country = text(body.country, 80);
   const companyName = isCompany ? text(body.company_name, 160) : null;
   const pib = isCompany ? text(body.pib, 20) : null;
   const mb = isCompany ? text(body.mb, 20) : null;
@@ -60,6 +61,7 @@ export async function PATCH(request: Request) {
   await sql`
     UPDATE users
     SET name = ${name}, phone = ${phone}, address = ${address}, city = ${city},
+        country = ${country},
         is_company = ${isCompany}, company_name = ${companyName},
         pib = ${pib}, mb = ${mb}
     WHERE id = ${user.uid}

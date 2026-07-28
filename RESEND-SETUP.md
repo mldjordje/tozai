@@ -84,20 +84,24 @@ nalog i proveri da mejl stigne. Isporuka projekta u `/admin/projekti` (status
 
 ---
 
-## Šta se šalje danas
+## Šta se šalje
 
 | Okidač | Kome |
 |---|---|
 | Admin pošalje procenu za AI video | kupcu koji je poslao upit |
 | Admin obeleži projekat kao isporučen | kupcu |
+| Klijent napravi porudžbinu preko računa | kupcu, sa PDF predračunom |
+| Admin potvrdi uplatu | kupcu, sa PDF konačnom fakturom |
+| Admin klikne „Pošalji podsetnik“ | kupcu, ponovo sa PDF predračunom |
 
 Svaki mejl se prvo upisuje u tabelu `email_outbox`, pa tek onda šalje. Ako Resend
 padne ili ključ fali, red ostaje u bazi sa statusom `failed` — ništa se ne gubi.
 
-## Poznata ograničenja (za sledeću fazu)
+## Poznata ograničenja
 
 - **`/admin/email-sabloni` trenutno ne utiče na poslate mejlove.** Šabloni se čuvaju
   u bazi, ali `lib/email.ts` prima tekst koji je već sklopljen na mestu slanja.
   Izmena šablona u panelu neće promeniti ono što kupac dobije dok se to ne poveže.
 - Nema ekrana za `email_outbox` — neuspeli mejlovi se vide samo kroz bazu.
-- Nema automatskog ponovnog slanja neuspelog mejla.
+- Nema automatskog ponovnog slanja neuspelog mejla; poruka ostaje u outbox tabeli
+  radi ručne provere.

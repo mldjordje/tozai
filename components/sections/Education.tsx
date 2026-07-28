@@ -4,33 +4,39 @@ import Reveal from "@/components/ui/Reveal";
 import KineticTitle from "@/components/ui/KineticTitle";
 import CTAButton from "@/components/ui/CTAButton";
 import { HOUR_PACKS, type HourPack } from "@/lib/content/offerings";
-
-const PILLS = ["1-na-1 mentorstvo", "Tvoj tempo", "Konkretno za tvoj biznis"];
+import { DEFAULTS } from "@/lib/content/landing";
 
 /**
  * #edukacija — 1-on-1 education sold as hour-packs. Tiers come from the admin
  * panel via the `packages` table (education rail, passed as props); falls back
  * to the static HOUR_PACKS placeholders when the DB has no active edu rows.
+ * Copy comes from site_content['landing'] the same way.
  */
-export default function Education({ packs = HOUR_PACKS }: { packs?: HourPack[] }) {
+export default function Education({
+  packs = HOUR_PACKS,
+  eyebrow = DEFAULTS.education_eyebrow,
+  title = DEFAULTS.education_title,
+  body = DEFAULTS.education_body,
+  pills = DEFAULTS.education_pills,
+}: {
+  packs?: HourPack[];
+  eyebrow?: string;
+  title?: string;
+  body?: string;
+  pills?: string[];
+}) {
   return (
     <section
       id="edukacija"
       className="relative flex min-h-[100svh] items-center px-6 py-28 md:px-12"
     >
       <div className="w-full max-w-6xl">
-        <p className="eyebrow mb-5">03 — Privatna edukacija</p>
-        <KineticTitle
-          text="Nauči da praviš sadržaj *koji prodaje*."
-          className="display max-w-3xl text-4xl md:text-7xl"
-        />
+        <p className="eyebrow mb-5">{eyebrow}</p>
+        <KineticTitle text={title} className="display max-w-3xl text-4xl md:text-7xl" />
         <Reveal delay={0.12}>
-          <p className="mt-7 max-w-xl text-muted md:text-lg">
-            1-na-1 mentorstvo. Kupuješ sate, rezervišeš termin, učiš tačno ono
-            što tvom biznisu treba.
-          </p>
+          <p className="mt-7 max-w-xl text-muted md:text-lg">{body}</p>
           <div className="mt-8 flex flex-wrap gap-3">
-            {PILLS.map((pill) => (
+            {pills.map((pill) => (
               <span
                 key={pill}
                 className="rounded-full border border-line bg-bg-elev/40 px-4 py-2 text-sm text-fg/90 backdrop-blur-md"

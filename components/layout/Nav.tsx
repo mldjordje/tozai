@@ -8,11 +8,15 @@ import BrandLogo from "@/components/brand/Logo";
 // numbers when they asked for offerings. The section ids stay as they are
 // (LatentBackground times its formations off them); the menu points at what the
 // label promises instead.
+// Hash links resolve against the landing, so they are written with a leading
+// "/" — the same header renders on /portfolio, where a bare "#paketi" would
+// scroll to nothing.
 const LINKS = [
-  { href: "#portfolio", label: "Rezultati" },
-  { href: "#paketi", label: "Paketi" },
-  { href: "#edukacija", label: "Edukacija" },
-  { href: "#booking", label: "Kontakt" },
+  { href: "/#portfolio", label: "Rezultati" },
+  { href: "/portfolio", label: "Radovi" },
+  { href: "/#paketi", label: "Paketi" },
+  { href: "/#edukacija", label: "Edukacija" },
+  { href: "/#booking", label: "Kontakt" },
 ];
 
 export default function Nav({
@@ -35,7 +39,7 @@ export default function Nav({
     >
       <nav className="mx-auto flex max-w-7xl items-center justify-between px-6 py-5 md:px-12">
         <a
-          href="#top"
+          href="/#top"
           aria-label="TOZA AI — početna"
           className="text-lg text-fg"
         >

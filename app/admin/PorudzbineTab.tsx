@@ -23,6 +23,10 @@ type OrderRow = {
   user_name: string | null;
   user_phone: string | null;
   invoice_number: string | null;
+  proforma_number: string | null;
+  proforma_id: number | null;
+  payment_method: "card" | "invoice" | null;
+  payment_reference: string | null;
   project_id: number | null;
   project_status: string | null;
 };
@@ -105,6 +109,26 @@ export function PorudzbineTab() {
     }
   }
 
+  async function sendReminder(id: number) {
+    setBusy(id);
+    setError(null);
+    try {
+      const response = await fetch("/api/admin/porudzbine", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, action: "payment-reminder" }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data.ok) {
+        setError(data.message ?? "Podsetnik nije poslat.");
+      }
+    } catch {
+      setError("Podsetnik nije poslat.");
+    } finally {
+      setBusy(null);
+    }
+  }
+
   return (
     <div className="adm__orders">
       <div>
@@ -160,6 +184,8 @@ export function PorudzbineTab() {
                   {order.flow === "hours" && order.hours != null && <span>{order.hours} sati</span>}
                   {order.user_email && <a href={`mailto:${order.user_email}`}>{order.user_email}</a>}
                   {order.invoice_number && <span>Faktura {order.invoice_number}</span>}
+                  {order.proforma_number && <span>Predračun {order.proforma_number}</span>}
+                  {order.payment_reference && <span>Poziv na broj: {order.payment_reference}</span>}
                   {order.project_id && (
                     <Link href="/admin/projekti">Projekat #{order.project_id}</Link>
                   )}
@@ -173,6 +199,11 @@ export function PorudzbineTab() {
                     <button onClick={() => setConfirming(confirming === order.id ? null : order.id)}>
                       {confirming === order.id ? "Odustani" : "Označi kao plaćeno"}
                     </button>
+                    {order.payment_method === "invoice" && (
+                      <button disabled={busy === order.id} onClick={() => sendReminder(order.id)}>
+                        {busy === order.id ? "Šaljem…" : "Pošalji podsetnik"}
+                      </button>
+                    )}
                   </div>
                 )}
 

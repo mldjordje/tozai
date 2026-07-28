@@ -11,3 +11,7 @@ neon.txt
 
 # dev-server build dir (see distDir in next.config.ts)
 /.next-dev
+
+# graphify knowledge graph (local index, rebuild with `graphify update`)
+/graphify-out
+/tmp

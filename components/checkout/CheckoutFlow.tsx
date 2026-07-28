@@ -35,6 +35,7 @@ type Profile = {
   mb: string | null;
   address: string | null;
   city: string | null;
+  country?: string | null;
 };
 
 type ManualIntent = {
@@ -48,9 +49,10 @@ type RedirectIntent = { kind: "redirect"; redirectUrl: string };
 type FormIntent = { kind: "form"; action: string; fields: Record<string, string> };
 type Intent = ManualIntent | RedirectIntent | FormIntent;
 
-/** Mirrors PaymentMode in lib/payments/provider — duplicated rather than
+/** Mirrors the server payment types — duplicated rather than
  *  imported so this client component pulls in no server-only module. */
-type PaymentMode = "card" | "manual" | "test";
+type PaymentMethod = "card" | "invoice";
+type PaymentAvailability = { card: boolean; invoice: boolean; cardIsTest: boolean };
 
 function money(amount: number | null, currency: string) {
   if (amount == null) return "€—";
@@ -58,18 +60,18 @@ function money(amount: number | null, currency: string) {
   return `${symbol}${amount.toLocaleString("sr-RS", { maximumFractionDigits: 2 })}`;
 }
 
-const STEPS = ["Nalog", "Podaci za račun", "Pregled"] as const;
+const STEPS = ["Nalog", "Podaci za račun", "Plaćanje", "Pregled"] as const;
 
 export default function CheckoutFlow({
   pkg,
   user,
   profile,
-  paymentMode,
+  paymentAvailability,
 }: {
   pkg: Pkg;
   user: { email: string; name: string | null } | null;
   profile: Profile | null;
-  paymentMode: PaymentMode;
+  paymentAvailability: PaymentAvailability;
 }) {
   // Signed-in buyers skip straight to billing; there is nothing to do on step 1.
   const [step, setStep] = useState(user ? 1 : 0);
@@ -82,7 +84,11 @@ export default function CheckoutFlow({
     mb: profile?.mb ?? "",
     address: profile?.address ?? "",
     city: profile?.city ?? "",
+    country: profile?.country ?? "Srbija",
   });
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(
+    paymentAvailability.card ? "card" : "invoice",
+  );
   const [consent, setConsent] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -109,7 +115,7 @@ export default function CheckoutFlow({
       const res = await fetch("/api/nalog/porudzbina", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ slug: pkg.slug, isCompany, ...form }),
+        body: JSON.stringify({ slug: pkg.slug, paymentMethod, isCompany, ...form }),
       });
       const data = await res.json();
       if (!res.ok || !data.ok) {
@@ -182,6 +188,14 @@ export default function CheckoutFlow({
                 valid={Boolean(billingValid)}
                 onNext={() => setStep(2)}
               />
+            ) : step === 2 ? (
+              <PaymentStep
+                availability={paymentAvailability}
+                value={paymentMethod}
+                onChange={setPaymentMethod}
+                onBack={() => setStep(1)}
+                onNext={() => setStep(3)}
+              />
             ) : (
               <ReviewStep
                 pkg={pkg}
@@ -193,8 +207,9 @@ export default function CheckoutFlow({
                 busy={busy}
                 error={error}
                 priceUnavailable={priceUnavailable}
-                paymentMode={paymentMode}
-                onBack={() => setStep(1)}
+                paymentMethod={paymentMethod}
+                cardIsTest={paymentAvailability.cardIsTest}
+                onBack={() => setStep(2)}
                 onSubmit={submit}
               />
             )}
@@ -358,6 +373,13 @@ function BillingStep({
             <Field label="Grad" value={form.city} onChange={s("city")} />
           </>
         )}
+        <Field
+          label="Država"
+          value={form.country}
+          onChange={s("country")}
+          placeholder="Srbija"
+          hint="Za kupce van Srbije faktura je na engleskom i u EUR."
+        />
       </div>
 
       <button
@@ -374,6 +396,85 @@ function BillingStep({
 
 /* -------------------------------------------------------------- step 3 --- */
 
+function PaymentStep({
+  availability,
+  value,
+  onChange,
+  onBack,
+  onNext,
+}: {
+  availability: PaymentAvailability;
+  value: PaymentMethod;
+  onChange: (value: PaymentMethod) => void;
+  onBack: () => void;
+  onNext: () => void;
+}) {
+  const options: {
+    value: PaymentMethod;
+    title: string;
+    description: string;
+    available: boolean;
+  }[] = [
+    {
+      value: "card",
+      title: availability.cardIsTest ? "Kartica — test režim" : "Platna kartica",
+      description: availability.cardIsTest
+        ? "Naplata je isključena; porudžbina se odmah označava kao plaćena."
+        : availability.card
+          ? "Nastavljaš na sigurnu stranicu procesora plaćanja."
+          : "Kartično plaćanje uskoro stiže.",
+      available: availability.card,
+    },
+    {
+      value: "invoice",
+      title: "Predračun / uplata na račun",
+      description:
+        "Odmah dobijaš predračun i podatke za uplatu. Konačna faktura stiže kad evidentiramo uplatu.",
+      available: true,
+    },
+  ];
+
+  return (
+    <div className="max-w-xl">
+      <h2 className="display text-3xl md:text-4xl">Kako želiš da platiš?</h2>
+      <div className="mt-9 grid gap-4">
+        {options.map((option) => (
+          <button
+            key={option.value}
+            type="button"
+            disabled={!option.available}
+            onClick={() => onChange(option.value)}
+            className={`rounded-2xl border p-6 text-left transition-colors ${
+              value === option.value
+                ? "border-accent-soft bg-bg-elev"
+                : "border-line bg-bg-elev/30 hover:border-faint"
+            } disabled:cursor-not-allowed disabled:opacity-45`}
+          >
+            <span className="text-sm font-medium text-fg">{option.title}</span>
+            <span className="mt-2 block text-sm leading-relaxed text-muted">
+              {option.description}
+            </span>
+          </button>
+        ))}
+      </div>
+      <div className="mt-10 flex gap-5">
+        <button
+          type="button"
+          onClick={onNext}
+          className="rounded-full bg-fg px-8 py-3.5 text-sm font-medium text-bg hover:bg-white"
+        >
+          Nastavi na pregled
+        </button>
+        <button type="button" onClick={onBack} className="text-sm text-muted hover:text-fg">
+          Nazad
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------- step 4 --- */
+
 function ReviewStep({
   pkg,
   form,
@@ -384,7 +485,8 @@ function ReviewStep({
   busy,
   error,
   priceUnavailable,
-  paymentMode,
+  paymentMethod,
+  cardIsTest,
   onBack,
   onSubmit,
 }: {
@@ -397,7 +499,8 @@ function ReviewStep({
   busy: boolean;
   error: string | null;
   priceUnavailable: boolean;
-  paymentMode: PaymentMode;
+  paymentMethod: PaymentMethod;
+  cardIsTest: boolean;
   onBack: () => void;
   onSubmit: () => void;
 }) {
@@ -418,11 +521,11 @@ function ReviewStep({
       {/* Payment method, stated before they commit rather than after. */}
       <div className="mt-9 rounded-2xl border border-line bg-bg-elev/40 p-6">
         <p className="text-xs uppercase tracking-[0.2em] text-faint">Način plaćanja</p>
-        {paymentMode === "card" ? (
+        {paymentMethod === "card" && !cardIsTest ? (
           <p className="mt-3 text-sm text-muted">
             Bićeš prebačen na sigurnu stranicu za plaćanje karticom.
           </p>
-        ) : paymentMode === "test" ? (
+        ) : paymentMethod === "card" ? (
           <>
             <p className="mt-3 text-sm text-amber-300/90">TEST REŽIM — naplata je isključena</p>
             <p className="mt-2 text-sm leading-relaxed text-muted">

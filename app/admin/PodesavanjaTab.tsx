@@ -7,6 +7,9 @@ type Settings = Record<string, string | null>;
 const EMPTY: Settings = {
   name: "TOZA AI", logo_url: "", currency: "EUR", locale: "sr", phone: "", email: "",
   address: "", city: "", company_name: "", pib: "", mb: "", bank_account: "",
+  iban: "", swift: "", bank_name: "", bank_address: "",
+  vat_note_domestic: "", vat_note_foreign: "", invoice_due_days: "5",
+  activity_code: "", registration_number: "",
   instagram: "", tiktok: "", youtube: "", linkedin: "",
 };
 
@@ -31,6 +34,25 @@ const SECTIONS: { title: string; fields: { key: string; label: string; placehold
       { key: "pib", label: "PIB" },
       { key: "mb", label: "Matični broj" },
       { key: "bank_account", label: "Žiro račun" },
+      { key: "activity_code", label: "Šifra delatnosti" },
+      { key: "registration_number", label: "Broj rešenja / registracije" },
+      { key: "invoice_due_days", label: "Rok plaćanja (dana)", placeholder: "5" },
+    ],
+  },
+  {
+    title: "Devizno plaćanje",
+    fields: [
+      { key: "iban", label: "IBAN" },
+      { key: "swift", label: "SWIFT / BIC" },
+      { key: "bank_name", label: "Naziv banke" },
+      { key: "bank_address", label: "Adresa banke" },
+    ],
+  },
+  {
+    title: "Napomene na fakturi (potvrditi sa knjigovođom)",
+    fields: [
+      { key: "vat_note_domestic", label: "Domaća PDV napomena" },
+      { key: "vat_note_foreign", label: "Inostrana VAT napomena (engleski)" },
     ],
   },
   {

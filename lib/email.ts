@@ -1,13 +1,15 @@
 import "server-only";
 import { getSql } from "@/lib/db";
+import { resendPayload, type EmailAttachment } from "@/lib/email-payload";
 
-type EmailInput = {
+export type EmailInput = {
   /** Null for mail addressed to the studio rather than to a customer. */
   userId: number | null;
   recipient: string;
   templateKey: string;
   subject: string;
   body: string;
+  attachments?: EmailAttachment[];
 };
 
 /**
@@ -17,8 +19,11 @@ type EmailInput = {
 export async function queueTransactionalEmail(input: EmailInput) {
   const sql = getSql();
   const rows = (await sql`
-    INSERT INTO email_outbox (user_id, recipient, template_key, subject, body)
-    VALUES (${input.userId}, ${input.recipient}, ${input.templateKey}, ${input.subject}, ${input.body})
+    INSERT INTO email_outbox (user_id, recipient, template_key, subject, body, attachments)
+    VALUES (
+      ${input.userId}, ${input.recipient}, ${input.templateKey}, ${input.subject}, ${input.body},
+      ${JSON.stringify((input.attachments ?? []).map(({ filename }) => ({ filename })))}::jsonb
+    )
     RETURNING id
   `) as { id: number }[];
   const outboxId = rows[0].id;
@@ -33,13 +38,15 @@ export async function queueTransactionalEmail(input: EmailInput) {
       headers: {
         Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
+        "Idempotency-Key": `tozai-outbox-${outboxId}`,
       },
-      body: JSON.stringify({
+      body: JSON.stringify(resendPayload({
         from,
-        to: [input.recipient],
+        recipient: input.recipient,
         subject: input.subject,
-        text: input.body,
-      }),
+        body: input.body,
+        attachments: input.attachments,
+      })),
     });
     const result = (await response.json()) as { id?: string; message?: string };
     if (!response.ok) throw new Error(result.message ?? `Email HTTP ${response.status}`);

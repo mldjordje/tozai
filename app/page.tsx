@@ -15,17 +15,13 @@ import Education from "@/components/sections/Education";
 import { getPublicPackages, type Package } from "@/lib/packages";
 import { getPublicContact } from "@/lib/settings";
 import { toClipPackage, toHourPack } from "@/lib/content/offerings";
+import { getLandingContent } from "@/lib/content/landing.server";
+import { getPublicResultShots } from "@/lib/results";
 
-// Pricing is admin-driven (packages table). ISR keeps the landing fast; the
-// admin write routes revalidatePath("/") so edits go live within a click.
+// Pricing AND copy are admin-driven (packages + site_content tables). ISR keeps
+// the landing fast; the admin write routes revalidatePath("/") so edits go live
+// within a click.
 export const revalidate = 60;
-
-const STATS = [
-  { value: "16M+", label: "Monthly Views" },
-  { value: "5000+", label: "AI Videos Created" },
-  { value: "100+", label: "Clients" },
-  { value: "2+", label: "Years Creating Content" },
-];
 
 // Every CTA on this page has to land on something a buyer can complete. The
 // destinations are derived from the packages table rather than hard-coded, so a
@@ -41,10 +37,12 @@ function pickFeatured(items: Package[]): Package | undefined {
 }
 
 export default async function Home() {
-  const [services, education, contact] = await Promise.all([
+  const [services, education, contact, copy, shots] = await Promise.all([
     getPublicPackages("services"),
     getPublicPackages("education"),
     getPublicContact(),
+    getLandingContent(),
+    getPublicResultShots(),
   ]);
   const projects = services.filter((item) => item.flow === "project");
   const clipPackages = projects.map(toClipPackage);
@@ -64,26 +62,31 @@ export default async function Home() {
     <>
       <Preloader />
       <LatentBackground />
-      <Nav ctaHref={inquiryHref} ctaLabel="Pošalji upit" />
+      <Nav ctaHref={inquiryHref} ctaLabel={copy.results_cta} />
 
       <main className="relative">
         <Hero
           primaryHref={inquiryHref}
-          primaryLabel="Poruči AI video"
+          primaryLabel={copy.hero_cta_primary}
           secondaryHref="#paketi"
-          secondaryLabel="Pogledaj pakete"
+          secondaryLabel={copy.hero_cta_secondary}
+          eyebrow={copy.hero_eyebrow}
+          title={copy.hero_title}
+          lead1={copy.hero_lead_1}
+          lead2={copy.hero_lead_2}
+          body={copy.hero_body}
         />
 
         {/* Brojevi */}
         <PinnedSection id="services">
           <div className="w-full max-w-6xl">
-            <p className="eyebrow mb-5">01 — Brojevi</p>
+            <p className="eyebrow mb-5">{copy.stats_eyebrow}</p>
             <KineticTitle
-              text="Brojevi koji rade *za sebe*."
+              text={copy.stats_title}
               className="display mb-16 max-w-2xl text-4xl md:mb-24 md:text-7xl"
             />
             <div className="grid grid-cols-2 gap-x-8 gap-y-14 md:grid-cols-4">
-              {STATS.map((s, i) => (
+              {copy.stats.map((s, i) => (
                 <Reveal key={s.label} delay={i * 0.09}>
                   <CountUp
                     value={s.value}
@@ -98,16 +101,36 @@ export default async function Home() {
           </div>
         </PinnedSection>
 
-        <TextStrip />
+        <TextStrip items={copy.strip_items} />
 
         {/* Proof — pinned horizontal showcase */}
-        <ResultsShowcase ctaHref={inquiryHref} />
+        <ResultsShowcase
+          ctaHref={inquiryHref}
+          shots={shots.length ? shots : undefined}
+          eyebrow={copy.results_eyebrow}
+          title={copy.results_title}
+          body={copy.results_body}
+          cardTitle={copy.results_card_title}
+          ctaLabel={copy.results_cta}
+        />
 
         {/* Paketi — buy AI clips (admin-driven, static fallback) */}
-        <Packages packages={clipPackages.length ? clipPackages : undefined} />
+        <Packages
+          packages={clipPackages.length ? clipPackages : undefined}
+          eyebrow={copy.packages_eyebrow}
+          title={copy.packages_title}
+          body={copy.packages_body}
+          note={copy.packages_note}
+        />
 
         {/* Edukacija — buy 1-on-1 hour packs (admin-driven, static fallback) */}
-        <Education packs={hourPacks.length ? hourPacks : undefined} />
+        <Education
+          packs={hourPacks.length ? hourPacks : undefined}
+          eyebrow={copy.education_eyebrow}
+          title={copy.education_title}
+          body={copy.education_body}
+          pills={copy.education_pills}
+        />
 
         {/* Booking */}
         <PinnedSection id="booking" hold={0.7} className="justify-center text-center">
@@ -118,11 +141,11 @@ export default async function Home() {
                   <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
                   <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400" />
                 </span>
-                Odgovaramo u roku od 24h
+                {copy.booking_badge}
               </p>
             </Reveal>
             <KineticTitle
-              text="Hajde da napravimo *tvoj sadržaj*."
+              text={copy.booking_title}
               className="display mx-auto max-w-4xl text-5xl md:text-8xl"
             />
             <Reveal delay={0.25}>
@@ -131,7 +154,7 @@ export default async function Home() {
                   scroll. Both options now open a checkout they can finish. */}
               <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
                 <CTAButton href={inquiryHref} size="lg">
-                  Pošalji upit
+                  {copy.booking_cta_primary}
                 </CTAButton>
                 <CTAButton href={consultHref} variant="ghost" size="lg">
                   {consultLabel}
@@ -140,7 +163,7 @@ export default async function Home() {
             </Reveal>
             <Reveal delay={0.35}>
               <p className="mt-7 text-sm text-faint">
-                Upit je besplatan i ne obavezuje te.
+                {copy.booking_note}
                 {contact.email && (
                   <>
                     {" "}
@@ -160,7 +183,12 @@ export default async function Home() {
         </PinnedSection>
       </main>
 
-      <Footer contact={contact} inquiryHref={inquiryHref} />
+      <Footer
+        contact={contact}
+        inquiryHref={inquiryHref}
+        tagline={copy.footer_tagline}
+        response={copy.footer_response}
+      />
     </>
   );
 }

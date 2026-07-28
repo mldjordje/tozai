@@ -32,12 +32,18 @@ await sql`
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
   )
 `;
-const ownerEmail = (process.env.OWNER_EMAIL ?? "owner@tozai.local").toLowerCase();
-await sql`
-  INSERT INTO staff (email, name, role)
-  SELECT ${ownerEmail}, 'Owner', 'owner'
-  WHERE NOT EXISTS (SELECT 1 FROM staff WHERE role = 'owner')
-`;
+const ownerEmails = [
+  "svetozartoza.markovic02@gmail.com",
+  "tozaayt@gmail.com",
+];
+for (const email of ownerEmails) {
+  await sql`
+    INSERT INTO staff (email, name, role, active)
+    VALUES (${email}, 'Owner', 'owner', true)
+    ON CONFLICT (email) DO UPDATE SET role = 'owner', active = true
+  `;
+}
+await sql`DELETE FROM staff WHERE email = 'owner@tozai.local'`;
 
 /* --------------------------------------------------------------- clients --- */
 // CRM: clients register via Google (later) or are created at checkout. Company
@@ -185,6 +191,9 @@ const templates = [
   { key: "project_status", name: "Status projekta", subject: "Update na tvom projektu", body: "Zdravo {{ime}},\n\nStatus tvog projekta: {{status}}.\n\nTOZA AI" },
   { key: "project_done", name: "Završetak projekta", subject: "Tvoj projekat je gotov 🎉", body: "Zdravo {{ime}},\n\nProjekat je završen. Materijali su ti dostupni na dashboardu.\n\nTOZA AI" },
   { key: "video_quote", name: "Procena za AI video", subject: "Stigla je procena za {{projekat}}", body: "Zdravo {{ime}},\n\nTvoja procena je spremna: {{cena}}, vreme izrade {{vreme}} dana. Ponuda važi do {{vazi_do}}.\n\nOtvori svoj TOZA AI nalog da pregledaš i potvrdiš ponudu.\n\n{{link}}\n\nTOZA AI" },
+  { key: "proforma_issued", name: "Izdat predračun", subject: "Predračun {{broj}} — TOZA AI", body: "Zdravo {{ime}},\n\nU prilogu je predračun {{broj}} sa podacima za uplatu.\n\nTOZA AI" },
+  { key: "invoice_issued", name: "Izdata faktura", subject: "Faktura {{broj}} — TOZA AI", body: "Zdravo {{ime}},\n\nU prilogu je konačna faktura {{broj}}.\n\nTOZA AI" },
+  { key: "payment_reminder", name: "Podsetnik za uplatu", subject: "Podsetnik za predračun {{broj}}", body: "Zdravo {{ime}},\n\nLjubazan podsetnik da predračun {{broj}} još čeka uplatu. Dokument je ponovo u prilogu.\n\nTOZA AI" },
 ];
 for (const t of templates) {
   await sql`
@@ -491,6 +500,7 @@ await sql`
   )
 `;
 await sql`CREATE INDEX IF NOT EXISTS email_outbox_status ON email_outbox (status, created_at)`;
+await sql`ALTER TABLE email_outbox ADD COLUMN IF NOT EXISTS attachments JSONB NOT NULL DEFAULT '[]'::jsonb`;
 
 /* -------------------------------------------------------------- bookings --- */
 // A session booked against the hour wallet. `booking_slots` carries one row per
@@ -561,8 +571,134 @@ await sql`
   GROUP BY user_id
 `;
 
+/* =========================================================================
+   Payment method + invoicing.
+   The buyer chooses card or bank transfer at checkout; choosing transfer
+   issues a proforma immediately and the final invoice only once the money is
+   confirmed (a flat-tax business records income on receipt, so an invoice
+   before payment would be wrong).
+   ======================================================================== */
+
+// NULL, not a default: orders placed before the choice existed genuinely had
+// no method, and pretending otherwise would falsify the history.
+await sql`ALTER TABLE orders ADD COLUMN IF NOT EXISTS payment_method TEXT`;
+
+// One order now has up to two documents — the proforma the buyer pays against
+// and the invoice issued after it clears — so `kind` is what distinguishes
+// them and the "already invoiced" guards must be kind-aware.
+await sql`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS kind TEXT NOT NULL DEFAULT 'invoice'`;
+await sql`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS scope TEXT NOT NULL DEFAULT 'domestic'`;
+await sql`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS issued_at DATE`;
+await sql`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS due_date DATE`;
+await sql`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS blob_pathname TEXT`;
+// The document must keep the numbers it was printed with. A rate looked up
+// again next month would silently restate an issued invoice.
+await sql`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS amount_rsd NUMERIC`;
+await sql`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS fx_rate NUMERIC`;
+await sql`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS fx_date DATE`;
+// Buyer details frozen at issue time, same reasoning as orders.billing.
+await sql`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS buyer JSONB`;
+await sql`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS item TEXT`;
+await sql`UPDATE invoices SET issued_at = created_at::date WHERE issued_at IS NULL`;
+// At most one proforma and one invoice per order — the guard that makes
+// re-running fulfilment idempotent.
+await sql`CREATE UNIQUE INDEX IF NOT EXISTS invoices_order_kind ON invoices (order_id, kind)`;
+
+// Payee details. `bank_account` is the domestic dinar account; IBAN/SWIFT are
+// the foreign-currency ones, which a Serbian flat-tax business needs before it
+// can be paid from abroad at all.
+await sql`ALTER TABLE studio_settings ADD COLUMN IF NOT EXISTS iban TEXT`;
+await sql`ALTER TABLE studio_settings ADD COLUMN IF NOT EXISTS swift TEXT`;
+await sql`ALTER TABLE studio_settings ADD COLUMN IF NOT EXISTS bank_name TEXT`;
+await sql`ALTER TABLE studio_settings ADD COLUMN IF NOT EXISTS bank_address TEXT`;
+await sql`ALTER TABLE studio_settings ADD COLUMN IF NOT EXISTS activity_code TEXT`;
+await sql`ALTER TABLE studio_settings ADD COLUMN IF NOT EXISTS registration_number TEXT`;
+// The VAT sentence is legal text, not copy: it is left for the studio's
+// accountant to fill in rather than guessed at here, and it is printed on
+// every document verbatim.
+await sql`ALTER TABLE studio_settings ADD COLUMN IF NOT EXISTS vat_note_domestic TEXT`;
+await sql`ALTER TABLE studio_settings ADD COLUMN IF NOT EXISTS vat_note_foreign TEXT`;
+await sql`ALTER TABLE studio_settings ADD COLUMN IF NOT EXISTS invoice_due_days INT NOT NULL DEFAULT 5`;
+await sql`
+  UPDATE studio_settings
+  SET vat_note_domestic = COALESCE(vat_note_domestic, 'POPUNITI SA KNJIGOVOĐOM — napomena o PDV-u (paušalac nije u sistemu PDV-a).'),
+      vat_note_foreign = COALESCE(vat_note_foreign, 'FILL IN WITH ACCOUNTANT — VAT note for services supplied to a foreign business.')
+  WHERE id = 1
+`;
+
+// Country decides which invoice template a buyer gets. Serbia (or unset) is
+// domestic; anything else is the foreign, English, EUR document.
+await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS country TEXT`;
+
+/* ------------------------------------------------- portfolio: YouTube --- */
+// Works are published Shorts, not uploaded files: the studio pastes the link it
+// got from YouTube and the public page embeds it. `media_url` keeps the pasted
+// URL (so the admin sees what it typed) while `youtube_id` is the parsed id the
+// player actually needs — parsing on every render would repeat the same work
+// and hide a bad link until someone visits the page.
+//
+// media_type gains the value 'youtube' alongside the existing 'image'/'video'
+// rows, which stay valid for anything hosted in Blob.
+// Visibility already has a flag — `featured`, which the admin UI labels
+// "Prikaži na sajtu". Adding an `active` beside it would give the studio two
+// switches for one decision.
+await sql`ALTER TABLE portfolio_works ADD COLUMN IF NOT EXISTS youtube_id TEXT`;
+await sql`CREATE INDEX IF NOT EXISTS portfolio_works_sort ON portfolio_works (sort, id)`;
+
+/* ---------------------------------------------------------- result shots --- */
+// The proof rail on the landing (#portfolio): screenshots of the accounts the
+// studio runs. Uploaded from /admin/rezultati straight to Vercel Blob.
+//
+// `blob_pathname` is what makes deleting a row also delete the file — without
+// it the store silently fills with images nothing references any more. It is
+// NULL for the shots that shipped in /public, which must not be deleted.
+//
+// `width`/`height` are the natural pixel size, read in the browser before
+// upload: next/image needs them, and deriving them from the `wide` flag (as the
+// hard-coded version did) distorts anything with a different aspect ratio.
+await sql`
+  CREATE TABLE IF NOT EXISTS result_shots (
+    id SERIAL PRIMARY KEY,
+    image_url TEXT NOT NULL,
+    blob_pathname TEXT,
+    alt TEXT NOT NULL DEFAULT '',
+    handle TEXT NOT NULL DEFAULT '',
+    stat TEXT NOT NULL DEFAULT '',
+    width INT,
+    height INT,
+    wide BOOLEAN NOT NULL DEFAULT false,
+    sort INT NOT NULL DEFAULT 0,
+    active BOOLEAN NOT NULL DEFAULT true,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  )
+`;
+await sql`CREATE INDEX IF NOT EXISTS result_shots_sort ON result_shots (sort, id) WHERE active`;
+
+// Seed the six shots that were hard-coded in ResultsShowcase, so the studio
+// opens the tab and finds its existing proof already editable instead of a
+// blank page.
+const shotCount = await sql`SELECT count(*)::int AS count FROM result_shots`;
+if (shotCount[0].count === 0) {
+  const shots = [
+    { image_url: "/media/results/ig-toza.png", handle: "toza.aii", stat: "187K pratilaca · Instagram", alt: "toza.aii — Instagram profil, 187K pratilaca, verifikovan", wide: true, width: 1358, height: 1158 },
+    { image_url: "/media/results/tt-toza.png", handle: "@tozaai", stat: "69.5K pratilaca · 609K lajkova", alt: "Toza Ai — TikTok profil, 69.5K pratilaca, 609K lajkova", wide: false, width: 853, height: 1846 },
+    { image_url: "/media/rezultati.png", handle: "TikTok Insights", stat: "43K+ lajkova po objavi", alt: "TikTok Insights — desetine hiljada lajkova po objavi", wide: false, width: 853, height: 1846 },
+    { image_url: "/media/results/tt-darija.png", handle: "@darijaaai", stat: "22.1K pratilaca · 753K lajkova", alt: "Darija Ai — TikTok profil, 22.1K pratilaca, 753K lajkova", wide: false, width: 853, height: 1846 },
+    { image_url: "/media/results/ig-kaja.png", handle: "kajasretic", stat: "12.3K pratilaca · Instagram", alt: "Kaja Sretic — Instagram AI profil, 12.3K pratilaca", wide: true, width: 1358, height: 1158 },
+    { image_url: "/media/results/tt-kajina.png", handle: "kajina.perspektiva", stat: "15.3K pratilaca · 183K lajkova", alt: "kajina.perspektiva — TikTok profil, 15.3K pratilaca, 183K lajkova", wide: false, width: 853, height: 1846 },
+  ];
+  for (let i = 0; i < shots.length; i++) {
+    const s = shots[i];
+    await sql`
+      INSERT INTO result_shots (image_url, alt, handle, stat, width, height, wide, sort)
+      VALUES (${s.image_url}, ${s.alt}, ${s.handle}, ${s.stat}, ${s.width}, ${s.height}, ${s.wide}, ${i})
+    `;
+  }
+  console.log("result_shots seeded (6 shots migrated from the hard-coded rail).");
+}
+
 console.log("✅ TOZA AI schema ready:");
 console.log("   staff, users, packages, portfolio_categories/works, faq,");
 console.log("   email_templates, availability_days, hour_entries (+education_wallet view),");
 console.log("   orders, invoices, projects (+updates/deliverables),");
-console.log("   bookings (+booking_slots), site_content, studio_settings.");
+console.log("   bookings (+booking_slots), site_content, studio_settings, result_shots.");

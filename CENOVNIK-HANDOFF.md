@@ -1,7 +1,7 @@
-# Cenovnik — handoff for the public pricing section
+# Cenovnik — stanje i korišćenje
 
-The admin side is done. The public "Cenovnik" section on the landing must read
-the **same `packages` table** the admin edits. Do **not** invent a second store.
+Admin i javni cenovnik su povezani. Sve što se sačuva u `/admin/paketi` čita se
+iz iste `packages` tabele i prikazuje na početnoj strani.
 
 ## Data contract
 
@@ -35,7 +35,7 @@ const education = await getPublicPackages("education");   // hour packs 2/5/10/2
 | `sort`        | number     | already ordered by the helper                     |
 | `active`      | boolean    | helper only returns `active = true`               |
 
-## Rules
+## Pravila koja su implementirana
 
 - Za `flow='project'` (AI video) javna kartica **nikada ne renderuje `price`**,
   čak i kada admin interno čuva referentnu cenu. CTA vodi na privatni upit.
@@ -45,15 +45,13 @@ const education = await getPublicPackages("education");   // hour packs 2/5/10/2
 - The helper already filters `active` and orders by `sort`. Don't re-sort.
 - If the table is unreachable the helper returns `[]` — render an empty/fallback
   state, don't crash.
-- The landing is fine to ISR-cache; the admin PATCH/POST routes should
-  `revalidatePath("/")` if you add caching (currently they don't cache).
+- Admin izmene revalidiraju početnu stranicu.
 - Seeded rows already exist (6 services + 4 education packs) so you have live
   data to design against right now.
 
-## Admin side (already built — for reference)
+## Admin
 
 - Editor: `app/admin/PaketiTab.tsx` → `/admin/paketi`
 - API: `app/api/admin/packages/route.ts` (GET all / POST / PATCH / DELETE)
 
-Everything the owner edits in `/admin/paketi` flows straight to `packages`, so
-your public section updates the moment they save (subject to any cache you add).
+Za klijentsko uputstvo vidi `KLIJENT-HANDOFF-2026-07.md`.

@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { getSql } from "@/lib/db";
 import { getSessionUser } from "@/lib/auth/user-session";
 import { getPackageBySlug } from "@/lib/packages";
-import { getPaymentProvider } from "@/lib/payments/provider";
+import { defaultPaymentMethod, getProviderFor } from "@/lib/payments/provider";
+import { issueInvoice } from "@/lib/invoices/issue";
 import { queueQuietly, queueStudioNotice } from "@/lib/email";
 import {
   cleanText,
@@ -308,13 +309,14 @@ export async function PATCH(request: Request) {
   const inserted = (await sql`
     INSERT INTO orders (
       user_id, package_id, item, amount, currency, status, flow, kind, hours,
-      buyer_type, billing, quote_request_id, note
+      buyer_type, billing, quote_request_id, note, payment_method
     )
     VALUES (
       ${user.uid}, ${q.package_id}, ${q.service_name}, ${q.quoted_amount}, ${q.currency},
       'pending', 'project', NULL, NULL, ${q.buyer_type},
       ${JSON.stringify(billing)}::jsonb, ${q.id},
-      ${q.turnaround_days ? `Dogovoreno vreme izrade: ${q.turnaround_days} dana` : null}
+      ${q.turnaround_days ? `Dogovoreno vreme izrade: ${q.turnaround_days} dana` : null},
+      ${defaultPaymentMethod()}
     )
     ON CONFLICT (quote_request_id) WHERE quote_request_id IS NOT NULL
       DO UPDATE SET quote_request_id = EXCLUDED.quote_request_id
@@ -328,7 +330,8 @@ export async function PATCH(request: Request) {
     WHERE id = ${q.id} AND user_id = ${user.uid} AND status = 'quoted'
   `;
 
-  const provider = await getPaymentProvider();
+  const paymentMethod = defaultPaymentMethod();
+  const provider = await getProviderFor(paymentMethod);
   const intent = await provider.createCheckout({
     id: orderId,
     item: q.service_name,
@@ -342,6 +345,13 @@ export async function PATCH(request: Request) {
       city: billing.city,
     },
   });
+  if (paymentMethod === "invoice") {
+    try {
+      await issueInvoice(orderId, "proforma");
+    } catch (error) {
+      console.error("[video-zahtevi] proforma issue failed", orderId, error);
+    }
+  }
   await sql`UPDATE orders SET provider = ${provider.id} WHERE id = ${orderId}`;
 
   // Accepting a quote is the same event as placing an order, so it gets the

@@ -1,4 +1,16 @@
 import "server-only";
+import {
+  cardConfigured,
+  mockEnabled,
+  type PaymentMethod,
+} from "./selection";
+export {
+  defaultPaymentMethod,
+  normalizePaymentMethod,
+  paymentAvailability,
+  type PaymentAvailability,
+  type PaymentMethod,
+} from "./selection";
 
 // The seam Monri will drop into.
 //
@@ -53,34 +65,31 @@ export interface PaymentProvider {
   createCheckout(order: OrderForPayment): Promise<PaymentIntent>;
 }
 
+/** What the buyer picks at checkout. `invoice` is a proforma settled by bank
+ *  transfer — from a banking app, or over the counter. */
+
 /**
- * Pick the active provider. Card payment is only offered once it is actually
- * configured — defaulting to a half-wired card flow would let a buyer reach a
- * dead payment page, which is worse than an honest bank transfer.
+ * Resolve the provider for the method the buyer chose.
+ *
+ * Throws rather than silently falling back: quietly turning a card payment into
+ * a bank transfer would leave the buyer waiting for a redirect that never comes
+ * and the studio expecting money that was never sent.
  */
-export async function getPaymentProvider(): Promise<PaymentProvider> {
-  // PAYMENTS_MOCK short-circuits everything so the post-payment half of the
-  // product (invoice, project, wallet, /nalog) can be walked end to end while
-  // Monri credentials are still pending. Explicit opt-in only — an unset env
-  // var can never accidentally hand out free orders.
-  if (process.env.PAYMENTS_MOCK === "1") {
-    const { mockProvider } = await import("./mock");
-    return mockProvider;
+export async function getProviderFor(method: PaymentMethod): Promise<PaymentProvider> {
+  if (method === "invoice") {
+    const { manualProvider } = await import("./manual");
+    return manualProvider;
   }
-  if (process.env.MONRI_MERCHANT_KEY && process.env.MONRI_AUTH_TOKEN) {
+
+  if (cardConfigured()) {
     const { monriProvider } = await import("./monri");
     return monriProvider;
   }
-  const { manualProvider } = await import("./manual");
-  return manualProvider;
-}
-
-export type PaymentMode = "card" | "manual" | "test";
-
-/** What the buyer is about to be handed off to. The checkout uses this to set
- *  expectations before they commit, rather than surprising them at the last
- *  step. */
-export function getPaymentMode(): PaymentMode {
-  if (process.env.PAYMENTS_MOCK === "1") return "test";
-  return process.env.MONRI_MERCHANT_KEY && process.env.MONRI_AUTH_TOKEN ? "card" : "manual";
+  if (mockEnabled()) {
+    // Stands in for the hosted card page so the whole post-payment half of the
+    // product can be walked end to end while Monri credentials are pending.
+    const { mockProvider } = await import("./mock");
+    return mockProvider;
+  }
+  throw new Error("[payments] card payment is not configured");
 }

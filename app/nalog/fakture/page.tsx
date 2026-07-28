@@ -14,7 +14,7 @@ export default async function FakturePage() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight text-fg">Fakture</h1>
         <p className="mt-2 text-muted">
-          Faktura se generiše automatski po potvrđenoj uplati.
+          Predračun dobijaš pre uplate, a konačnu fakturu po potvrđenoj uplati.
         </p>
       </div>
 
@@ -30,22 +30,21 @@ export default async function FakturePage() {
               <li key={inv.id} className="flex items-center justify-between gap-4 px-5 py-4">
                 <div className="min-w-0">
                   <p className="truncate text-sm text-fg">{inv.number}</p>
-                  <p className="text-sm text-faint">{formatDate(inv.created_at)}</p>
+                  <p className="text-sm text-faint">
+                    {inv.kind === "proforma" ? "Predračun" : "Faktura"} ·{" "}
+                    {formatDate(inv.issued_at || inv.created_at)}
+                  </p>
                 </div>
                 <div className="flex shrink-0 items-center gap-4">
                   <span className="text-sm text-muted">
                     {formatMoney(inv.amount, inv.currency)}
                   </span>
-                  {inv.pdf_url ? (
-                    <a
-                      href={inv.pdf_url}
-                      className="text-sm text-accent-soft underline underline-offset-4"
-                    >
-                      Preuzmi PDF
-                    </a>
-                  ) : (
-                    <span className="text-sm text-faint">PDF u pripremi</span>
-                  )}
+                  <a
+                    href={`/api/nalog/fakture/${inv.id}`}
+                    className="text-sm text-accent-soft underline underline-offset-4"
+                  >
+                    Preuzmi PDF
+                  </a>
                 </div>
               </li>
             ))}

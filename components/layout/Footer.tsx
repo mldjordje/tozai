@@ -1,6 +1,7 @@
 import Link from "next/link";
 import BrandLogo from "@/components/brand/Logo";
 import { socialUrl, type PublicContact } from "@/lib/settings";
+import { DEFAULTS } from "@/lib/content/landing";
 
 /**
  * The page used to end on a pinned CTA and nothing else: a buyer who scrolled
@@ -14,9 +15,13 @@ import { socialUrl, type PublicContact } from "@/lib/settings";
 export default function Footer({
   contact,
   inquiryHref,
+  tagline = DEFAULTS.footer_tagline,
+  response = DEFAULTS.footer_response,
 }: {
   contact: PublicContact;
   inquiryHref: string;
+  tagline?: string;
+  response?: string;
 }) {
   const socials = [
     { label: "Instagram", href: socialUrl("https://instagram.com", contact.instagram) },
@@ -33,10 +38,7 @@ export default function Footer({
             <Link href="/#top" aria-label="TOZA AI — početna" className="inline-block">
               <BrandLogo markClassName="size-8" />
             </Link>
-            <p className="mt-5 max-w-xs text-sm leading-relaxed text-muted">
-              AI video reklame i privatna AI edukacija. Upit je besplatan i ne
-              obavezuje te na kupovinu.
-            </p>
+            <p className="mt-5 max-w-xs text-sm leading-relaxed text-muted">{tagline}</p>
           </div>
 
           <FooterCol
@@ -110,7 +112,7 @@ export default function Footer({
 
         <div className="mt-14 flex flex-col gap-3 border-t border-line pt-7 text-xs text-faint sm:flex-row sm:items-center sm:justify-between">
           <p>© {new Date().getFullYear()} TOZA AI. Sva prava zadržana.</p>
-          <p>Odgovaramo u roku od 24h.</p>
+          <p>{response}</p>
         </div>
       </div>
     </footer>

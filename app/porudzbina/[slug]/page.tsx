@@ -6,7 +6,7 @@ import VideoInquiryFlow from "@/components/checkout/VideoInquiryFlow";
 import { getPackageBySlug } from "@/lib/packages";
 import { getSessionUser } from "@/lib/auth/user-session";
 import { getProfile } from "@/lib/account";
-import { getPaymentMode } from "@/lib/payments/provider";
+import { paymentAvailability } from "@/lib/payments/provider";
 
 // Deliberately OUTSIDE the middleware gate. A buyer should be able to read the
 // whole order before being asked to sign in — bouncing an anonymous visitor to
@@ -110,10 +110,11 @@ export default async function CheckoutPage({
                   mb: profile.mb,
                   address: profile.address,
                   city: profile.city,
+                  country: profile.country,
                 }
               : null
           }
-          paymentMode={getPaymentMode()}
+          paymentAvailability={paymentAvailability()}
         />
         )}
       </div>

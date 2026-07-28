@@ -10,6 +10,7 @@ import {
 } from "@/lib/auth/user-session";
 import { setSessionCookie, signSessionToken } from "@/lib/auth/session";
 import { getStaffByEmail } from "@/lib/staff";
+import { isBootstrapAdmin, wantsAdminDestination } from "@/lib/auth/admin-access";
 
 export const runtime = "nodejs";
 
@@ -111,6 +112,20 @@ export async function GET(request: NextRequest) {
   } catch {
     // staff table missing (pre-migration) — treat as a plain customer login.
   }
+  const bootstrapAdmin = isBootstrapAdmin(email);
+  if (!staffMember && bootstrapAdmin) {
+    const seeded = (await sql`
+      INSERT INTO staff (email, name, role, active, google_id, avatar_url)
+      VALUES (${email.toLowerCase()}, ${name ?? "Owner"}, 'owner', true, ${googleId}, ${avatar})
+      ON CONFLICT (email) DO UPDATE
+      SET active = true,
+          role = 'owner',
+          google_id = EXCLUDED.google_id,
+          avatar_url = EXCLUDED.avatar_url
+      RETURNING id, email, name, role
+    `) as { id: number; email: string; name: string; role: "owner" | "staff" }[];
+    staffMember = seeded[0] ?? null;
+  }
 
   if (staffMember) {
     await sql`
@@ -129,6 +144,15 @@ export async function GET(request: NextRequest) {
     clearOAuthTxnCookie(response);
     setUserSessionCookie(response, token);
     setSessionCookie(response, adminToken);
+    return response;
+  }
+
+  if (wantsAdminDestination(txn.next)) {
+    const url = new URL("/admin/login", origin);
+    url.searchParams.set("error", "access");
+    const response = NextResponse.redirect(url);
+    clearOAuthTxnCookie(response);
+    setUserSessionCookie(response, token);
     return response;
   }
 

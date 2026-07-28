@@ -1,6 +1,7 @@
 import "server-only";
 import { getSql } from "@/lib/db";
 import { queueQuietly, queueStudioNotice } from "@/lib/email";
+import { issueInvoice, renderStoredInvoice } from "@/lib/invoices/issue";
 
 // The single point that turns a paid order into what the buyer bought.
 //
@@ -72,33 +73,10 @@ export async function fulfillPaidOrder(
     `;
   }
 
-  // --- invoice ------------------------------------------------------------
-  // The number is allocated inside the INSERT so the MAX and the write are one
-  // statement. Two concurrent callers can still read the same MAX under READ
-  // COMMITTED; the UNIQUE index on invoices.number rejects the loser, and the
-  // retry picks up the next number.
-  //
-  // The MAX is a scalar subquery, NOT an aggregate over the outer SELECT: an
-  // aggregate with no GROUP BY yields one row even when the WHERE matches
-  // nothing, so the "already invoiced" guard would never suppress the insert
-  // and a re-run would collide on invoices.number.
-  const year = new Date().getFullYear();
-  const invoiceRows = (await sql`
-    INSERT INTO invoices (order_id, number, amount, currency)
-    SELECT ${orderId},
-           'TZ-' || ${year}::text || '-' ||
-             LPAD((
-               COALESCE((
-                 SELECT MAX(SUBSTRING(i.number FROM 'TZ-[0-9]{4}-([0-9]+)')::int)
-                 FROM invoices i
-                 WHERE i.number LIKE ${`TZ-${year}-%`}
-               ), 0) + 1
-             )::text, 4, '0'),
-           ${order.amount},
-           ${order.currency}
-    WHERE NOT EXISTS (SELECT 1 FROM invoices x WHERE x.order_id = ${orderId})
-    RETURNING id
-  `) as { id: number }[];
+  // The final invoice is distinct from the proforma created at checkout.
+  // issueInvoice freezes buyer/rate data, renders the PDF and is idempotent on
+  // (order_id, kind), so retries cannot produce a second tax document.
+  const finalInvoice = await issueInvoice(orderId, "invoice");
 
   let projectId: number | null = null;
   let hoursCredited = 0;
@@ -187,11 +165,16 @@ export async function fulfillPaidOrder(
     const total = `${order.amount.toLocaleString("sr-RS")} ${order.currency}`;
 
     if (buyer[0]) {
+      const renderedInvoice = finalInvoice
+        ? await renderStoredInvoice(finalInvoice.id)
+        : null;
       await queueQuietly({
         userId: order.user_id,
         recipient: buyer[0].email,
-        templateKey: "order_paid",
-        subject: `Uplata je evidentirana — ${order.item}`,
+        templateKey: "invoice_issued",
+        subject: finalInvoice
+          ? `Faktura ${finalInvoice.number} — ${order.item}`
+          : `Uplata je evidentirana — ${order.item}`,
         body: [
           `Zdravo ${buyer[0].name?.split(" ")[0] ?? ""},`,
           "",
@@ -205,6 +188,12 @@ export async function fulfillPaidOrder(
           "",
           "TOZA AI",
         ].join("\n"),
+        attachments: renderedInvoice
+          ? [{
+              filename: `${renderedInvoice.number}.pdf`,
+              content: Buffer.from(renderedInvoice.bytes).toString("base64"),
+            }]
+          : undefined,
       });
     }
 
@@ -229,7 +218,7 @@ export async function fulfillPaidOrder(
     ok: true,
     orderId,
     alreadyPaid,
-    invoiceCreated: invoiceRows.length > 0,
+    invoiceCreated: finalInvoice !== null,
     projectId,
     hoursCredited,
   };

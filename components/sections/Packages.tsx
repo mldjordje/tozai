@@ -4,29 +4,39 @@ import Reveal from "@/components/ui/Reveal";
 import KineticTitle from "@/components/ui/KineticTitle";
 import CTAButton from "@/components/ui/CTAButton";
 import { CLIP_PACKAGES, type ClipPackage } from "@/lib/content/offerings";
+import { DEFAULTS } from "@/lib/content/landing";
 
 /**
  * #paketi — choose an AI-video scope and send a brief. Project pricing is
  * intentionally private because it depends on the requested clip count,
  * complexity and turnaround.
+ *
+ * Tiers come from the packages table; the surrounding copy from
+ * site_content['landing'] (see lib/content/landing.ts).
  */
-export default function Packages({ packages = CLIP_PACKAGES }: { packages?: ClipPackage[] }) {
+export default function Packages({
+  packages = CLIP_PACKAGES,
+  eyebrow = DEFAULTS.packages_eyebrow,
+  title = DEFAULTS.packages_title,
+  body = DEFAULTS.packages_body,
+  note = DEFAULTS.packages_note,
+}: {
+  packages?: ClipPackage[];
+  eyebrow?: string;
+  title?: string;
+  body?: string;
+  note?: string;
+}) {
   return (
     <section
       id="paketi"
       className="relative flex min-h-[100svh] items-center px-6 py-28 md:px-12"
     >
       <div className="w-full max-w-6xl">
-        <p className="eyebrow mb-5">02 — Paketi</p>
-        <KineticTitle
-          text="AI video po meri. *Ponuda po briefu*."
-          className="display mb-5 max-w-2xl text-4xl md:text-7xl"
-        />
+        <p className="eyebrow mb-5">{eyebrow}</p>
+        <KineticTitle text={title} className="display mb-5 max-w-2xl text-4xl md:text-7xl" />
         <Reveal delay={0.1}>
-          <p className="mb-16 max-w-xl text-muted md:mb-20 md:text-lg">
-            Izaberi smer i pošalji ideju. Dobijaš privatnu cenu i realno vreme
-            izrade pre nego što bilo šta potvrdiš.
-          </p>
+          <p className="mb-16 max-w-xl text-muted md:mb-20 md:text-lg">{body}</p>
         </Reveal>
 
         <div className="grid gap-5 md:grid-cols-3">
@@ -90,10 +100,7 @@ export default function Packages({ packages = CLIP_PACKAGES }: { packages?: Clip
           ))}
         </div>
 
-        <p className="mt-8 max-w-2xl text-sm leading-relaxed text-faint">
-          Slanje upita je besplatno i ne obavezuje te na kupovinu. Cena je
-          vidljiva samo na tvom nalogu, nakon procene.
-        </p>
+        <p className="mt-8 max-w-2xl text-sm leading-relaxed text-faint">{note}</p>
       </div>
     </section>
   );

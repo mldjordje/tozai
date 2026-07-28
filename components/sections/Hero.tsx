@@ -1,9 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { motion, useReducedMotion } from "framer-motion";
 import CTAButton from "@/components/ui/CTAButton";
 import { useIntroReleased } from "@/lib/intro";
+import { DEFAULTS } from "@/lib/content/landing";
+import { plainText } from "@/components/ui/AccentText";
 
 const EXPO = [0.16, 1, 0.3, 1] as const;
 
@@ -91,20 +93,41 @@ function Word({
   );
 }
 
+/** One word of the headline, split into what precedes the accent, the accent
+ *  itself and what trails it — so "*AI*." keeps the full stop outside the
+ *  italic, the way the hand-written markup had it. */
+function parseWord(raw: string) {
+  const match = raw.match(/^(.*?)\*(.+?)\*(.*)$/);
+  if (!match) return { lead: raw, accent: null as string | null, trail: "" };
+  return { lead: match[1], accent: match[2], trail: match[3] };
+}
+
 export default function Hero({
   // Both hero CTAs pointed at anchors that dead-ended: "Book a Call" landed on
   // a section whose own button scrolled back to the top, and "Explore Services"
   // landed on the stats block. They now open the two things that can actually
   // be bought. Defaults keep the component renderable without the DB.
   primaryHref = "#paketi",
-  primaryLabel = "Poruči AI video",
+  primaryLabel = DEFAULTS.hero_cta_primary,
   secondaryHref = "#edukacija",
-  secondaryLabel = "Privatna edukacija",
+  secondaryLabel = DEFAULTS.hero_cta_secondary,
+  eyebrow = DEFAULTS.hero_eyebrow,
+  title = DEFAULTS.hero_title,
+  lead1 = DEFAULTS.hero_lead_1,
+  lead2 = DEFAULTS.hero_lead_2,
+  body = DEFAULTS.hero_body,
 }: {
   primaryHref?: string;
   primaryLabel?: string;
   secondaryHref?: string;
   secondaryLabel?: string;
+  /** Admin-editable copy — see lib/content/landing.ts. `title` splits on "\n"
+   *  for the line break and marks the `*word*` as the sheened accent. */
+  eyebrow?: string;
+  title?: string;
+  lead1?: string;
+  lead2?: string;
+  body?: string;
 } = {}) {
   // The preloader sits over the first ~2s of the page. Animating on mount meant
   // the whole reveal played behind an opaque panel and the headline was already
@@ -132,7 +155,7 @@ export default function Hero({
           className="relative z-10 max-w-4xl"
         >
           <motion.p variants={line} className="eyebrow mb-7">
-            AI Video Studio
+            {eyebrow}
           </motion.p>
 
           {/* The words are spaced with margins, not whitespace text nodes, so
@@ -142,43 +165,48 @@ export default function Hero({
           <motion.h1
             variants={headFocus}
             onAnimationComplete={(def) => def === "show" && setSettled(true)}
-            aria-label="Build Your Business With AI."
+            aria-label={plainText(title.replace(/\n/g, " "))}
             style={{ willChange: settled ? "auto" : "filter" }}
             className="display text-balance text-6xl md:text-8xl lg:text-[6.5rem]"
           >
-            <span aria-hidden className="mr-[0.24em]">
-              <Word settled={settled}>Build</Word>
-            </span>
-            <span aria-hidden className="mr-[0.24em]">
-              <Word settled={settled}>Your</Word>
-            </span>
-            <span aria-hidden>
-              <Word settled={settled}>Business</Word>
-            </span>
-            <br />
-            <span aria-hidden className="mr-[0.24em]">
-              <Word settled={settled}>With</Word>
-            </span>
-            <span aria-hidden>
-              <Word settled={settled}>
-                {/* The sheen goes on a span INSIDE the em, not on the em
-                    itself: `.display em` sets the accent colour at higher
-                    specificity than `.sheen` can, so a clip applied to the em
-                    would be overridden and the gradient would never show.
-                    Last word of the headline, so the sweep — and the bloom
-                    riding with it — wait for the whole line to arrive rather
-                    than racing it. */}
-                <em>
-                  <span
-                    className={show ? "sheen sheen-run" : "sheen"}
-                    style={{ animationDelay: "1.15s" }}
-                  >
-                    AI
-                  </span>
-                </em>
-                .
-              </Word>
-            </span>
+            {title.split("\n").map((row, rowIndex, rows) => (
+              <Fragment key={rowIndex}>
+                {row.split(" ").filter(Boolean).map((raw, i, words) => {
+                  const { lead, accent, trail } = parseWord(raw);
+                  return (
+                    <span
+                      key={`${raw}-${i}`}
+                      aria-hidden
+                      className={i < words.length - 1 ? "mr-[0.24em]" : undefined}
+                    >
+                      <Word settled={settled}>
+                        {lead}
+                        {/* The sheen goes on a span INSIDE the em, not on the
+                            em itself: `.display em` sets the accent colour at
+                            higher specificity than `.sheen` can, so a clip
+                            applied to the em would be overridden and the
+                            gradient would never show. Delayed past the last
+                            word's rise so the sweep — and the bloom riding
+                            with it — waits for the line to arrive rather than
+                            racing it. */}
+                        {accent && (
+                          <em>
+                            <span
+                              className={show ? "sheen sheen-run" : "sheen"}
+                              style={{ animationDelay: "1.15s" }}
+                            >
+                              {accent}
+                            </span>
+                          </em>
+                        )}
+                        {trail}
+                      </Word>
+                    </span>
+                  );
+                })}
+                {rowIndex < rows.length - 1 && <br />}
+              </Fragment>
+            ))}
           </motion.h1>
 
           {/* Hairline drawn under the headline once it has set. Pure scaleX on
@@ -194,16 +222,15 @@ export default function Hero({
             variants={line}
             className="mt-8 space-y-1 text-xl font-medium md:text-2xl"
           >
-            <p>Ne učimo AI. Gradimo biznise uz AI.</p>
-            <p className="text-muted">Pametnije. Brže. Profitabilnije.</p>
+            <p>{lead1}</p>
+            <p className="text-muted">{lead2}</p>
           </motion.div>
 
           <motion.p
             variants={line}
             className="mt-8 max-w-xl text-base leading-relaxed text-muted md:text-lg"
           >
-            Kreiramo AI video reklame i pružamo privatnu AI edukaciju — sadržaj
-            koji zaustavlja skrol i uči te da ga praviš sam.
+            {body}
           </motion.p>
 
           <motion.div variants={line} className="mt-10 flex flex-wrap gap-4">

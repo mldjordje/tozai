@@ -225,14 +225,12 @@ export default async function NalogPage() {
                     <span className="text-sm text-muted">
                       {formatMoney(inv.amount, inv.currency)}
                     </span>
-                    {inv.pdf_url && (
-                      <a
-                        href={inv.pdf_url}
-                        className="text-sm text-accent-soft underline underline-offset-4"
-                      >
-                        PDF
-                      </a>
-                    )}
+                    <a
+                      href={`/api/nalog/fakture/${inv.id}`}
+                      className="text-sm text-accent-soft underline underline-offset-4"
+                    >
+                      PDF
+                    </a>
                   </div>
                 </li>
               ))}

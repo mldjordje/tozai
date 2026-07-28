@@ -141,6 +141,11 @@ button.adm__chip:disabled{opacity:.3;cursor:default;text-decoration:line-through
 .adm__pf-submit:hover:not(:disabled){background:rgba(46,107,255,.3)}
 .adm__pf-submit:disabled{opacity:.35;cursor:default}
 
+/* YouTube poster preview inside the work editor: the thumbnail beside the
+   "upload your own" control, so a bad auto-poster is visible before saving. */
+.adm__pf-ytpreview{display:flex;gap:14px;align-items:flex-start}
+.adm__pf-ytpreview img{width:96px;aspect-ratio:9/16;object-fit:cover;border-radius:4px;border:1px solid var(--line);background:rgba(255,255,255,.03)}
+.adm__pf-ytpreview>div{flex:1;display:flex;flex-direction:column;gap:10px}
 .adm__pf-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:14px}
 .adm__pf-card{position:relative;display:flex;flex-direction:column;border:1px solid var(--line);border-radius:4px;overflow:hidden;background:rgba(255,255,255,.02)}
 .adm__pf-card img{width:100%;aspect-ratio:4/5;object-fit:cover;display:block}
@@ -335,7 +340,12 @@ button.adm__chip:disabled{opacity:.3;cursor:default;text-decoration:line-through
 .adm__content-changed{padding:2px 8px;border-radius:999px;background:rgba(108,148,255,.2);color:var(--neon);font-style:normal;font-size:8px}
 .adm__content-field input,.adm__content-field textarea{padding:10px 12px;border:1px solid var(--line);border-radius:4px;background:rgba(255,255,255,.03);color:#fff;font:inherit;font-size:13px;resize:vertical}
 .adm__content-field input:focus,.adm__content-field textarea:focus{outline:none;border-color:var(--neon)}
+/* Field hints are prose, not labels — the uppercase/tracked label rule above
+   would otherwise catch them by being the more specific selector. */
+.adm__content-field .adm__hint,.adm__content-grid>div>.adm__hint{text-transform:none;letter-spacing:0;font-size:11px;line-height:1.5}
+.adm__content-section>.adm__hint{margin:-10px 0 14px;text-transform:none}
 .adm__content-save{display:flex;align-items:center;gap:14px;position:sticky;bottom:14px;padding:12px 16px;border:1px solid var(--line);border-radius:6px;background:rgba(0,0,0,.9);backdrop-filter:blur(6px)}
+.adm__content-save a{color:var(--neon)}
 
 /* Portfolio AI metadata */
 .adm__pf-ai{display:flex;flex-direction:column;gap:10px;padding:14px;border:1px dashed rgba(108,148,255,.4);border-radius:4px}

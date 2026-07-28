@@ -17,6 +17,7 @@ import {
   ClipboardList,
   FolderKanban,
   Receipt,
+  TrendingUp,
   Menu,
   X,
 } from "lucide-react";
@@ -39,6 +40,7 @@ const NAV: NavItem[] = [
   { href: "/admin/klijenti", label: "Klijenti", icon: Users },
   { href: "/admin/paketi", label: "Paketi", icon: Tag },
   { href: "/admin/portfolio", label: "Portfolio", icon: Images },
+  { href: "/admin/rezultati", label: "Rezultati", icon: TrendingUp },
   { href: "/admin/faq", label: "FAQ", icon: HelpCircle },
   { href: "/admin/email-sabloni", label: "Email šabloni", icon: Mail },
   { href: "/admin/dostupnost", label: "Dostupnost", icon: CalendarDays },

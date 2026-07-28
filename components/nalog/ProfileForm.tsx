@@ -9,6 +9,7 @@ type Form = {
   phone: string;
   address: string;
   city: string;
+  country: string;
   is_company: boolean;
   company_name: string;
   pib: string;
@@ -21,6 +22,7 @@ function toForm(p: AccountProfile): Form {
     phone: p.phone ?? "",
     address: p.address ?? "",
     city: p.city ?? "",
+    country: p.country ?? "Srbija",
     is_company: p.is_company,
     company_name: p.company_name ?? "",
     pib: p.pib ?? "",
@@ -112,6 +114,7 @@ export default function ProfileForm({ profile }: { profile: AccountProfile }) {
           />
           <Field label="Adresa" value={form.address} onChange={(v) => set("address", v)} />
           <Field label="Grad" value={form.city} onChange={(v) => set("city", v)} />
+          <Field label="Država" value={form.country} onChange={(v) => set("country", v)} />
         </div>
         <p className="mt-4 text-sm text-faint">
           Email ({profile.email}) dolazi sa Google naloga i ne menja se ovde.

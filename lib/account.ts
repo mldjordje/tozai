@@ -46,6 +46,12 @@ export type AccountOrder = {
   currency: string;
   status: string;
   flow: string;
+  payment_method: "card" | "invoice" | null;
+  payment_reference: string | null;
+  payee_name: string | null;
+  bank_account: string | null;
+  proforma_id: number | null;
+  proforma_number: string | null;
   created_at: string;
 };
 
@@ -55,6 +61,9 @@ export type AccountInvoice = {
   amount: number;
   currency: string;
   pdf_url: string | null;
+  kind: "proforma" | "invoice";
+  scope: "domestic" | "foreign";
+  issued_at: string;
   created_at: string;
 };
 
@@ -206,16 +215,29 @@ export async function getPastBookings(userId: number): Promise<AccountBooking[]>
 export async function getOrders(userId: number): Promise<AccountOrder[]> {
   const sql = getSql();
   return (await sql`
-    SELECT id, item, amount::float8 AS amount, currency, status, flow, created_at
-    FROM orders WHERE user_id = ${userId}
-    ORDER BY created_at DESC
+    SELECT o.id, o.item, o.amount::float8 AS amount, o.currency, o.status, o.flow,
+           o.payment_method,
+           CASE WHEN o.payment_method = 'invoice'
+                THEN 'TZ-' || LPAD(o.id::text, 5, '0') ELSE NULL END AS payment_reference,
+           COALESCE(s.company_name, s.name) AS payee_name,
+           s.bank_account,
+           (SELECT i.id FROM invoices i
+            WHERE i.order_id = o.id AND i.kind = 'proforma' LIMIT 1) AS proforma_id,
+           (SELECT i.number FROM invoices i
+            WHERE i.order_id = o.id AND i.kind = 'proforma' LIMIT 1) AS proforma_number,
+           o.created_at
+    FROM orders o
+    LEFT JOIN studio_settings s ON s.id = 1
+    WHERE o.user_id = ${userId}
+    ORDER BY o.created_at DESC
   `) as AccountOrder[];
 }
 
 export async function getInvoices(userId: number): Promise<AccountInvoice[]> {
   const sql = getSql();
   return (await sql`
-    SELECT i.id, i.number, i.amount::float8 AS amount, i.currency, i.pdf_url, i.created_at
+    SELECT i.id, i.number, i.amount::float8 AS amount, i.currency, i.pdf_url,
+           i.kind, i.scope, i.issued_at::text AS issued_at, i.created_at
     FROM invoices i
     JOIN orders o ON o.id = i.order_id
     WHERE o.user_id = ${userId}
@@ -235,13 +257,14 @@ export type AccountProfile = {
   mb: string | null;
   address: string | null;
   city: string | null;
+  country: string | null;
 };
 
 export async function getProfile(userId: number): Promise<AccountProfile | null> {
   const sql = getSql();
   const rows = (await sql`
     SELECT id, email, name, avatar_url, phone, is_company, company_name, pib, mb,
-           address, city
+           address, city, country
     FROM users WHERE id = ${userId}
   `) as AccountProfile[];
   return rows[0] ?? null;
