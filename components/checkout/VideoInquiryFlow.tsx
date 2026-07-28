@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { DEFAULT_LOCALE, type Locale } from "@/lib/i18n/config";
 import { ui, type UiStrings } from "@/lib/i18n/ui";
+import { countryOptions, defaultCountry, isSerbia } from "@/lib/countries";
 
 type T = UiStrings["inquiry"];
 
@@ -48,6 +49,7 @@ type ProfileSummary = {
   mb: string | null;
   address: string | null;
   city: string | null;
+  country: string | null;
 };
 
 /** Mirrors the server-side minimums in /api/nalog/video-zahtevi. Kept here as
@@ -72,6 +74,7 @@ const EMPTY = {
   mb: "",
   address: "",
   city: "",
+  country: "",
   idea: "",
   clipCount: "3",
   businessName: "",
@@ -97,15 +100,25 @@ function validate(form: FormState, t: T): Partial<Record<FieldKey, string>> {
   if (form.name.trim().length < MIN.name) {
     errors.name = t.errors.name;
   }
+  if (!form.country.trim()) {
+    errors.country = t.errors.country;
+  }
   if (form.buyerType === "company") {
     if (form.companyName.trim().length < 2) {
       errors.companyName = t.errors.companyName;
     }
-    if (!/^\d{9}$/.test(form.pib.trim())) {
-      errors.pib = t.errors.pib;
-    }
-    if (!/^\d{8}$/.test(form.mb.trim())) {
-      errors.mb = t.errors.mb;
+    // A PIB and a matični broj are issued by the Serbian business register, so
+    // they are only demanded of a Serbian company. A company anywhere else gives
+    // a VAT / tax ID in whatever shape its own registry uses — and optionally,
+    // because a missing one is a question the studio can ask later rather than a
+    // reason to lose the job at the form.
+    if (isSerbia(form.country)) {
+      if (!/^\d{9}$/.test(form.pib.trim())) {
+        errors.pib = t.errors.pib;
+      }
+      if (!/^\d{8}$/.test(form.mb.trim())) {
+        errors.mb = t.errors.mb;
+      }
     }
     if (form.address.trim().length < 3) {
       errors.address = t.errors.address;
@@ -170,6 +183,10 @@ export default function VideoInquiryFlow({
     mb: profile?.mb ?? "",
     address: profile?.address ?? "",
     city: profile?.city ?? "",
+    // Serbia unless the buyer says otherwise — it is the overwhelming majority,
+    // and a country nobody chose is what silently issued every foreign buyer a
+    // domestic Serbian document.
+    country: profile?.country ?? defaultCountry(locale),
   }));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -181,7 +198,12 @@ export default function VideoInquiryFlow({
 
   const errors = validate(form, copy);
   const noService = selected.length === 0;
-  const requiredCount = (form.buyerType === "company" ? 11 : 6) + 1;
+  // A foreign company is asked for three fewer things than a Serbian one (no
+  // PIB, no matični broj), so the bar has to count what is actually required of
+  // *this* buyer — otherwise it sticks below 100% for someone who has finished.
+  const domestic = isSerbia(form.country);
+  const requiredCount =
+    (form.buyerType === "company" ? (domestic ? 12 : 10) : 7) + 1;
   const progress = Math.round(
     ((requiredCount - Object.keys(errors).length - (noService ? 1 : 0)) / requiredCount) * 100,
   );
@@ -201,7 +223,11 @@ export default function VideoInquiryFlow({
 
   const set =
     (key: FieldKey, transform?: (value: string) => string) =>
-    (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    (
+      event: React.ChangeEvent<
+        HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
+      >,
+    ) => {
       const value = transform ? transform(event.target.value) : event.target.value;
       setForm((current) => ({ ...current, [key]: value }));
     };
@@ -228,6 +254,7 @@ export default function VideoInquiryFlow({
       setShowAll(true);
       const first = ([
         "name",
+        "country",
         "companyName",
         "pib",
         "mb",
@@ -243,7 +270,9 @@ export default function VideoInquiryFlow({
       if (first) {
         const node = fieldRefs.current[first];
         node?.scrollIntoView({ behavior: "smooth", block: "center" });
-        (node?.querySelector("input, textarea") as HTMLElement | null)?.focus({ preventScroll: true });
+        (node?.querySelector("input, textarea, select") as HTMLElement | null)?.focus({
+          preventScroll: true,
+        });
       }
       return;
     }
@@ -468,6 +497,25 @@ export default function VideoInquiryFlow({
             </div>
           </Reveal>
 
+          {/* Where the buyer is. This is the field the whole document set hangs
+              off: Serbia gets the domestic proforma with the dinar account and
+              the domestic VAT note, anywhere else gets the English one with
+              IBAN/SWIFT and the export note. Asked of individuals too — a
+              private buyer abroad needs the foreign document just as much. */}
+          <Reveal delay={0.13}>
+            <Select
+              label={copy.country}
+              required
+              value={form.country}
+              onChange={set("country")}
+              onBlur={blur("country")}
+              options={countryOptions(locale)}
+              hint={domestic ? undefined : copy.countryForeignHint}
+              error={errorFor("country")}
+              innerRef={(node) => (fieldRefs.current.country = node)}
+            />
+          </Reveal>
+
           <AnimatePresence initial={false}>
             {form.buyerType === "company" && (
               <motion.div
@@ -496,32 +544,49 @@ export default function VideoInquiryFlow({
                       error={errorFor("companyName")}
                       innerRef={(node) => (fieldRefs.current.companyName = node)}
                     />
-                    <div className="grid gap-7 sm:grid-cols-2">
+                    {/* A PIB and a matični broj exist only in the Serbian
+                        register. A company outside it is asked for one free-form
+                        tax ID, which prints under "Tax ID" on the English
+                        document, and is not held up by a format it cannot meet. */}
+                    {domestic ? (
+                      <div className="grid gap-7 sm:grid-cols-2">
+                        <Field
+                          label={copy.pib}
+                          required
+                          value={form.pib}
+                          onChange={set("pib", (value) => fixedDigits(value, 9))}
+                          onBlur={blur("pib")}
+                          inputMode="numeric"
+                          placeholder={copy.pibHint}
+                          hint={copy.pibHint}
+                          error={errorFor("pib")}
+                          innerRef={(node) => (fieldRefs.current.pib = node)}
+                        />
+                        <Field
+                          label={copy.mb}
+                          required
+                          value={form.mb}
+                          onChange={set("mb", (value) => fixedDigits(value, 8))}
+                          onBlur={blur("mb")}
+                          inputMode="numeric"
+                          placeholder={copy.mbHint}
+                          hint={copy.mbHint}
+                          error={errorFor("mb")}
+                          innerRef={(node) => (fieldRefs.current.mb = node)}
+                        />
+                      </div>
+                    ) : (
                       <Field
-                        label={copy.pib}
-                        required
+                        label={copy.taxId}
                         value={form.pib}
-                        onChange={set("pib", (value) => fixedDigits(value, 9))}
+                        onChange={set("pib")}
                         onBlur={blur("pib")}
-                        inputMode="numeric"
-                        placeholder={copy.pibHint}
-                        hint={copy.pibHint}
+                        placeholder={copy.taxIdPlaceholder}
+                        hint={copy.taxIdHint}
                         error={errorFor("pib")}
                         innerRef={(node) => (fieldRefs.current.pib = node)}
                       />
-                      <Field
-                        label={copy.mb}
-                        required
-                        value={form.mb}
-                        onChange={set("mb", (value) => fixedDigits(value, 8))}
-                        onBlur={blur("mb")}
-                        inputMode="numeric"
-                        placeholder={copy.mbHint}
-                        hint={copy.mbHint}
-                        error={errorFor("mb")}
-                        innerRef={(node) => (fieldRefs.current.mb = node)}
-                      />
-                    </div>
+                    )}
                     <div className="grid gap-7 sm:grid-cols-2">
                       <Field
                         label={copy.address}
@@ -990,6 +1055,76 @@ function Field({
         aria-invalid={error ? true : undefined}
         className="field mt-3"
       />
+      <Note error={error} hint={hint} />
+    </label>
+  );
+}
+
+/**
+ * A native <select>, styled as one of the fields.
+ *
+ * Native rather than a custom listbox: sixty-odd countries is exactly the case
+ * where a phone's own picker — searchable, scrollable with one thumb, already
+ * familiar — beats anything rebuilt in a div. The only thing worth overriding
+ * is the arrow, so it matches the rest of the form rather than the OS.
+ */
+function Select({
+  label,
+  value,
+  onChange,
+  onBlur,
+  options,
+  hint,
+  error,
+  required,
+  innerRef,
+}: {
+  label: string;
+  value: string;
+  onChange: (event: React.ChangeEvent<HTMLSelectElement>) => void;
+  onBlur?: () => void;
+  options: { value: string; label: string }[];
+  hint?: string;
+  error?: string;
+  required?: boolean;
+  innerRef?: (node: HTMLElement | null) => void;
+}) {
+  return (
+    <label ref={innerRef} className="block max-w-sm scroll-mt-24">
+      <Label label={label} required={required} />
+      <div className="relative mt-3">
+        <select
+          value={value}
+          onChange={onChange}
+          onBlur={onBlur}
+          aria-invalid={error ? true : undefined}
+          className="field appearance-none pr-11"
+        >
+          {/* A value the list does not know about — an older profile row typed
+              by hand — keeps its own option, so opening the form never silently
+              rewrites what the buyer told us before. */}
+          {options.some((option) => option.value === value) ? null : (
+            <option value={value}>{value}</option>
+          )}
+          {options.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+        <svg
+          viewBox="0 0 24 24"
+          aria-hidden
+          className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-faint"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <path d="M6 9l6 6 6-6" />
+        </svg>
+      </div>
       <Note error={error} hint={hint} />
     </label>
   );

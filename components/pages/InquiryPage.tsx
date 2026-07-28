@@ -64,6 +64,7 @@ export default async function InquiryPage({ locale }: { locale: Locale }) {
                   mb: profile.mb,
                   address: profile.address,
                   city: profile.city,
+                  country: profile.country,
                 }
               : null
           }

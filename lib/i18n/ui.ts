@@ -85,6 +85,11 @@ export type UiStrings = {
     addressPlaceholder: string;
     city: string;
     cityPlaceholder: string;
+    country: string;
+    countryForeignHint: string;
+    taxId: string;
+    taxIdPlaceholder: string;
+    taxIdHint: string;
     business: string;
     businessPlaceholder: string;
     aboutBusiness: string;
@@ -123,6 +128,7 @@ export type UiStrings = {
       mb: string;
       address: string;
       city: string;
+      country: string;
       businessName: string;
       businessDescription: (min: number) => string;
       idea: (min: number) => string;
@@ -226,6 +232,12 @@ const sr: UiStrings = {
     addressPlaceholder: "Ulica i broj",
     city: "Grad",
     cityPlaceholder: "Mesto",
+    country: "Zemlja",
+    countryForeignHint:
+      "Za kupce van Srbije predračun i faktura idu na engleskom, sa deviznim računom (IBAN/SWIFT).",
+    taxId: "PIB / VAT broj",
+    taxIdPlaceholder: "npr. DE123456789",
+    taxIdHint: "Opciono — ide na fakturu ako ga upišeš.",
     business: "Biznis / brend",
     businessPlaceholder: "Naziv biznisa ili brenda",
     aboutBusiness: "Kratko o biznisu",
@@ -272,6 +284,7 @@ const sr: UiStrings = {
       mb: "Matični broj mora imati tačno 8 cifara.",
       address: "Upiši adresu sedišta.",
       city: "Upiši grad.",
+      country: "Izaberi zemlju.",
       businessName: "Upiši naziv biznisa ili brenda.",
       businessDescription: (min) => `Još malo — treba nam najmanje ${min} karaktera.`,
       idea: (min) =>
@@ -375,6 +388,12 @@ const en: UiStrings = {
     addressPlaceholder: "Street and number",
     city: "City",
     cityPlaceholder: "City",
+    country: "Country",
+    countryForeignHint:
+      "Outside Serbia the proforma and the invoice are issued in English, against the foreign-currency account (IBAN/SWIFT).",
+    taxId: "VAT / Tax ID",
+    taxIdPlaceholder: "e.g. DE123456789",
+    taxIdHint: "Optional — it goes on the invoice if you enter it.",
     business: "Business / brand",
     businessPlaceholder: "Business or brand name",
     aboutBusiness: "About the business",
@@ -421,6 +440,7 @@ const en: UiStrings = {
       mb: "The company number must be exactly 8 digits.",
       address: "Enter the registered address.",
       city: "Enter the city.",
+      country: "Pick a country.",
       businessName: "Enter the business or brand name.",
       businessDescription: (min) => `Almost — we need at least ${min} characters.`,
       idea: (min) => `Describe the idea in at least ${min} characters so we can quote the job.`,

@@ -101,6 +101,7 @@ export default async function CheckoutPage({
                     mb: profile.mb,
                     address: profile.address,
                     city: profile.city,
+                    country: profile.country,
                   }
                 : null
             }

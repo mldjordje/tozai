@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSql } from "@/lib/db";
 import { getSessionUser } from "@/lib/auth/user-session";
+import { isSerbia } from "@/lib/countries";
 import { getPackageBySlug } from "@/lib/packages";
 import { getProviderFor, normalizePaymentMethod } from "@/lib/payments/provider";
 import { issueInvoice, renderStoredInvoice } from "@/lib/invoices/issue";
@@ -91,22 +92,25 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, message: "Ime i prezime su obavezni." }, { status: 400 });
   }
   if (isCompany) {
-    const missing = (["companyName", "pib", "mb", "address", "city"] as const).filter(
-      (k) => !billing[k],
-    );
+    const missing = (["companyName", "address", "city"] as const).filter((k) => !billing[k]);
     if (missing.length > 0) {
       return NextResponse.json(
-        { ok: false, message: "Za pravno lice su obavezni naziv, PIB, MB, adresa i grad." },
+        { ok: false, message: "Za pravno lice su obavezni naziv, adresa i grad." },
         { status: 400 },
       );
     }
     // PIB is 9 digits, MB is 8 — a wrong one makes the invoice unusable, and
-    // it is far cheaper to reject it here than to reissue later.
-    if (!/^\d{9}$/.test(billing.pib!)) {
-      return NextResponse.json({ ok: false, message: "PIB mora imati 9 cifara." }, { status: 400 });
-    }
-    if (!/^\d{8}$/.test(billing.mb!)) {
-      return NextResponse.json({ ok: false, message: "Matični broj mora imati 8 cifara." }, { status: 400 });
+    // it is far cheaper to reject it here than to reissue later. Both are
+    // Serbian register numbers, so they are only asked of a Serbian company; a
+    // buyer elsewhere gives one free-form tax ID, which the foreign template
+    // prints under "Tax ID".
+    if (isSerbia(billing.country)) {
+      if (!/^\d{9}$/.test(billing.pib ?? "")) {
+        return NextResponse.json({ ok: false, message: "PIB mora imati 9 cifara." }, { status: 400 });
+      }
+      if (!/^\d{8}$/.test(billing.mb ?? "")) {
+        return NextResponse.json({ ok: false, message: "Matični broj mora imati 8 cifara." }, { status: 400 });
+      }
     }
   }
 

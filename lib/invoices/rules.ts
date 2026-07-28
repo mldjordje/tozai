@@ -1,3 +1,7 @@
+// Relative, not "@/lib/…": this module is covered by tests/invoice-rules.test.mts,
+// which runs on bare node with no path aliases.
+import { isSerbia } from "../countries.ts";
+
 export type InvoiceKind = "proforma" | "invoice";
 
 export function invoiceNumber(
@@ -9,14 +13,17 @@ export function invoiceNumber(
   return `${prefix}-${year}-${String(sequence).padStart(4, "0")}`;
 }
 
+/**
+ * Which of the two templates a buyer gets.
+ *
+ * The spelling rules live in lib/countries.ts, next to the list the buyer picks
+ * from, so the select, the API validation and the document can never disagree
+ * about what counts as domestic.
+ */
 export function invoiceScope(
   country: string | null | undefined,
 ): "domestic" | "foreign" {
-  const value = country?.trim().toUpperCase();
-  if (!value) return "domestic";
-  return value === "RS" || value === "SRB" || value === "SRBIJA" || value === "SERBIA"
-    ? "domestic"
-    : "foreign";
+  return isSerbia(country) ? "domestic" : "foreign";
 }
 
 export type SellerPaymentAccounts = {

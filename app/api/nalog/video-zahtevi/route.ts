@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSql } from "@/lib/db";
 import { getSessionUser } from "@/lib/auth/user-session";
 import { getPackageBySlug } from "@/lib/packages";
+import { isSerbia } from "@/lib/countries";
 import {
   defaultPaymentMethod,
   getProviderFor,
@@ -33,6 +34,8 @@ type BillingSnapshot = {
   mb: string;
   address: string;
   city: string;
+  /** Decides which invoice template the buyer gets — see lib/invoices/rules.ts. */
+  country: string;
   email: string;
 };
 
@@ -95,6 +98,10 @@ export async function POST(request: Request) {
   const mb = cleanText(body.mb, 20) ?? "";
   const address = cleanText(body.address, 200) ?? "";
   const city = cleanText(body.city, 120) ?? "";
+  // Empty is read as Serbia, which is what every brief sent before this field
+  // existed effectively meant.
+  const country = cleanText(body.country, 80) ?? "";
+  const domestic = isSerbia(country);
   if (
     slugs.length === 0 || !buyerType || !name || !idea || !businessName || !businessDescription ||
     !Number.isInteger(clipCount) || clipCount < 1 || clipCount > 100 ||
@@ -105,15 +112,22 @@ export async function POST(request: Request) {
       { status: 400 },
     );
   }
-  if (
-    isCompany &&
-    (!companyName || !/^\d{9}$/.test(pib) || !/^\d{8}$/.test(mb) || !address || !city)
-  ) {
+  // The Serbian identifiers are only demanded of a Serbian company: a PIB and a
+  // matični broj are issued by the local register and a company abroad has
+  // neither. Requiring them unconditionally is what made this form impossible
+  // to submit from outside Serbia.
+  if (isCompany && (!companyName || !address || !city)) {
+    return NextResponse.json(
+      { ok: false, message: "Za pravno lice su obavezni pun naziv, adresa i grad." },
+      { status: 400 },
+    );
+  }
+  if (isCompany && domestic && (!/^\d{9}$/.test(pib) || !/^\d{8}$/.test(mb))) {
     return NextResponse.json(
       {
         ok: false,
         message:
-          "Za pravno lice su obavezni pun naziv, PIB (9 cifara), matični broj (8 cifara), adresa i grad.",
+          "Za domaće pravno lice obavezni su PIB (9 cifara) i matični broj (8 cifara).",
       },
       { status: 400 },
     );
@@ -145,6 +159,7 @@ export async function POST(request: Request) {
     mb,
     address,
     city,
+    country,
     email: user.email,
   };
 
@@ -170,7 +185,11 @@ export async function POST(request: Request) {
         pib = NULLIF(${isCompany ? pib : ""}, ''),
         mb = NULLIF(${isCompany ? mb : ""}, ''),
         address = NULLIF(${isCompany ? address : ""}, ''),
-        city = NULLIF(${isCompany ? city : ""}, '')
+        city = NULLIF(${isCompany ? city : ""}, ''),
+        -- Country is kept for individuals too: invoiceScope() reads it off the
+        -- user when an order carries no billing snapshot of its own, and a
+        -- private buyer abroad needs the foreign document just as much.
+        country = COALESCE(NULLIF(${country}, ''), country)
     WHERE id = ${user.uid}
   `;
 
@@ -225,6 +244,7 @@ export async function POST(request: Request) {
       `${name} (${user.email}) je poslao upit za ${serviceName}.`,
       "",
       `Biznis: ${businessName}`,
+      `Zemlja: ${country || "Srbija"}${domestic ? "" : " — inostrani predračun (EN, IBAN/SWIFT)"}`,
       `Klipova: ${clipCount}`,
       `Budžet: ${budgetEur} EUR`,
       "",
@@ -295,7 +315,8 @@ export async function PATCH(request: Request) {
            r.package_id, r.revisions, r.turnaround_days, r.buyer_type,
            r.billing AS request_billing,
            r.quote_valid_until::text AS quote_valid_until,
-           u.email, u.name, u.phone, u.is_company, u.company_name, u.pib, u.mb, u.address, u.city
+           u.email, u.name, u.phone, u.is_company, u.company_name, u.pib, u.mb, u.address, u.city,
+           u.country
     FROM video_requests r
     JOIN users u ON u.id = r.user_id
     WHERE r.id = ${id} AND r.user_id = ${user.uid} AND r.status = 'quoted'
@@ -322,6 +343,7 @@ export async function PATCH(request: Request) {
     mb: string | null;
     address: string | null;
     city: string | null;
+    country: string | null;
   }[];
   const q = quote[0];
   if (!q) {
@@ -340,6 +362,7 @@ export async function PATCH(request: Request) {
     mb: q.mb ?? "",
     address: q.address ?? "",
     city: q.city ?? "",
+    country: q.country ?? "",
     email: q.email,
   };
   if (

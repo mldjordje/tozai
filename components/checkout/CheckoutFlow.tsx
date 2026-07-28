@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { countryOptions, isSerbia } from "@/lib/countries";
 import InvoiceDocument from "@/components/nalog/InvoiceDocument";
 import PaymentChoice from "@/components/checkout/PaymentChoice";
 
@@ -103,19 +104,27 @@ export default function CheckoutFlow({
     proforma: Proforma | null;
   } | null>(null);
 
-  const set = (key: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) =>
-    setForm((f) => ({ ...f, [key]: e.target.value }));
+  const set =
+    (key: keyof typeof form) =>
+    (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
+      setForm((f) => ({ ...f, [key]: e.target.value }));
+
+  // Serbia decides the whole document set — domestic proforma and dinar account
+  // versus the English one on IBAN/SWIFT — so it also decides which company
+  // identifiers are worth asking for. A firm in Vienna has no PIB.
+  const domestic = isSerbia(form.country);
 
   const priceUnavailable = pkg.price == null || pkg.price <= 0;
 
   const billingValid =
     form.name.trim().length > 1 &&
+    form.country.trim().length > 0 &&
     (!isCompany ||
       (form.companyName.trim() &&
-        /^\d{9}$/.test(form.pib.trim()) &&
-        /^\d{8}$/.test(form.mb.trim()) &&
         form.address.trim() &&
-        form.city.trim()));
+        form.city.trim() &&
+        (!domestic ||
+          (/^\d{9}$/.test(form.pib.trim()) && /^\d{8}$/.test(form.mb.trim())))));
 
   async function submit() {
     setBusy(true);
@@ -198,6 +207,7 @@ export default function CheckoutFlow({
                 set={set}
                 isCompany={isCompany}
                 setIsCompany={setIsCompany}
+                domestic={domestic}
                 email={user?.email ?? ""}
                 valid={Boolean(billingValid)}
                 onNext={() => setStep(2)}
@@ -324,24 +334,81 @@ function Field({
   );
 }
 
+/** Native picker, styled as a field. Sixty countries is exactly the case where
+ *  the phone's own list beats anything rebuilt out of divs. */
+function Select({
+  label,
+  value,
+  onChange,
+  options,
+  hint,
+}: {
+  label: string;
+  value: string;
+  onChange: (e: React.ChangeEvent<HTMLSelectElement>) => void;
+  options: { value: string; label: string }[];
+  hint?: string;
+}) {
+  return (
+    <label className="block">
+      <span className="text-xs uppercase tracking-[0.2em] text-faint">{label}</span>
+      <div className="relative mt-2.5">
+        <select value={value} onChange={onChange} className="field appearance-none pr-11">
+          {/* A value typed by hand before this was a list keeps its own option,
+              so opening checkout never silently rewrites it. */}
+          {options.some((option) => option.value === value) ? null : (
+            <option value={value}>{value}</option>
+          )}
+          {options.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+        <svg
+          viewBox="0 0 24 24"
+          aria-hidden
+          className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-faint"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <path d="M6 9l6 6 6-6" />
+        </svg>
+      </div>
+      {hint && <span className="mt-1.5 block text-xs text-faint">{hint}</span>}
+    </label>
+  );
+}
+
 function BillingStep({
   form,
   set,
   isCompany,
   setIsCompany,
+  domestic,
   email,
   valid,
   onNext,
 }: {
   form: Record<string, string>;
-  set: (k: never) => (e: React.ChangeEvent<HTMLInputElement>) => void;
+  set: (
+    k: never,
+  ) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => void;
   isCompany: boolean;
   setIsCompany: (v: boolean) => void;
+  /** Whether the chosen country is Serbia — decides which company identifiers
+   *  are asked for, and which invoice template the order will produce. */
+  domestic: boolean;
   email: string;
   valid: boolean;
   onNext: () => void;
 }) {
-  const s = set as unknown as (k: string) => (e: React.ChangeEvent<HTMLInputElement>) => void;
+  const s = set as unknown as (
+    k: string,
+  ) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => void;
   return (
     <div className="max-w-xl">
       <h2 className="display text-3xl md:text-4xl">Podaci za račun.</h2>
@@ -376,24 +443,42 @@ function BillingStep({
         </div>
         <Field label="Telefon" value={form.phone} onChange={s("phone")} placeholder="+381 60 000 0000" inputMode="tel" />
 
+        {/* Above the company block, because it decides what that block asks
+            for — and it was a free-text box, so "Deutschland" or a typo quietly
+            produced a domestic Serbian invoice for a buyer abroad. */}
+        <Select
+          label="Država"
+          value={form.country}
+          onChange={s("country")}
+          options={countryOptions("sr")}
+          hint={
+            domestic
+              ? undefined
+              : "Za kupce van Srbije predračun i faktura idu na engleskom, sa deviznim računom (IBAN/SWIFT)."
+          }
+        />
+
         {isCompany && (
           <>
             <Field label="Naziv firme" value={form.companyName} onChange={s("companyName")} />
-            <div className="grid gap-7 sm:grid-cols-2">
-              <Field label="PIB" value={form.pib} onChange={s("pib")} hint="9 cifara" inputMode="numeric" />
-              <Field label="Matični broj" value={form.mb} onChange={s("mb")} hint="8 cifara" inputMode="numeric" />
-            </div>
+            {domestic ? (
+              <div className="grid gap-7 sm:grid-cols-2">
+                <Field label="PIB" value={form.pib} onChange={s("pib")} hint="9 cifara" inputMode="numeric" />
+                <Field label="Matični broj" value={form.mb} onChange={s("mb")} hint="8 cifara" inputMode="numeric" />
+              </div>
+            ) : (
+              <Field
+                label="PIB / VAT broj"
+                value={form.pib}
+                onChange={s("pib")}
+                placeholder="npr. DE123456789"
+                hint="Opciono — ide na fakturu ako ga upišeš."
+              />
+            )}
             <Field label="Adresa" value={form.address} onChange={s("address")} />
             <Field label="Grad" value={form.city} onChange={s("city")} />
           </>
         )}
-        <Field
-          label="Država"
-          value={form.country}
-          onChange={s("country")}
-          placeholder="Srbija"
-          hint="Za kupce van Srbije faktura je na engleskom i u EUR."
-        />
       </div>
 
       <button
@@ -485,8 +570,17 @@ function ReviewStep({
 
       <dl className="mt-9 space-y-4 border-t border-line pt-7 text-sm">
         <Row k="Kupac" v={isCompany ? form.companyName : form.name} />
-        {isCompany && <Row k="PIB / MB" v={`${form.pib} · ${form.mb}`} />}
+        {isCompany &&
+          (isSerbia(form.country) ? (
+            <Row k="PIB / MB" v={`${form.pib} · ${form.mb}`} />
+          ) : (
+            form.pib && <Row k="PIB / VAT" v={form.pib} />
+          ))}
         {isCompany && <Row k="Adresa" v={`${form.address}, ${form.city}`} />}
+        {/* The buyer should see the country on the review step, because it is
+            what decides the language and the account on the document they are
+            about to be issued. */}
+        {form.country && <Row k="Država" v={form.country} />}
         <Row k="Email" v={email} />
         {form.phone && <Row k="Telefon" v={form.phone} />}
         <Row k="Stavka" v={pkg.name} />
