@@ -1,5 +1,6 @@
 import "server-only";
 import { getSql } from "./db";
+import { cleanSocialLinks, type SocialLink } from "./socials";
 
 // Public slice of `studio_settings` (the row the owner edits in /admin/podesavanja).
 // Only the contact/social fields — never the billing ones, which belong to the
@@ -8,30 +9,16 @@ import { getSql } from "./db";
 export type PublicContact = {
   email: string | null;
   phone: string | null;
-  instagram: string | null;
-  tiktok: string | null;
-  youtube: string | null;
-  linkedin: string | null;
+  /** Studio-managed list, in display order. Replaces the four fixed columns:
+   *  adding a network is a row now, not a migration. */
+  socials: SocialLink[];
 };
 
 const EMPTY: PublicContact = {
   email: null,
   phone: null,
-  instagram: null,
-  tiktok: null,
-  youtube: null,
-  linkedin: null,
+  socials: [],
 };
-
-/** The admin field takes either a full URL or a bare handle, because that is
- *  what people paste. Normalized here so the footer never renders a link to
- *  "@tozaai". */
-export function socialUrl(base: string, value: string | null): string | null {
-  const v = value?.trim();
-  if (!v) return null;
-  if (/^https?:\/\//i.test(v)) return v;
-  return `${base}/${v.replace(/^@/, "")}`;
-}
 
 // Landing-safe: a settings outage must not take the page down, so an
 // unreachable DB reads as "no contact details", same as an unfilled row.
@@ -39,10 +26,18 @@ export async function getPublicContact(): Promise<PublicContact> {
   try {
     const sql = getSql();
     const rows = (await sql`
-      SELECT email, phone, instagram, tiktok, youtube, linkedin
+      SELECT email, phone, social_links
       FROM studio_settings WHERE id = 1
-    `) as PublicContact[];
-    return rows[0] ?? EMPTY;
+    `) as { email: string | null; phone: string | null; social_links: unknown }[];
+    const row = rows[0];
+    if (!row) return EMPTY;
+    return {
+      email: row.email,
+      phone: row.phone,
+      // Cleaned on read as well as on write: a row edited straight in the
+      // database must not be able to render a dead icon on the landing.
+      socials: cleanSocialLinks(row.social_links),
+    };
   } catch {
     return EMPTY;
   }

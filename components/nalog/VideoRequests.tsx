@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import InvoiceDocument from "@/components/nalog/InvoiceDocument";
+import PaymentChoice from "@/components/checkout/PaymentChoice";
+import type { PaymentAvailability, PaymentMethod } from "@/lib/payments/selection";
 
 type RequestRow = {
   id: number;
@@ -46,7 +48,11 @@ const LABEL: Record<RequestRow["status"], string> = {
   canceled: "Otkazano",
 };
 
-export default function VideoRequests() {
+export default function VideoRequests({
+  availability,
+}: {
+  availability: PaymentAvailability;
+}) {
   const [requests, setRequests] = useState<RequestRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<number | null>(null);
@@ -56,6 +62,7 @@ export default function VideoRequests() {
     intent: ManualIntent;
     proforma: { id: number; number: string } | null;
   } | null>(null);
+  const [method, setMethod] = useState<PaymentMethod>(availability.card ? "card" : "invoice");
 
   async function load() {
     try {
@@ -81,7 +88,7 @@ export default function VideoRequests() {
       const response = await fetch("/api/nalog/video-zahtevi", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id, action }),
+        body: JSON.stringify(action === "accept" ? { id, action, paymentMethod: method } : { id, action }),
       });
       const data = await response.json();
       if (!response.ok || !data.ok) {
@@ -191,9 +198,23 @@ export default function VideoRequests() {
               </div>
               {request.admin_note && <p className="mt-4 rounded-xl bg-bg-elev p-4 text-sm text-muted">{request.admin_note}</p>}
               <p className="mt-4 text-xs text-faint">Ponuda važi do {request.quote_valid_until}.</p>
+              {/* Accepting a quote is a purchase, so the buyer picks how to pay
+                  here just as they would in checkout — rather than the server
+                  deciding for them and the choice appearing only afterwards. */}
+              <PaymentChoice
+                availability={availability}
+                value={method}
+                onChange={setMethod}
+                className="mt-5"
+              />
+
               <div className="mt-5 flex flex-wrap gap-3">
                 <button onClick={() => act(request.id, "accept")} disabled={busy === request.id} className="rounded-full bg-fg px-6 py-3 text-sm font-medium text-bg disabled:opacity-50">
-                  {busy === request.id ? "Otvaram plaćanje…" : "Prihvati i plati"}
+                  {busy === request.id
+                    ? "Otvaram plaćanje…"
+                    : method === "invoice"
+                      ? "Prihvati i uzmi predračun"
+                      : "Prihvati i plati"}
                 </button>
                 <button onClick={() => act(request.id, "decline")} disabled={busy === request.id} className="rounded-full border border-line px-6 py-3 text-sm text-muted">
                   Ne odgovara mi

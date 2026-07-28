@@ -1,4 +1,5 @@
 import VideoRequests from "@/components/nalog/VideoRequests";
+import { paymentAvailability } from "@/lib/payments/provider";
 
 export const dynamic = "force-dynamic";
 
@@ -11,7 +12,7 @@ export default function ZahteviPage() {
           Ovde vidiš poslati brief, privatnu cenu i sledeći korak.
         </p>
       </div>
-      <VideoRequests />
+      <VideoRequests availability={paymentAvailability()} />
     </div>
   );
 }

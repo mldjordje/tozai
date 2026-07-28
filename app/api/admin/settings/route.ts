@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { getSql } from "@/lib/db";
+import { cleanSocialLinks } from "@/lib/socials";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -20,10 +22,15 @@ export async function GET() {
            company_name, pib, mb, bank_account, instagram, tiktok, youtube, linkedin
            , iban, swift, bank_name, bank_address, vat_note_domestic, vat_note_foreign,
            invoice_due_days::text AS invoice_due_days
-           , activity_code, registration_number
+           , activity_code, registration_number, social_links
     FROM studio_settings WHERE id = 1
-  `) as Record<string, string | null>[];
-  return NextResponse.json({ ok: true, settings: rows[0] ?? null });
+  `) as Record<string, unknown>[];
+  const row = rows[0] ?? null;
+  return NextResponse.json({
+    ok: true,
+    settings: row,
+    socials: row ? cleanSocialLinks(row.social_links) : [],
+  });
 }
 
 export async function PUT(request: Request) {
@@ -53,6 +60,11 @@ export async function PUT(request: Request) {
       { status: 400 },
     );
   }
+  // Half-filled rows are dropped rather than rejected: the studio adds an empty
+  // row, tabs away, and should not be blocked by a validation error over a line
+  // it never meant to keep.
+  const socials = cleanSocialLinks(body.socials);
+
   const sql = getSql();
   await sql`
     UPDATE studio_settings SET
@@ -85,8 +97,19 @@ export async function PUT(request: Request) {
       tiktok = CASE WHEN ${"tiktok" in v} THEN ${v.tiktok ?? null} ELSE tiktok END,
       youtube = CASE WHEN ${"youtube" in v} THEN ${v.youtube ?? null} ELSE youtube END,
       linkedin = CASE WHEN ${"linkedin" in v} THEN ${v.linkedin ?? null} ELSE linkedin END,
+      social_links = CASE
+        WHEN ${"socials" in body}
+        THEN ${JSON.stringify(socials)}::jsonb
+        ELSE social_links
+      END,
       updated_at = now()
     WHERE id = 1
   `;
-  return NextResponse.json({ ok: true });
+
+  // Contact details and the icon row are rendered on the ISR landing and the
+  // portfolio page; without this an edit sits invisible until the window ends.
+  revalidatePath("/");
+  revalidatePath("/portfolio");
+
+  return NextResponse.json({ ok: true, socials });
 }

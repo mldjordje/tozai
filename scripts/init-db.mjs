@@ -613,6 +613,32 @@ await sql`ALTER TABLE studio_settings ADD COLUMN IF NOT EXISTS bank_name TEXT`;
 await sql`ALTER TABLE studio_settings ADD COLUMN IF NOT EXISTS bank_address TEXT`;
 await sql`ALTER TABLE studio_settings ADD COLUMN IF NOT EXISTS activity_code TEXT`;
 await sql`ALTER TABLE studio_settings ADD COLUMN IF NOT EXISTS registration_number TEXT`;
+
+/* ----------------------------------------------------------- social links --- */
+// One column per network meant a new platform was a migration and a deploy. The
+// studio adds and removes its own rows now: [{ label, url }], ordered as shown.
+//
+// The four legacy columns are folded in once and then left alone — they are
+// still read by nothing, but dropping a column the old code might touch during
+// a rollout is not worth the risk.
+await sql`ALTER TABLE studio_settings ADD COLUMN IF NOT EXISTS social_links JSONB`;
+await sql`
+  UPDATE studio_settings
+  SET social_links = (
+    SELECT COALESCE(jsonb_agg(entry), '[]'::jsonb)
+    FROM (
+      SELECT jsonb_build_object('label', label, 'url', value) AS entry
+      FROM (VALUES
+        ('Instagram', instagram),
+        ('TikTok', tiktok),
+        ('YouTube', youtube),
+        ('LinkedIn', linkedin)
+      ) AS legacy(label, value)
+      WHERE value IS NOT NULL AND btrim(value) <> ''
+    ) AS filled
+  )
+  WHERE id = 1 AND social_links IS NULL
+`;
 // The VAT sentence is legal text, not copy: it is left for the studio's
 // accountant to fill in rather than guessed at here, and it is printed on
 // every document verbatim.

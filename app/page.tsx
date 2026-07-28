@@ -8,6 +8,7 @@ import KineticTitle from "@/components/ui/KineticTitle";
 import CountUp from "@/components/ui/CountUp";
 import CTAButton from "@/components/ui/CTAButton";
 import TextStrip from "@/components/ui/TextStrip";
+import SocialLinks from "@/components/ui/SocialLinks";
 import Hero from "@/components/sections/Hero";
 import ResultsShowcase from "@/components/sections/ResultsShowcase";
 import Packages from "@/components/sections/Packages";
@@ -178,6 +179,10 @@ export default async function Home() {
                   </>
                 )}
               </p>
+              {/* The one place on the page where a visitor is already looking
+                  for a way to reach the studio — and the proof rail above has
+                  just spent six cards talking about these very accounts. */}
+              <SocialLinks links={contact.socials} className="mt-7 justify-center" />
             </Reveal>
           </div>
         </PinnedSection>

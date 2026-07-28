@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import InvoiceDocument from "@/components/nalog/InvoiceDocument";
+import PaymentChoice from "@/components/checkout/PaymentChoice";
 
 /**
  * Three steps, one screen: identity, billing, review. The order summary stays
@@ -422,54 +423,15 @@ function PaymentStep({
   onBack: () => void;
   onNext: () => void;
 }) {
-  const options: {
-    value: PaymentMethod;
-    title: string;
-    description: string;
-    available: boolean;
-  }[] = [
-    {
-      value: "card",
-      title: availability.cardIsTest ? "Kartica — test režim" : "Platna kartica",
-      description: availability.cardIsTest
-        ? "Naplata je isključena; porudžbina se odmah označava kao plaćena."
-        : availability.card
-          ? "Nastavljaš na sigurnu stranicu procesora plaćanja."
-          : "Kartično plaćanje uskoro stiže.",
-      available: availability.card,
-    },
-    {
-      value: "invoice",
-      title: "Predračun / uplata na račun",
-      description:
-        "Odmah dobijaš predračun i podatke za uplatu. Konačna faktura stiže kad evidentiramo uplatu.",
-      available: true,
-    },
-  ];
-
   return (
     <div className="max-w-xl">
       <h2 className="display text-3xl md:text-4xl">Kako želiš da platiš?</h2>
-      <div className="mt-9 grid gap-4">
-        {options.map((option) => (
-          <button
-            key={option.value}
-            type="button"
-            disabled={!option.available}
-            onClick={() => onChange(option.value)}
-            className={`rounded-2xl border p-6 text-left transition-colors ${
-              value === option.value
-                ? "border-accent-soft bg-bg-elev"
-                : "border-line bg-bg-elev/30 hover:border-faint"
-            } disabled:cursor-not-allowed disabled:opacity-45`}
-          >
-            <span className="text-sm font-medium text-fg">{option.title}</span>
-            <span className="mt-2 block text-sm leading-relaxed text-muted">
-              {option.description}
-            </span>
-          </button>
-        ))}
-      </div>
+      <PaymentChoice
+        availability={availability}
+        value={value}
+        onChange={onChange}
+        className="mt-9"
+      />
       <div className="mt-10 flex gap-5">
         <button
           type="button"

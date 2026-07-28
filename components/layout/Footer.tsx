@@ -1,6 +1,7 @@
 import Link from "next/link";
 import BrandLogo from "@/components/brand/Logo";
-import { socialUrl, type PublicContact } from "@/lib/settings";
+import { type PublicContact } from "@/lib/settings";
+import SocialLinks from "@/components/ui/SocialLinks";
 import { DEFAULTS } from "@/lib/content/landing";
 
 /**
@@ -23,12 +24,7 @@ export default function Footer({
   tagline?: string;
   response?: string;
 }) {
-  const socials = [
-    { label: "Instagram", href: socialUrl("https://instagram.com", contact.instagram) },
-    { label: "TikTok", href: socialUrl("https://tiktok.com/@", contact.tiktok) },
-    { label: "YouTube", href: socialUrl("https://youtube.com", contact.youtube) },
-    { label: "LinkedIn", href: socialUrl("https://linkedin.com/in", contact.linkedin) },
-  ].filter((s): s is { label: string; href: string } => Boolean(s.href));
+  const socials = contact.socials;
 
   return (
     <footer className="relative z-10 border-t border-line bg-bg/80 px-6 py-16 backdrop-blur-md md:px-12">
@@ -84,18 +80,14 @@ export default function Footer({
                   </a>
                 </li>
               )}
-              {socials.map((s) => (
-                <li key={s.label}>
-                  <a
-                    href={s.href}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-muted transition-colors duration-300 hover:text-fg"
-                  >
-                    {s.label}
-                  </a>
+              {/* Icons rather than a fourth column of text links: the studio
+                  can now add as many profiles as it likes, and a growing list
+                  of words would push the footer out of shape. */}
+              {socials.length > 0 && (
+                <li className="pt-1">
+                  <SocialLinks links={socials} />
                 </li>
-              ))}
+              )}
               {!contact.email && !contact.phone && socials.length === 0 && (
                 <li className="text-muted">
                   <Link

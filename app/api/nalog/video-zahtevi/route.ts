@@ -2,7 +2,12 @@ import { NextResponse } from "next/server";
 import { getSql } from "@/lib/db";
 import { getSessionUser } from "@/lib/auth/user-session";
 import { getPackageBySlug } from "@/lib/packages";
-import { defaultPaymentMethod, getProviderFor } from "@/lib/payments/provider";
+import {
+  defaultPaymentMethod,
+  getProviderFor,
+  normalizePaymentMethod,
+  type PaymentMethod,
+} from "@/lib/payments/provider";
 import { issueInvoice, renderStoredInvoice } from "@/lib/invoices/issue";
 import { queueQuietly, queueStudioNotice } from "@/lib/email";
 import {
@@ -217,6 +222,22 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ ok: false, message: "Neispravna akcija." }, { status: 400 });
   }
 
+  // Accepting a quote is a purchase, so the buyer picks how to pay here exactly
+  // as they would in checkout. Validated against what is actually wired up —
+  // a client asking for "card" while no provider exists must not reach a dead
+  // payment page. An older client that sends nothing still works.
+  let acceptMethod: PaymentMethod = defaultPaymentMethod();
+  if (action === "accept" && "paymentMethod" in body) {
+    const chosen = normalizePaymentMethod(body.paymentMethod);
+    if (!chosen) {
+      return NextResponse.json(
+        { ok: false, message: "Izabrani način plaćanja trenutno nije dostupan." },
+        { status: 400 },
+      );
+    }
+    acceptMethod = chosen;
+  }
+
   const sql = getSql();
   if (action === "decline" || action === "withdraw") {
     const allowed = action === "decline" ? "quoted" : "submitted";
@@ -316,7 +337,7 @@ export async function PATCH(request: Request) {
       'pending', 'project', NULL, NULL, ${q.buyer_type},
       ${JSON.stringify(billing)}::jsonb, ${q.id},
       ${q.turnaround_days ? `Dogovoreno vreme izrade: ${q.turnaround_days} dana` : null},
-      ${defaultPaymentMethod()}
+      ${acceptMethod}
     )
     ON CONFLICT (quote_request_id) WHERE quote_request_id IS NOT NULL
       DO UPDATE SET quote_request_id = EXCLUDED.quote_request_id
@@ -330,8 +351,7 @@ export async function PATCH(request: Request) {
     WHERE id = ${q.id} AND user_id = ${user.uid} AND status = 'quoted'
   `;
 
-  const paymentMethod = defaultPaymentMethod();
-  const provider = await getProviderFor(paymentMethod);
+  const provider = await getProviderFor(acceptMethod);
   const intent = await provider.createCheckout({
     id: orderId,
     item: q.service_name,
@@ -351,7 +371,7 @@ export async function PATCH(request: Request) {
   // floor, as this did, left the buyer with a payment slip and no proforma.
   let proforma: { id: number; number: string } | null = null;
   let proformaAttachment: { filename: string; content: string } | undefined;
-  if (paymentMethod === "invoice") {
+  if (acceptMethod === "invoice") {
     try {
       const issued = await issueInvoice(orderId, "proforma");
       if (issued) {
