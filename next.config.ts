@@ -2,6 +2,14 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  async redirects() {
+    return [
+      { source: "/index", destination: "/", permanent: true },
+      { source: "/index.html", destination: "/", permanent: true },
+      { source: "/en/index", destination: "/en", permanent: true },
+      { source: "/en/index.html", destination: "/en", permanent: true },
+    ];
+  },
   // `next dev` and `next start` both default to `.next`, so running a dev
   // server next to the production one on :3001 has them overwriting each
   // other's manifests — both then 500 with missing routes-manifest.json or

@@ -24,7 +24,6 @@ export function isLocale(value: unknown): value is Locale {
  * untouched, so callers can pass hrefs straight through without checking first.
  */
 export function localePath(locale: Locale, path: string): string {
-  if (locale === DEFAULT_LOCALE) return path;
   if (!path.startsWith("/") || path.startsWith("//")) return path;
   if (path.startsWith("/api/")) return path;
   // "/#paketi" is a link to a section of the home page, so the prefix goes
@@ -32,7 +31,13 @@ export function localePath(locale: Locale, path: string): string {
   const hash = path.indexOf("#");
   const base = hash === -1 ? path : path.slice(0, hash);
   const rest = hash === -1 ? "" : path.slice(hash);
-  const clean = base === "/" ? "" : base;
+  // Some browsers/caches expose the home page pathname as "/index" even
+  // though the canonical route is "/". Never let that alias become the
+  // non-existent English route "/en/index".
+  const normalizedBase = base === "/index" || base === "/index.html" ? "/" : base;
+  const normalizedPath = `${normalizedBase}${rest}`;
+  if (locale === DEFAULT_LOCALE) return normalizedPath;
+  const clean = normalizedBase === "/" ? "" : normalizedBase;
   return `/${locale}${clean}${rest}` || `/${locale}`;
 }
 
