@@ -9,8 +9,9 @@ Status:
 - Monri webhook i prava kartična naplata čekaju Monri kredencijale/dokumentaciju.
 - Google admin ulaz je pripremljen, ali kredencijali nisu dostavljeni i postojeća
   admin lozinka namerno ostaje aktivna do posebne završne provere oba Google naloga.
-- Resend slanje čeka `RESEND_API_KEY` i verifikovan domen; bez toga se poruke
-  bezbedno čuvaju u outbox tabeli, a dokumenti ostaju dostupni na nalogu.
+- Resend je podešen na Vercelu i produkcijsko slanje je ručno potvrđeno.
+  Promenljive namerno nisu kopirane u lokalni `.env.local`.
+- Vercel Blob je povezan sa produkcijskim projektom `toza-ai.rs` i upload radi.
 - Operativno uputstvo za klijenta: `KLIJENT-HANDOFF-2026-07.md`.
 
 Ovaj dokument mapira sve taskove iz brifa i beleži šta u kodu **već postoji** (da se ne

@@ -1,9 +1,11 @@
 # Resend — uputstvo za klijenta
 
-Aplikacija već ume da šalje mejlove (`lib/email.ts` gađa Resend API). Fali samo
-nalog, verifikovan domen i API ključ. Ovo je sve što klijent treba da uradi.
+> Status produkcije: Resend je već podešen u Vercel projektu `toza-ai.rs` i
+> slanje je testirano. Ovo uputstvo služi za buduće održavanje ili obnovu
+> konfiguracije; korake ne treba ponavljati sada.
 
-Kad se ključ upiše u env, mejlovi krenu sami — nema izmene koda.
+Aplikacija šalje mejlove kroz Resend API. Nalog, domen i produkcijske Vercel
+promenljive su već podešeni. Lokalni `.env.local` ih namerno ne sadrži.
 
 ---
 

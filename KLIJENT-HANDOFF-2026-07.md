@@ -135,17 +135,14 @@ posle nekoliko sekundi.
 
 ## 8. Email slanje
 
-Da bi predračuni, fakture i podsetnici stvarno stizali kupcima, potrebno je
-podesiti Resend. Detaljno uputstvo je u `RESEND-SETUP.md`.
+Resend je već podešen na Vercelu i produkcijsko slanje je testirano. Nije
+potrebno da klijent ponovo pravi nalog ili šalje API ključ.
 
-Potrebni podaci za produkciju:
+PDF predračun ili faktura se automatski dodaje kao prilog. Podsetnik za uplatu
+se šalje iz `/admin/porudzbine`.
 
-- `RESEND_API_KEY`;
-- `EMAIL_FROM`;
-- `NEXT_PUBLIC_APP_URL=https://toza-ai.rs`.
-
-PDF predračun ili faktura se automatski dodaje kao prilog. Ako Resend još nije
-podešen, porudžbina i dokument ipak ostaju sačuvani u nalogu kupca.
+Resend promenljive namerno nisu postavljene lokalno. Produkcijske vrednosti
+ostaju bezbedno sačuvane u Vercel projektu `toza-ai.rs`.
 
 ## 9. Google ulaz u admin
 
@@ -180,4 +177,3 @@ podaci, developeru proslediti:
 - valutu i pravila RSD naplate.
 
 Do tada je kartična opcija isključena za kupce, a predračun radi normalno.
-

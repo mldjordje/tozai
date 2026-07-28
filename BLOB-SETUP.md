@@ -1,5 +1,9 @@
 # Vercel Blob — produkcijsko podešavanje
 
+> Status produkcije: Blob store je već povezan sa Vercel projektom
+> `toza-ai.rs` i upload je podešen. Koraci ispod služe samo za proveru ili
+> ponovno povezivanje u budućnosti.
+
 Upload rezultata i medija koristi Vercel Blob direktno iz browsera, kako veliki
 fajlovi ne bi udarili u limit Vercel funkcija.
 
@@ -19,4 +23,3 @@ Token nikad ne stavljati u `NEXT_PUBLIC_*`, git, email ili screenshot.
 
 U `/admin/rezultati` uploadovati jednu probnu sliku, proveriti da se pojavljuje
 na početnoj strani, zatim je obrisati. Brisanje uklanja i bazni red i Blob fajl.
-
