@@ -75,6 +75,7 @@ Tri stavke, preko sigurnog kanala (ne običan mejl / ne Viber):
 RESEND_API_KEY=re_xxxxxxxxxxxxxxxxxxxx
 EMAIL_FROM="TOZA AI <no-reply@mail.toza-ai.rs>"
 NEXT_PUBLIC_APP_URL=https://toza-ai.rs
+CRON_SECRET=dugacak-nasumican-string
 ```
 
 `NEXT_PUBLIC_APP_URL` ide u linkove unutar mejla ("otvori svoj nalog"). Bez njega se
@@ -95,6 +96,37 @@ nalog i proveri da mejl stigne. Isporuka projekta u `/admin/projekti` (status
 | Klijent napravi porudžbinu preko računa | kupcu, sa PDF predračunom |
 | Admin potvrdi uplatu | kupcu, sa PDF konačnom fakturom |
 | Admin klikne „Pošalji podsetnik“ | kupcu, ponovo sa PDF predračunom |
+| Klijent pošalje novi upit | studiju |
+| Klijent napravi porudžbinu / uplata potvrđena | studiju |
+| Klijent zakaže ili otkaže termin | studiju |
+| **Sat vremena pre termina** | studiju |
+
+### Adresa studija
+
+Sve što ide „studiju" šalje se na **Podešavanja → Obaveštenja → Email za
+obaveštenja** (`studio_settings.notify_email`). Ako je prazno, koristi se javni
+kontakt email. Trenutno podešeno: `tozaayt@gmail.com`.
+
+Razlog za dva polja: kontakt email se prikazuje na sajtu (futer, sekcija
+Kontakt). Kada bi obaveštenja išla na njega, promena javnog kontakta bi tiho
+preusmerila i sva obaveštenja.
+
+### Podsetnik sat vremena pre termina
+
+Jedini zakazani posao u aplikaciji: `GET /api/cron/podsetnici`. Prolazi kroz
+termine u statusu `zakazano` koji počinju u narednih 60 minuta, šalje po jedan
+mejl studiju i obeležava `bookings.reminded_1h` — dupli mejl nije moguć.
+
+Podešavanje:
+
+1. U Vercel projektu dodaj env varijablu `CRON_SECRET` (bilo koji dug nasumičan
+   string). Bez nje ruta vraća 401 i ništa ne šalje.
+2. Raspored stoji u `vercel.json` — na svakih 10 minuta. **Hobby plan dozvoljava
+   samo jedno pokretanje dnevno**, što je premalo; ili Pro plan, ili spoljni
+   pinger (npr. cron-job.org) na
+   `https://toza-ai.rs/api/cron/podsetnici?key=<CRON_SECRET>` na svakih 10 min.
+
+Provera: pozovi rutu ručno sa `?key=…` — vraća `{"ok":true,"due":N,"sent":N}`.
 
 Svaki mejl se prvo upisuje u tabelu `email_outbox`, pa tek onda šalje. Ako Resend
 padne ili ključ fali, red ostaje u bazi sa statusom `failed` — ništa se ne gubi.

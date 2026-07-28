@@ -7,6 +7,7 @@ type Settings = Record<string, string | null>;
 
 const EMPTY: Settings = {
   name: "TOZA AI", logo_url: "", currency: "EUR", locale: "sr", phone: "", email: "",
+  notify_email: "",
   address: "", city: "", company_name: "", pib: "", mb: "", bank_account: "",
   iban: "", swift: "", bank_name: "", bank_address: "",
   vat_note_domestic: "", vat_note_foreign: "", invoice_due_days: "5",
@@ -15,9 +16,14 @@ const EMPTY: Settings = {
 
 type Social = { label: string; url: string };
 
-const SECTIONS: { title: string; fields: { key: string; label: string; placeholder?: string }[] }[] = [
+const SECTIONS: {
+  title: string;
+  hint?: string;
+  fields: { key: string; label: string; placeholder?: string }[];
+}[] = [
   {
     title: "Brend i kontakt",
+    hint: "Email i telefon odavde se prikazuju na sajtu — u futeru i u sekciji Kontakt.",
     fields: [
       { key: "name", label: "Naziv", placeholder: "TOZA AI" },
       { key: "logo_url", label: "Logo URL" },
@@ -27,6 +33,15 @@ const SECTIONS: { title: string; fields: { key: string; label: string; placehold
       { key: "city", label: "Grad" },
       { key: "currency", label: "Valuta", placeholder: "EUR" },
       { key: "locale", label: "Jezik", placeholder: "sr" },
+    ],
+  },
+  {
+    title: "Obaveštenja",
+    hint:
+      "Ovde stižu novi upiti, nove porudžbine, zakazani i otkazani termini, i podsetnik sat vremena pre svakog termina. " +
+      "Adresa se ne prikazuje nigde na sajtu. Ako ostane prazna, koristi se email iz kontakta.",
+    fields: [
+      { key: "notify_email", label: "Email za obaveštenja", placeholder: "tozaayt@gmail.com" },
     ],
   },
   {
@@ -121,6 +136,7 @@ export function PodesavanjaTab() {
           {SECTIONS.map((sec) => (
             <section key={sec.title} className="adm__content-section">
               <h3>{sec.title}</h3>
+              {sec.hint && <p className="adm__hint">{sec.hint}</p>}
               <div className="adm__content-grid">
                 {sec.fields.map((f) => (
                   <label key={f.key} className="adm__content-field">

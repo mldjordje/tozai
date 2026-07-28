@@ -72,9 +72,10 @@ export async function queueTransactionalEmail(input: EmailInput) {
  *
  * A lead that only appears inside the admin panel is a lead nobody sees until
  * someone happens to log in, so both buyer-initiated events send a copy here.
- * The address comes from studio_settings (admin → Podešavanja); until it is
- * filled in this is a no-op rather than a failure, because a missing owner
- * address must never cost the buyer their order.
+ * The address comes from studio_settings (admin → Podešavanja): `notify_email`
+ * when the studio set one, otherwise the public contact address. Until both are
+ * empty this is a no-op rather than a failure, because a missing owner address
+ * must never cost the buyer their order.
  */
 export async function queueStudioNotice(input: {
   templateKey: string;
@@ -84,7 +85,8 @@ export async function queueStudioNotice(input: {
   try {
     const sql = getSql();
     const rows = (await sql`
-      SELECT email FROM studio_settings WHERE id = 1
+      SELECT COALESCE(NULLIF(btrim(notify_email), ''), email) AS email
+      FROM studio_settings WHERE id = 1
     `) as { email: string | null }[];
     const to = rows[0]?.email?.trim();
     if (!to) return { queued: false, sent: false };

@@ -614,6 +614,17 @@ await sql`ALTER TABLE studio_settings ADD COLUMN IF NOT EXISTS bank_address TEXT
 await sql`ALTER TABLE studio_settings ADD COLUMN IF NOT EXISTS activity_code TEXT`;
 await sql`ALTER TABLE studio_settings ADD COLUMN IF NOT EXISTS registration_number TEXT`;
 
+// Where studio notices go. Split from `email` because that one is published —
+// it is the contact address on the landing and in the footer — and the day the
+// owner puts an office@ address there, every "new inquiry" mail would silently
+// follow it. Seeded from the current contact address so nothing changes on the
+// first run; `queueStudioNotice` falls back to `email` when it is empty.
+await sql`ALTER TABLE studio_settings ADD COLUMN IF NOT EXISTS notify_email TEXT`;
+await sql`
+  UPDATE studio_settings SET notify_email = email
+  WHERE id = 1 AND notify_email IS NULL AND email IS NOT NULL
+`;
+
 /* ----------------------------------------------------------- social links --- */
 // One column per network meant a new platform was a migration and a deploy. The
 // studio adds and removes its own rows now: [{ label, url }], ordered as shown.
