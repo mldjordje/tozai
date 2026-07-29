@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ArrowDown, ArrowUp, Trash2, Upload } from "lucide-react";
+import { ArrowDown, ArrowUp, RefreshCw, Trash2, Upload } from "lucide-react";
 import { readImageSize, uploadToBlob } from "@/lib/blob-upload";
 import { LocaleTabs } from "./LocaleTabs";
 
@@ -38,6 +38,12 @@ export function RezultatiTab() {
   const [lang, setLang] = useState<"sr" | "en">("sr");
   const [status, setStatus] = useState<Record<number, Status>>({});
   const fileRef = useRef<HTMLInputElement>(null);
+  /** Which card the replace-picker was opened for, and which card is mid-swap.
+   *  One shared file input rather than one per card: a card is remounted on
+   *  every reorder, and a per-card input loses its pending selection with it. */
+  const replaceRef = useRef<HTMLInputElement>(null);
+  const replaceFor = useRef<number | null>(null);
+  const [replacing, setReplacing] = useState<number | null>(null);
   /** Last values known to be persisted, per row — the baseline blur compares
    *  against. A ref, not state: changing it must not re-render the grid. */
   const saved = useRef<Record<number, Partial<Shot>>>({});
@@ -94,6 +100,47 @@ export function RezultatiTab() {
     } finally {
       setUploading(false);
       if (fileRef.current) fileRef.current.value = "";
+    }
+  };
+
+  /** Swap the image on an existing card, keeping its text, order and flags.
+   *
+   *  The row is updated in one PATCH — new URL, new pathname, new measured size
+   *  — and the old file is named for deletion in the same call, so a replaced
+   *  screenshot does not leave a paid-for orphan in Blob. `wide` is deliberately
+   *  NOT recomputed: it is a layout choice the studio may have made by hand, and
+   *  a replacement of the same subject should not silently undo it. */
+  const replaceFile = async (shot: Shot, file: File) => {
+    setReplacing(shot.id);
+    setError(null);
+    try {
+      const [media, size] = await Promise.all([
+        uploadToBlob(file, "rezultati"),
+        readImageSize(file),
+      ]);
+      if (media.type !== "image") throw new Error("Za rezultate ide slika, ne video.");
+
+      const res = await fetch("/api/admin/results", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: shot.id,
+          image_url: media.url,
+          blob_pathname: media.pathname,
+          width: size?.width ?? null,
+          height: size?.height ?? null,
+          delete_blob: shot.blob_pathname,
+        }),
+      });
+      const d = await res.json();
+      if (!d.ok) throw new Error(d.message);
+      await load();
+    } catch (err) {
+      setError(err instanceof Error && err.message ? err.message : "Zamena slike nije uspela.");
+    } finally {
+      setReplacing(null);
+      replaceFor.current = null;
+      if (replaceRef.current) replaceRef.current.value = "";
     }
   };
 
@@ -155,7 +202,8 @@ export function RezultatiTab() {
     <div className="adm__portfolio">
       <p className="adm__hint">
         Slike koje se vrte u sekciji „Rezultati“ na sajtu. Redosled ovde je redosled na sajtu.
-        Naslov sekcije i tekst se menjaju u tabu Sadržaj.
+        Naslov sekcije i tekst se menjaju u tabu Sadržaj. „Zameni sliku“ ubacuje novu fotografiju
+        u istu karticu — tekst, redosled i podešavanja ostaju, stari fajl se briše sa servera.
       </p>
       <LocaleTabs
         value={lang}
@@ -186,6 +234,20 @@ export function RezultatiTab() {
             onChange={(e) => e.target.files?.[0] && addFile(e.target.files[0])}
           />
         </div>
+
+        {/* The replace picker for every card. Which card it belongs to is held
+            in a ref, set by the button that opened it. */}
+        <input
+          ref={replaceRef}
+          type="file"
+          accept="image/*"
+          hidden
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            const target = shots.find((s) => s.id === replaceFor.current);
+            if (file && target) void replaceFile(target, file);
+          }}
+        />
 
         {loading && <p className="adm__empty">Učitavanje…</p>}
         {!loading && shots.length === 0 && <p className="adm__empty">Još nema slika.</p>}
@@ -266,6 +328,17 @@ export function RezultatiTab() {
               </div>
 
               <div className="adm__pf-card-actions">
+                <button
+                  type="button"
+                  onClick={() => {
+                    replaceFor.current = shot.id;
+                    replaceRef.current?.click();
+                  }}
+                  disabled={replacing !== null}
+                >
+                  <RefreshCw size={11} style={{ verticalAlign: "-1px" }} />{" "}
+                  {replacing === shot.id ? "Menjam…" : "Zameni sliku"}
+                </button>
                 <button type="button" onClick={() => move(index, -1)} disabled={index === 0} aria-label="Pomeri gore">
                   <ArrowUp size={12} />
                 </button>

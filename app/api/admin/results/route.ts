@@ -72,6 +72,12 @@ export async function PATCH(request: Request) {
   const id = int(b.id);
   if (id === null) return NextResponse.json({ ok: false, message: "Bad id" }, { status: 400 });
 
+  // Swapping the image on an existing card: the browser has already put the new
+  // file in Blob, so the old one is an orphan the moment this row is updated.
+  // The caller names it explicitly rather than this route reading the row back —
+  // only the caller knows whether it is replacing the file or just editing text.
+  const stale = str(b.delete_blob, 600);
+
   await sql`
     UPDATE result_shots SET
       image_url = CASE WHEN ${"image_url" in b} THEN ${str(b.image_url, 600)} ELSE image_url END,
@@ -87,6 +93,16 @@ export async function PATCH(request: Request) {
       active = CASE WHEN ${"active" in b} THEN ${Boolean(b.active)} ELSE active END
     WHERE id = ${id}
   `;
+
+  // Same reasoning as DELETE: an orphaned file is a storage cost, not a broken
+  // page, so it must never fail the request the studio is waiting on.
+  if (stale && stale !== str(b.blob_pathname, 600) && process.env.BLOB_READ_WRITE_TOKEN) {
+    try {
+      await del(stale);
+    } catch (error) {
+      console.error("[results] stale blob delete failed", stale, error);
+    }
+  }
 
   revalidatePublic("/");
   return NextResponse.json({ ok: true });
