@@ -135,6 +135,7 @@ export default function LatentBackground({ onReady }: { onReady?: () => void }) 
             `${d.particles.toLocaleString()} particles · ${d.bufferW}x${d.bufferH}`,
             `scale ${d.renderScale} · cap ${d.fpsCap} · ${d.fps} fps`,
             `${d.rendererClass}: ${d.renderer || "unknown"}`,
+            `coarse ${coarse} · reduce ${reduce}`,
           ].join("\n"),
         );
       };
@@ -194,14 +195,45 @@ export default function LatentBackground({ onReady }: { onReady?: () => void }) 
     if (reduce) {
       engine.setPointer(0.62, 0.6);
       syncCopyRect();
-      engine.renderOnce(0.05);
+      // This single settled frame runs outside the animation loop, so none of
+      // the loop's own safety nets (the try/catch around simulate/draw, the
+      // stall watchdog) apply to it. A throw here used to leave the canvas
+      // frozen on whatever the GPU last cleared it to, with no reason recorded
+      // anywhere — exactly "the background doesn't work" with nothing to show
+      // for it in the debug overlay.
+      const settle = (progress: number) => {
+        try {
+          engine.renderOnce(progress);
+          return true;
+        } catch (err) {
+          reportFailure(engine);
+          if (!engine.getFailReason()) {
+            setDiag(
+              [
+                `FALLBACK — reduced-motion render threw: ` +
+                  (err instanceof Error ? err.message : String(err)),
+              ].join("\n"),
+            );
+          }
+          setFailed(true);
+          return false;
+        }
+      };
+      if (!settle(0.05)) {
+        return () => {
+          window.clearInterval(diagTimer);
+          canvas.removeEventListener("webglcontextcreationerror", onCreationError);
+          canvas.removeEventListener("webglcontextlost", onContextLost);
+          engine.dispose();
+        };
+      }
       const onResize = () => {
         if (!engine.resize()) {
           setFailed(true);
           return;
         }
         syncSectionRanges();
-        engine.renderOnce(0.05);
+        settle(0.05);
       };
       window.addEventListener("resize", onResize);
       return () => {

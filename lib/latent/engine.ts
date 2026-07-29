@@ -152,6 +152,14 @@ export class LatentEngine {
   private fpsCap = 60;
   private onGiveUp?: () => void;
   private fps = 0;
+  /** Frames actually drawn by the loop since the last (re)start. A machine
+   *  where mount() succeeds and the GPU classifies as capable but the loop
+   *  never produces a frame — no exception, no governor sample, just silence —
+   *  was previously indistinguishable from one running fine: every existing
+   *  check only fires from inside a frame that runs. The watchdog below is the
+   *  only thing that can catch a loop that never happens at all. */
+  private frameCount = 0;
+  private watchdog = 0;
   private profileName = "high";
   private renderer = "";
   private rendererClass: RendererClass = "unknown";
@@ -498,7 +506,24 @@ export class LatentEngine {
     if (this.running || !this.gl) return;
     this.running = true;
     this.lastNow = performance.now();
+    this.frameCount = 0;
+    this.armWatchdog();
     this.loop();
+  }
+
+  /** Fail the field if it hasn't drawn a single frame within a few seconds of
+   *  starting. Generous on purpose — this only exists to catch a loop that
+   *  truly never runs, not to second-guess a slow one; the governor already
+   *  owns demoting a loop that runs but is too slow. */
+  private armWatchdog() {
+    if (this.watchdog) window.clearTimeout(this.watchdog);
+    this.watchdog = window.setTimeout(() => {
+      if (this.running && this.frameCount < 1) {
+        this.fail(`stalled — no frame drawn 4s after start (${this.renderer || "unknown GPU"})`);
+        this.pause();
+        this.onGiveUp?.();
+      }
+    }, 4000);
   }
 
   /** Why the field is not running, or null while it is. Every bail-out in
@@ -761,6 +786,7 @@ export class LatentEngine {
 
   pause() {
     this.running = false;
+    window.clearTimeout(this.watchdog);
     cancelAnimationFrame(this.raf);
   }
 
@@ -768,11 +794,14 @@ export class LatentEngine {
     if (this.running || !this.gl) return;
     this.running = true;
     this.lastNow = performance.now();
+    this.frameCount = 0;
+    this.armWatchdog();
     this.loop();
   }
 
   dispose() {
     this.running = false;
+    window.clearTimeout(this.watchdog);
     cancelAnimationFrame(this.raf);
     const gl = this.gl;
     if (gl) {
@@ -1230,6 +1259,7 @@ export class LatentEngine {
       this.onGiveUp?.();
       return;
     }
+    this.frameCount++;
     this.raf = requestAnimationFrame(this.loop);
   };
 }
