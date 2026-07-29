@@ -24,9 +24,11 @@ export const metadata: Metadata = {
   description:
     "Kreiramo AI video reklame i pružamo privatnu AI edukaciju. Pametnije. Brže. Profitabilnije.",
   metadataBase: new URL("https://toza-ai.rs"),
-  icons: {
-    icon: "/media/tozai-mark.svg",
-  },
+  // No `icons` here on purpose: app/icon.svg is the file convention, which Next
+  // fingerprints and links itself. A config-based `icons` entry replaces that
+  // generated link with an unhashed /icon.svg, so a browser that cached the old
+  // favicon keeps showing it — the tab icon is the one asset users have already
+  // cached and will not re-request without a new URL.
   openGraph: {
     title: "TOZA AI — Build Your Business With AI",
     description:
