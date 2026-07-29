@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import LiteField from "@/components/background/LiteField";
 import { LatentEngine } from "@/lib/latent/engine";
 import { selectLatentProfile } from "@/lib/latent/quality";
+import { measureSectionRanges, scrollProgress } from "@/lib/latent/sections";
 
 /**
  * WebGL2 particle field — scroll resolves the latent field.
@@ -58,6 +60,34 @@ export default function LatentBackground({ onReady }: { onReady?: () => void }) 
       saveData: coarse || reduce || nav.connection?.saveData,
     });
 
+    const mode = new URLSearchParams(window.location.search).get("latent");
+    const debug = mode === "debug" || mode === "lite-debug";
+    // Force the lite field on hardware that does not need it. Without this the
+    // 2D path can only be seen on a machine that already fails — i.e. never on
+    // the machine it is being developed on.
+    if (mode === "lite" || mode === "lite-debug") {
+      setFailed(true);
+      onReady?.();
+      canvas.removeEventListener("webglcontextcreationerror", onCreationError);
+      return;
+    }
+
+    // Why the fallback is showing, in the same overlay as the live readout.
+    // Without this a machine that never got a context looks exactly like one
+    // that ran fine, which is the whole difficulty of supporting hardware you
+    // do not own.
+    const reportFailure = (engine: LatentEngine) => {
+      if (!debug) return;
+      setDiag(
+        [
+          `FALLBACK — ${engine.getFailReason() ?? "unknown reason"}`,
+          `bid ${profile.name} · ${window.innerWidth}x${window.innerHeight} @${window.devicePixelRatio}`,
+          `mem ${nav.deviceMemory ?? "?"}GB · ${nav.hardwareConcurrency ?? "?"} cores`,
+          `coarse ${coarse} · reduce ${reduce}`,
+        ].join("\n"),
+      );
+    };
+
     const engine = new LatentEngine();
     const onContextLost = (event: Event) => {
       event.preventDefault();
@@ -70,9 +100,13 @@ export default function LatentBackground({ onReady }: { onReady?: () => void }) 
       profile,
       // The governor has walked to the bottom of the ladder and still cannot
       // hold a watchable rate. A gradient is a better answer than a slideshow.
-      onGiveUp: () => setFailed(true),
+      onGiveUp: () => {
+        reportFailure(engine);
+        setFailed(true);
+      },
     });
     if (!ok) {
+      reportFailure(engine);
       setFailed(true);
       onReady?.();
       return () => {
@@ -89,8 +123,11 @@ export default function LatentBackground({ onReady }: { onReady?: () => void }) 
     // Debug readout. Opt-in via ?latent=debug so it costs nothing in normal use
     // but can be read off any machine, including one on the other end of a call.
     let diagTimer = 0;
-    if (new URLSearchParams(window.location.search).get("latent") === "debug") {
+    if (debug) {
       const tick = () => {
+        // Once the engine has bailed, the live readout would overwrite the far
+        // more useful reason for the bail.
+        if (engine.getFailReason()) return;
         const d = engine.getDiagnostics();
         setDiag(
           [
@@ -98,6 +135,7 @@ export default function LatentBackground({ onReady }: { onReady?: () => void }) 
             `${d.particles.toLocaleString()} particles · ${d.bufferW}x${d.bufferH}`,
             `scale ${d.renderScale} · cap ${d.fpsCap} · ${d.fps} fps`,
             `${d.rendererClass}: ${d.renderer || "unknown"}`,
+            `coarse ${coarse} · reduce ${reduce}`,
           ].join("\n"),
         );
       };
@@ -105,57 +143,13 @@ export default function LatentBackground({ onReady }: { onReady?: () => void }) 
       diagTimer = window.setInterval(tick, 500);
     }
 
-    const scrollProgress = () => {
-      const max = document.documentElement.scrollHeight - window.innerHeight;
-      return max > 0 ? Math.min(1, Math.max(0, window.scrollY / max)) : 0;
-    };
-
     // Each formation owns the scroll window during which its section is
     // pinned. Measured from the DOM rather than hard-coded, so changing a
-    // section's `hold` re-times the background with no second source of truth.
+    // section's `hold` re-times the background with no second source of truth —
+    // and shared with the lite field, so both are timed to the same page.
     const syncSectionRanges = () => {
-      const max = document.documentElement.scrollHeight - window.innerHeight;
-      if (max <= 0) return;
-      const vh = window.innerHeight;
-      const range = (id: string): [number, number] => {
-        const el = document.getElementById(id);
-        if (!el) return [0, 0];
-        const top = el.getBoundingClientRect().top + window.scrollY;
-        // A section taller than the viewport pins its sticky child until the
-        // section's bottom reaches the viewport bottom. Sections at or under
-        // one viewport collapse to a point and simply cross-fade.
-        const pinned = Math.max(0, el.offsetHeight - vh);
-        if (process.env.NODE_ENV !== "production" && pinned > 0) {
-          // A sticky child taller than the viewport exhausts its travel and
-          // scrolls away rather than holding, which silently breaks both the
-          // pin and this formation's hold window.
-          const sticky = el.firstElementChild as HTMLElement | null;
-          // Only a genuinely sticky child can suffer this; an ordinary tall
-          // section is just a tall section.
-          const isSticky = sticky && getComputedStyle(sticky).position === "sticky";
-          if (sticky && isSticky && sticky.offsetHeight > vh + 1) {
-            console.warn(
-              `[latent] #${id} is pinned but its content is ${sticky.offsetHeight}px ` +
-                `against a ${vh}px viewport — it will scroll away instead of holding.`,
-            );
-          }
-        }
-        return [top / max, (top + pinned) / max];
-      };
-      // Booking's pin carries two formations: the field first collapses to a
-      // point, then spells the wordmark. Splitting one hold in two with a gap
-      // between them gives the collapse a beat before the reveal.
-      const booking = range("booking");
-      const span = booking[1] - booking[0];
-      engine.setSectionRanges([
-        range("top"),
-        range("services"),
-        range("portfolio"),
-        range("paketi"),
-        range("edukacija"),
-        [booking[0], booking[0] + span * 0.26],
-        [booking[0] + span * 0.62, booking[1]],
-      ]);
+      const ranges = measureSectionRanges();
+      if (ranges) engine.setSectionRanges(ranges);
     };
 
     // Keep the field clear of whatever copy is currently on screen. Measured
@@ -201,14 +195,45 @@ export default function LatentBackground({ onReady }: { onReady?: () => void }) 
     if (reduce) {
       engine.setPointer(0.62, 0.6);
       syncCopyRect();
-      engine.renderOnce(0.05);
+      // This single settled frame runs outside the animation loop, so none of
+      // the loop's own safety nets (the try/catch around simulate/draw, the
+      // stall watchdog) apply to it. A throw here used to leave the canvas
+      // frozen on whatever the GPU last cleared it to, with no reason recorded
+      // anywhere — exactly "the background doesn't work" with nothing to show
+      // for it in the debug overlay.
+      const settle = (progress: number) => {
+        try {
+          engine.renderOnce(progress);
+          return true;
+        } catch (err) {
+          reportFailure(engine);
+          if (!engine.getFailReason()) {
+            setDiag(
+              [
+                `FALLBACK — reduced-motion render threw: ` +
+                  (err instanceof Error ? err.message : String(err)),
+              ].join("\n"),
+            );
+          }
+          setFailed(true);
+          return false;
+        }
+      };
+      if (!settle(0.05)) {
+        return () => {
+          window.clearInterval(diagTimer);
+          canvas.removeEventListener("webglcontextcreationerror", onCreationError);
+          canvas.removeEventListener("webglcontextlost", onContextLost);
+          engine.dispose();
+        };
+      }
       const onResize = () => {
         if (!engine.resize()) {
           setFailed(true);
           return;
         }
         syncSectionRanges();
-        engine.renderOnce(0.05);
+        settle(0.05);
       };
       window.addEventListener("resize", onResize);
       return () => {
@@ -340,7 +365,10 @@ export default function LatentBackground({ onReady }: { onReady?: () => void }) 
   return (
     <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden bg-bg">
       {failed ? (
-        <div className="latent-fallback absolute inset-0" aria-hidden />
+        // Not the CSS gradient: a cheap 2D field with the same formations and
+        // the same scroll timing. It falls through to `.latent-fallback`
+        // itself if the machine cannot even manage that.
+        <LiteField />
       ) : (
         <canvas ref={canvasRef} className="absolute inset-0 h-full w-full" aria-hidden />
       )}

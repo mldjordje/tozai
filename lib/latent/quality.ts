@@ -142,8 +142,13 @@ export function applyRendererClass(
   if (cls === "software") return null;
   const cap =
     cls === "weak" ? "minimal" : cls === "modest" ? "efficient" : cls === "unknown" ? "balanced" : null;
-  if (!cap) return profile;
-  const capped = PROFILES[cap as LatentProfile["name"]];
+  return cap ? capProfile(profile, cap) : profile;
+}
+
+/** Lower a profile to at most `cap`, never raise it. Any signal that says the
+ *  machine is weaker than the opening bid may call this; none may argue it up. */
+export function capProfile(profile: LatentProfile, cap: LatentProfile["name"]): LatentProfile {
+  const capped = PROFILES[cap];
   return ORDER.indexOf(profile.name) >= ORDER.indexOf(capped.name) ? profile : capped;
 }
 

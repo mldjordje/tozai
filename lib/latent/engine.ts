@@ -25,6 +25,7 @@ import {
 } from "./shader";
 import {
   applyRendererClass,
+  capProfile,
   classifyRenderer,
   getSafeCanvasSize,
   PerfGovernor,
@@ -151,6 +152,14 @@ export class LatentEngine {
   private fpsCap = 60;
   private onGiveUp?: () => void;
   private fps = 0;
+  /** Frames actually drawn by the loop since the last (re)start. A machine
+   *  where mount() succeeds and the GPU classifies as capable but the loop
+   *  never produces a frame — no exception, no governor sample, just silence —
+   *  was previously indistinguishable from one running fine: every existing
+   *  check only fires from inside a frame that runs. The watchdog below is the
+   *  only thing that can catch a loop that never happens at all. */
+  private frameCount = 0;
+  private watchdog = 0;
   private profileName = "high";
   private renderer = "";
   private rendererClass: RendererClass = "unknown";
@@ -238,6 +247,10 @@ export class LatentEngine {
   private bobRoll = 0;
   private bobYaw = 0;
   private breath = 0;
+  private failReason: string | null = null;
+  /** Internal format of the simulation state textures. Numeric rather than
+   *  `gl.RGBA32F` because no context exists yet at field-initialiser time. */
+  private simInternal = 0x8814; // gl.RGBA32F
 
   mount(canvas: HTMLCanvasElement, options: LatentOptions): boolean {
     const gl = canvas.getContext("webgl2", {
@@ -247,10 +260,21 @@ export class LatentEngine {
       stencil: false,
       powerPreference: "high-performance",
     });
-    if (!gl) return false;
-    // The whole simulation lives in float render targets. No extension, no
-    // engine — the caller shows its CSS fallback instead.
-    if (!gl.getExtension("EXT_color_buffer_float")) return false;
+    if (!gl) return this.fail("no webgl2 context");
+    // The whole simulation lives in float render targets. Full 32-bit floats
+    // are the preference, but a great many older integrated GPUs — the exact
+    // machines that were getting the static gradient — expose WebGL2 and
+    // renderable HALF floats and nothing more. Sixteen bits is roughly a
+    // thousandth of the field's radius, which is finer than a particle moves
+    // in a frame, so the simulation is indistinguishable to the eye.
+    let halfOnly = false;
+    if (!gl.getExtension("EXT_color_buffer_float")) {
+      if (!gl.getExtension("EXT_color_buffer_half_float")) {
+        return this.fail("no EXT_color_buffer_float / _half_float");
+      }
+      halfOnly = true;
+      this.simInternal = gl.RGBA16F;
+    }
 
     // What the GPU actually is. Every pre-flight signal in quality.ts is a CPU
     // signal; this is the only one that describes the part doing the work, and
@@ -261,11 +285,15 @@ export class LatentEngine {
       ? String(gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) ?? "")
       : String(gl.getParameter(gl.RENDERER) ?? "");
     this.rendererClass = classifyRenderer(this.renderer);
-    const profile = applyRendererClass(options.profile, this.rendererClass);
+    const classed = applyRendererClass(options.profile, this.rendererClass);
     // Software rasteriser: there is no setting at which this is worth drawing.
-    if (!profile) return false;
+    if (!classed) return this.fail(`software renderer: ${this.renderer || "unknown"}`);
+    // A GPU that has no 32-bit render targets in 2026 is old regardless of what
+    // its renderer string claims, and half-float state accumulates error faster
+    // — so run it lean rather than discovering the same thing via the governor.
+    const profile = halfOnly ? capProfile(classed, "efficient") : classed;
 
-    this.profileName = profile.name;
+    this.profileName = halfOnly ? `${profile.name} (16f)` : profile.name;
     this.dim = profile.texDim;
     this.count = this.dim * this.dim;
     this.maxDpr = profile.maxDpr;
@@ -275,7 +303,9 @@ export class LatentEngine {
     this.renderScale = this.governor.state.renderScale;
     this.fpsCap = this.governor.state.fpsCap;
     this.maxTextureSize = gl.getParameter(gl.MAX_TEXTURE_SIZE) as number;
-    if (this.dim > this.maxTextureSize) return false;
+    if (this.dim > this.maxTextureSize) {
+      return this.fail(`texture size ${this.dim} > MAX_TEXTURE_SIZE ${this.maxTextureSize}`);
+    }
 
     const link = (vsSrc: string, fsSrc: string): WebGLProgram | null => {
       const vs = compile(gl, gl.VERTEX_SHADER, vsSrc);
@@ -304,7 +334,7 @@ export class LatentEngine {
     this.blurProg = link(fullscreenVertexShader, blurShader);
     this.showProg = link(fullscreenVertexShader, displayShader);
     if (!this.simProg || !this.pointProg || !this.brightProg || !this.blurProg || !this.showProg) {
-      return false;
+      return this.fail("shader compile/link failed");
     }
 
     this.gl = gl;
@@ -333,7 +363,7 @@ export class LatentEngine {
     this.velB = this.dataTex(gl, this.dim, this.dim, null);
     if (!this.posA || !this.posB || !this.velA || !this.velB || !this.simulationTargetReady()) {
       this.dispose();
-      return false;
+      return this.fail("float render target incomplete");
     }
 
     this.buildWordmark();
@@ -345,7 +375,7 @@ export class LatentEngine {
 
     if (!this.resize()) {
       this.dispose();
-      return false;
+      return this.fail("initial resize failed");
     }
     this.lastNow = performance.now();
     this.bootStart = this.lastNow;
@@ -433,7 +463,9 @@ export class LatentEngine {
     this.wordTex = this.dataTex(gl, this.dim, this.dim, data);
   }
 
-  /** RGBA32F texture, NEAREST — simulation state, never filtered. */
+  /** Simulation state texture, NEAREST — never filtered. RGBA32F where the GPU
+   *  can render to it, RGBA16F where it cannot; both accept a Float32Array
+   *  upload, so only the internal format changes. */
   private dataTex(
     gl: WebGL2RenderingContext,
     w: number,
@@ -445,7 +477,7 @@ export class LatentEngine {
     gl.bindTexture(gl.TEXTURE_2D, t);
     // Discard a stale error so the allocation check describes this texture.
     gl.getError();
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, w, h, 0, gl.RGBA, gl.FLOAT, data);
+    gl.texImage2D(gl.TEXTURE_2D, 0, this.simInternal, w, h, 0, gl.RGBA, gl.FLOAT, data);
     if (gl.getError() !== gl.NO_ERROR) {
       gl.deleteTexture(t);
       return null;
@@ -474,7 +506,40 @@ export class LatentEngine {
     if (this.running || !this.gl) return;
     this.running = true;
     this.lastNow = performance.now();
+    this.frameCount = 0;
+    this.armWatchdog();
     this.loop();
+  }
+
+  /** Fail the field if it hasn't drawn a single frame within a few seconds of
+   *  starting. Generous on purpose — this only exists to catch a loop that
+   *  truly never runs, not to second-guess a slow one; the governor already
+   *  owns demoting a loop that runs but is too slow. */
+  private armWatchdog() {
+    if (this.watchdog) window.clearTimeout(this.watchdog);
+    this.watchdog = window.setTimeout(() => {
+      if (this.running && this.frameCount < 1) {
+        this.fail(`stalled — no frame drawn 4s after start (${this.renderer || "unknown GPU"})`);
+        this.pause();
+        this.onGiveUp?.();
+      }
+    }, 4000);
+  }
+
+  /** Why the field is not running, or null while it is. Every bail-out in
+   *  mount() records its reason here: a machine that shows the fallback is
+   *  otherwise indistinguishable from one that never tried, which made
+   *  "it's a static image on my laptop" impossible to act on. */
+  getFailReason(): string | null {
+    return this.failReason;
+  }
+
+  /** Record why the engine refused to run and return the boolean mount() owes
+   *  its caller, so each bail-out stays a single line. */
+  private fail(reason: string): false {
+    this.failReason = reason;
+    if (process.env.NODE_ENV !== "production") console.warn(`[latent] ${reason}`);
+    return false;
   }
 
   /** What the engine settled on. Surfaced so a machine where the field misbehaves
@@ -502,9 +567,10 @@ export class LatentEngine {
     const verdict = g.sample(frameMs);
     if (verdict === "hold") return;
     if (verdict === "abort") {
-      if (process.env.NODE_ENV !== "production") {
-        console.warn(`[latent] giving up — ${this.renderer || "unknown GPU"} cannot hold the field`);
-      }
+      this.fail(
+        `governor gave up at step ${g.level} — ${this.renderer || "unknown GPU"} ` +
+          `held only ${Math.round(this.fps)}fps`,
+      );
       this.pause();
       this.onGiveUp?.();
       return;
@@ -514,6 +580,7 @@ export class LatentEngine {
     if (next.renderScale !== this.renderScale) {
       this.renderScale = next.renderScale;
       if (!this.resize()) {
+        this.fail(`resize failed at step ${g.level}`);
         this.pause();
         this.onGiveUp?.();
       }
@@ -719,6 +786,7 @@ export class LatentEngine {
 
   pause() {
     this.running = false;
+    window.clearTimeout(this.watchdog);
     cancelAnimationFrame(this.raf);
   }
 
@@ -726,11 +794,14 @@ export class LatentEngine {
     if (this.running || !this.gl) return;
     this.running = true;
     this.lastNow = performance.now();
+    this.frameCount = 0;
+    this.armWatchdog();
     this.loop();
   }
 
   dispose() {
     this.running = false;
+    window.clearTimeout(this.watchdog);
     cancelAnimationFrame(this.raf);
     const gl = this.gl;
     if (gl) {
@@ -1173,8 +1244,22 @@ export class LatentEngine {
     this.pulseV *= Math.exp(-dt * 3.2);
     this.animTime += dt;
 
-    this.simulate(dt);
-    this.draw();
+    // A throw inside these two silently kills the rAF chain — the canvas just
+    // freezes on its last frame with no error surfaced anywhere. That read as
+    // "the background doesn't work" with no reason in the debug overlay, on a
+    // machine easily capable of running the field (a discrete desktop GPU),
+    // because every diagnostic this file had only covered mount()-time
+    // bail-outs and the governor's own abort, not a runtime exception.
+    try {
+      this.simulate(dt);
+      this.draw();
+    } catch (err) {
+      this.fail(`runtime error: ${err instanceof Error ? err.message : String(err)}`);
+      this.pause();
+      this.onGiveUp?.();
+      return;
+    }
+    this.frameCount++;
     this.raf = requestAnimationFrame(this.loop);
   };
 }
