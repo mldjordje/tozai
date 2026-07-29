@@ -38,7 +38,9 @@ Klijent se prijavljuje Google nalogom. Posle prijave dobija:
 
 ## 2. Kako radi edukacija
 
-1. Posetilac na početnoj strani bira paket od 2, 5, 10 ili 20 sati.
+1. Posetilac na početnoj strani bira paket od 1, 2, 5, 10 ili 20 sati
+   (AI Strategy Call, AI Kickstart, AI Content Accelerator, AI Business
+   Mastery, Full AI Transformation).
 2. Prijavljuje se Google nalogom.
 3. Unosi podatke za račun i bira način plaćanja.
 4. Ako bira uplatu na račun, odmah dobija predračun i podatke za uplatu.
@@ -199,6 +201,8 @@ legalno ukloni.
 U `/admin/rezultati` možeš:
 
 - dodati screenshot;
+- **zameniti sliku** na postojećoj kartici (tekst, redosled i podešavanja
+  ostaju, stari fajl se briše sa servera);
 - promeniti naziv naloga, statistiku i alt tekst;
 - izabrati široku/usku karticu;
 - menjati redosled;

@@ -14,6 +14,20 @@ import { ui } from "@/lib/i18n/ui";
  * to the static HOUR_PACKS placeholders when the DB has no active edu rows.
  * Copy comes from site_content['landing'] the same way.
  */
+
+/** Serbian hour agreement: 1 sat / 2–4 sata / 5+ sati, and the same again above
+ *  20 (21 sat, 22 sata). Teens are the exception — 11–14 take the plural. */
+function hourLabel(
+  hours: number,
+  t: { hour: string; hoursFew: string; hours: string },
+): string {
+  const last = Math.abs(hours) % 10;
+  const lastTwo = Math.abs(hours) % 100;
+  if (lastTwo >= 11 && lastTwo <= 14) return t.hours;
+  if (last === 1) return t.hour;
+  if (last >= 2 && last <= 4) return t.hoursFew;
+  return t.hours;
+}
 export default function Education({
   locale = DEFAULT_LOCALE,
   packs = HOUR_PACKS,
@@ -52,7 +66,7 @@ export default function Education({
           </div>
         </Reveal>
 
-        <div className="mt-14 grid gap-5 md:mt-20 md:grid-cols-3">
+        <div className="mt-14 grid gap-5 sm:grid-cols-2 md:mt-20 lg:grid-cols-3">
           {packs.map((pack, i) => (
             <Reveal key={pack.id} delay={i * 0.08}>
               <div
@@ -67,8 +81,7 @@ export default function Education({
                     {pack.label}
                   </span>
                   <span className="text-sm text-accent-soft">
-                    {pack.hours}
-                    {pack.hours === 1 ? ` ${t.hour}` : ` ${t.hours}`}
+                    {pack.hours} {hourLabel(pack.hours, t)}
                   </span>
                 </div>
 
@@ -100,8 +113,6 @@ export default function Education({
           ))}
         </div>
 
-        {/* TODO(admin): hour-pack prices are placeholders; wire to
-            admin-editable source (see lib/content/offerings.ts). */}
       </div>
     </section>
   );

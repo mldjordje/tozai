@@ -16,6 +16,18 @@ import { ui } from "@/lib/i18n/ui";
  * Tiers come from the packages table; the surrounding copy from
  * site_content['landing'] (see lib/content/landing.ts).
  */
+
+/** The service copy is written as a claim and then its explanation — "Dominacija
+ *  algoritmom. Naučno vođena strategija rasta…". Set as one paragraph the claim
+ *  is lost in the middle of the card, so the first sentence is lifted out and
+ *  the rest is set muted underneath it. One field in the admin panel, two levels
+ *  of hierarchy on the card, and a description without a full stop still renders
+ *  correctly as a single line. */
+function splitLead(text: string): { lead: string; rest: string } {
+  const at = text.indexOf(". ");
+  if (at < 0) return { lead: text, rest: "" };
+  return { lead: text.slice(0, at + 1), rest: text.slice(at + 2).trim() };
+}
 export default function Packages({
   locale = DEFAULT_LOCALE,
   packages = CLIP_PACKAGES,
@@ -44,8 +56,10 @@ export default function Packages({
           <p className="mb-16 max-w-xl text-muted md:mb-20 md:text-lg">{body}</p>
         </Reveal>
 
-        <div className="grid gap-5 md:grid-cols-3">
-          {packages.map((pkg, i) => (
+        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          {packages.map((pkg, i) => {
+            const { lead, rest } = splitLead(pkg.headline);
+            return (
             <Reveal key={pkg.id} delay={i * 0.08}>
               <div
                 className={`group relative flex h-full flex-col rounded-2xl border p-7 backdrop-blur-md transition-colors duration-300 ${
@@ -70,27 +84,41 @@ export default function Packages({
                   </span>
                 </div>
 
-                <div className="mt-2 text-sm text-fg/90">{pkg.headline}</div>
+                <div className="mt-3 text-sm font-medium text-fg">{lead}</div>
+                {rest && (
+                  <p
+                    className={`mt-2 text-sm leading-relaxed text-muted ${
+                      pkg.features.length ? "" : "flex-1"
+                    }`}
+                  >
+                    {rest}
+                  </p>
+                )}
 
-                <ul className="mt-7 flex-1 space-y-3 border-t border-line pt-7">
-                  {pkg.features.map((f) => (
-                    <li key={f} className="flex gap-3 text-sm text-muted">
-                      <svg
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2.2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        className="mt-0.5 h-4 w-4 shrink-0 text-accent-soft"
-                        aria-hidden
-                      >
-                        <path d="M20 6L9 17l-5-5" />
-                      </svg>
-                      <span>{f}</span>
-                    </li>
-                  ))}
-                </ul>
+                {/* Hidden entirely when there are no bullets: an empty list still
+                    draws its own top rule and padding, which read as a stray
+                    hairline across the bottom of the card. */}
+                {pkg.features.length > 0 && (
+                  <ul className="mt-7 flex-1 space-y-3 border-t border-line pt-7">
+                    {pkg.features.map((f) => (
+                      <li key={f} className="flex gap-3 text-sm text-muted">
+                        <svg
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2.2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          className="mt-0.5 h-4 w-4 shrink-0 text-accent-soft"
+                          aria-hidden
+                        >
+                          <path d="M20 6L9 17l-5-5" />
+                        </svg>
+                        <span>{f}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
 
                 <div className="mt-8">
                   <CTAButton
@@ -102,7 +130,8 @@ export default function Packages({
                 </div>
               </div>
             </Reveal>
-          ))}
+            );
+          })}
         </div>
 
         <p className="mt-8 max-w-2xl text-sm leading-relaxed text-faint">{note}</p>

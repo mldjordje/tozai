@@ -37,6 +37,10 @@ export type UiStrings = {
   };
   education: {
     hour: string;
+    /** Serbian needs three forms: 1 sat, 2–4 sata, 5+ sati. English collapses
+     *  `hoursFew` onto the plural, which is why the packs can carry any hour
+     *  count without the card reading as broken grammar. */
+    hoursFew: string;
     hours: string;
     buy: string;
     reserve: string;
@@ -180,6 +184,7 @@ const sr: UiStrings = {
   },
   education: {
     hour: "sat",
+    hoursFew: "sata",
     hours: "sati",
     buy: "Kupi sate",
     reserve: "Rezerviši",
@@ -337,6 +342,7 @@ const en: UiStrings = {
   },
   education: {
     hour: "hour",
+    hoursFew: "hours",
     hours: "hours",
     buy: "Buy hours",
     reserve: "Book",

@@ -1,19 +1,27 @@
 // Offerings data — AI-clip packages + 1-on-1 education hour-packs.
 //
-// TODO(admin): these arrays are the single source of truth for the pricing
-// sections. Prices/tiers are meant to be editable from an admin panel later,
-// so keep this shape stable and swap the constant for a fetch (Supabase /
-// admin API) without touching the section components. Everything here is
-// PLACEHOLDER content until the admin flow lands.
+// The LIVE source of truth is the `packages` table, edited in /admin/paketi and
+// read by lib/packages.ts; the two arrays at the bottom of this file are the
+// offline mirror the sections fall back to when that read comes back empty (see
+// getPublicPackages, which swallows a DB error into []). The mappers in between
+// turn a table row into the shape a card renders.
+//
+// So: change prices and tiers in the admin panel. Only re-seeding the catalogue
+// wholesale — a different set of services, not a different price — needs this
+// file touched, and then scripts/set-packages-2026-07.mjs is the other half.
 
 export type ClipPackage = {
   id: string;
   name: string;
-  /** Display price string incl. currency — placeholder until admin-driven. */
-  price: string;
-  /** Short cadence/qualifier under the price, e.g. "jednokratno". */
+  /** Reference price, admin-side only. Every video package is quoted per brief —
+   *  scope, length and turnaround all move the number — so the public card shows
+   *  the "privatna procena" pill instead and never renders this. Kept optional
+   *  because the mapper below still carries whatever the studio stores. */
+  price?: string;
+  /** Short cadence/qualifier under the price. Not rendered, see `price`. */
   priceNote?: string;
-  /** Headline deliverable, e.g. "10 AI klipova". */
+  /** The service in one claim plus its explanation. Packages.tsx lifts the first
+   *  sentence out as the card's lead. */
   headline: string;
   features: string[];
   cta: string;
@@ -39,49 +47,57 @@ export type HourPack = {
 };
 
 // --- AI-clip packages (section: #paketi) --------------------------------
+// Mirrors the `packages` rows seeded by scripts/set-packages-2026-07.mjs, in the
+// same order, so an unreachable database renders the real catalogue rather than
+// a set of placeholder tiers that no longer exist. Edits belong in the admin
+// panel; this list only has to stay recognisable.
 export const CLIP_PACKAGES: ClipPackage[] = [
   {
-    id: "starter",
-    name: "Starter",
-    price: "€—",
-    priceNote: "jednokratno",
-    headline: "Paket kratkih AI klipova",
-    features: [
-      "Set AI video klipova",
-      "Vertikalni format (Reels / TikTok / Shorts)",
-      "Osnovni brendiranje i tekst",
-      "1 krug revizija",
-    ],
+    id: "ai-performance-ads",
+    name: "AI Performance Ads",
+    headline:
+      "Prodaja vođena podacima. Optimizovani video oglasi za Meta i TikTok sa fokusom na maksimalan povraćaj investicije (ROI).",
+    features: [],
     cta: "Pošalji upit",
   },
   {
-    id: "pro",
-    name: "Pro",
-    price: "€—",
-    priceNote: "jednokratno",
-    headline: "Više klipova + brža isporuka",
-    features: [
-      "Veći set AI klipova",
-      "Hook + caption optimizacija",
-      "Prilagođeno tvom brendu",
-      "2 kruga revizija",
-      "Prioritetna isporuka",
-    ],
+    id: "ai-virality-growth",
+    name: "AI Virality Growth",
+    headline:
+      "Dominacija algoritmom. Naučno vođena strategija rasta koja koristi AI za postizanje milionskih pregleda i organsku ekspanziju.",
+    features: [],
     cta: "Pošalji upit",
-    featured: true,
   },
   {
-    id: "scale",
-    name: "Scale",
-    price: "€—",
-    priceNote: "mesečno",
-    headline: "Stalni priliv sadržaja",
-    features: [
-      "Mesečna produkcija klipova",
-      "Content plan + teme",
-      "Neograničene sitne izmene",
-      "Namenski kontakt",
-    ],
+    id: "ai-cinematic-ads",
+    name: "AI Cinematic Ads",
+    headline:
+      "Brending budućnosti. Vrhunske reklame filmskog kvaliteta koje pozicioniraju vaš biznis kao lidera u industriji.",
+    features: [],
+    cta: "Pošalji upit",
+  },
+  {
+    id: "ai-vsl-architect",
+    name: "AI VSL Architect",
+    headline:
+      "Prodajna moć u svakom kadru. Psihološki optimizovani Video Sales Letters koji drastično povećavaju stopu konverzije.",
+    features: [],
+    cta: "Pošalji upit",
+  },
+  {
+    id: "3d-medical-vision",
+    name: "3D Medical Vision",
+    headline:
+      "Preciznost koja edukuje. Kompleksne medicinske i naučne vizuelizacije kroz naprednu 3D AI tehnologiju visokog nivoa detalja.",
+    features: [],
+    cta: "Pošalji upit",
+  },
+  {
+    id: "ai-toon-storytelling",
+    name: "AI Toon Storytelling",
+    headline:
+      "Magija u Pixar stilu. Emotivne i vizuelno zapanjujuće animacije koje oživljavaju vaš brend kroz vrhunski 3D umetnički stil.",
+    features: [],
     cta: "Pošalji upit",
   },
 ];
@@ -146,30 +162,43 @@ export function toHourPack(p: PackageRow): HourPack {
 }
 
 // --- 1-on-1 education hour-packs (section: #edukacija) -------------------
+// Same contract as CLIP_PACKAGES above: the offline mirror of the seeded
+// education rail. `perHour` is the effective rate the DB mapper computes, spelled
+// out here so the fallback shows the same descending rate the real cards do.
 export const HOUR_PACKS: HourPack[] = [
   {
-    id: "h1",
+    id: "ai-strategy-call",
     hours: 1,
-    label: "Proba",
-    price: "€—",
-    perHour: "€— / sat",
-    note: "Jedan termin, konkretan problem.",
+    label: "AI Strategy Call",
+    price: "€99",
+    perHour: "€99 / sat",
   },
   {
-    id: "h5",
+    id: "ai-kickstart",
+    hours: 2,
+    label: "AI Kickstart",
+    price: "€180",
+    perHour: "€90 / sat",
+  },
+  {
+    id: "ai-content-accelerator",
     hours: 5,
-    label: "Fokus",
-    price: "€—",
-    perHour: "€— / sat",
-    note: "Kroz ceo tvoj sadržaj workflow.",
-    featured: true,
+    label: "AI Content Accelerator",
+    price: "€400",
+    perHour: "€80 / sat",
   },
   {
-    id: "h10",
+    id: "ai-business-mastery",
     hours: 10,
-    label: "Mentorstvo",
-    price: "€—",
-    perHour: "€— / sat",
-    note: "Dugoročno, od nule do sistema.",
+    label: "AI Business Mastery",
+    price: "€700",
+    perHour: "€70 / sat",
+  },
+  {
+    id: "full-ai-transformation",
+    hours: 20,
+    label: "Full AI Transformation",
+    price: "€1.200",
+    perHour: "€60 / sat",
   },
 ];
