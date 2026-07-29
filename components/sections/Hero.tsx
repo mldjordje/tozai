@@ -142,7 +142,19 @@ export default function Hero({
     // latent core to settle and be read before it starts dissolving into the
     // next formation. Any longer and the first scroll feels like it broke.
     <section id="top" className="relative h-[145svh]">
-      <div className="sticky top-0 flex min-h-svh flex-col justify-center overflow-hidden px-6 md:px-12">
+      {/* The block is centred in the FULL viewport and the header is fixed, so it
+          takes no part in the layout that has to clear it — which is how the
+          eyebrow ended up printed across the logo and the CTA. The top padding
+          reserves the header's band.
+
+          It has to come back off again on a short phone. Once the copy is taller
+          than what the padding leaves, flex aligns it to the START and the
+          overflow all goes off the bottom, where this container's own
+          overflow-hidden clips it and the pin makes it unreachable — so a 667px
+          screen would lose the buttons. Under 740px tall the reserve shrinks to
+          the header's real height and the scroll hint gives up its corner: both
+          are affordances, and the CTA outranks them. */}
+      <div className="sticky top-0 flex min-h-svh flex-col justify-center overflow-hidden px-6 pb-12 pt-24 max-md:[@media(max-height:740px)]:pb-2 max-md:[@media(max-height:740px)]:pt-16 md:px-12 md:pb-0 md:pt-0">
         <div
           aria-hidden
           className="pointer-events-none absolute inset-0 z-[1] bg-gradient-to-b from-bg via-bg/90 to-bg/55 md:hidden"
@@ -154,20 +166,25 @@ export default function Hero({
           animate={show ? "show" : "hidden"}
           className="relative z-10 max-w-4xl"
         >
-          <motion.p variants={line} className="eyebrow mb-7">
+          <motion.p variants={line} className="eyebrow mb-5 md:mb-7">
             {eyebrow}
           </motion.p>
 
           {/* The words are spaced with margins, not whitespace text nodes, so
               the accessible name has to be supplied explicitly — otherwise
               assistive tech and copy-paste both read "BuildYourBusiness
-              WithAI." */}
+              WithAI."
+
+              Four lines of 60px plus the leads, the body and two buttons do not
+              fit above the fold on a 667px phone, and what gave way was the top
+              of the block. A notch smaller below sm keeps the whole hero on one
+              screen; md upward is unchanged. */}
           <motion.h1
             variants={headFocus}
             onAnimationComplete={(def) => def === "show" && setSettled(true)}
             aria-label={plainText(title.replace(/\n/g, " "))}
             style={{ willChange: settled ? "auto" : "filter" }}
-            className="display text-balance text-6xl md:text-8xl lg:text-[6.5rem]"
+            className="display text-balance text-[3.15rem] leading-[1.04] sm:text-6xl sm:leading-none md:text-8xl lg:text-[6.5rem]"
           >
             {title.split("\n").map((row, rowIndex, rows) => (
               <Fragment key={rowIndex}>
@@ -215,12 +232,12 @@ export default function Hero({
           <motion.div
             aria-hidden
             variants={rule}
-            className="mt-9 h-px w-full max-w-md origin-left bg-gradient-to-r from-accent-soft/70 via-line to-transparent"
+            className="mt-7 h-px w-full max-w-md origin-left bg-gradient-to-r from-accent-soft/70 via-line to-transparent md:mt-9"
           />
 
           <motion.div
             variants={line}
-            className="mt-8 space-y-1 text-xl font-medium md:text-2xl"
+            className="mt-6 space-y-1 text-xl font-medium md:mt-8 md:text-2xl"
           >
             <p>{lead1}</p>
             <p className="text-muted">{lead2}</p>
@@ -228,12 +245,12 @@ export default function Hero({
 
           <motion.p
             variants={line}
-            className="mt-8 max-w-xl text-base leading-relaxed text-muted md:text-lg"
+            className="mt-6 max-w-xl text-base leading-relaxed text-muted md:mt-8 md:text-lg"
           >
             {body}
           </motion.p>
 
-          <motion.div variants={line} className="mt-10 flex flex-wrap gap-4">
+          <motion.div variants={line} className="mt-8 flex flex-wrap gap-4 md:mt-10">
             <CTAButton href={primaryHref}>{primaryLabel}</CTAButton>
             <CTAButton href={secondaryHref} variant="ghost">
               {secondaryLabel}
@@ -246,7 +263,7 @@ export default function Hero({
           initial={{ opacity: 0 }}
           animate={{ opacity: show ? 1 : 0 }}
           transition={{ delay: show ? 1.6 : 0, duration: 1 }}
-          className="absolute bottom-8 left-6 z-10 flex items-center gap-3 text-xs uppercase tracking-[0.2em] text-faint md:left-12"
+          className="absolute bottom-8 left-6 z-10 flex items-center gap-3 text-xs uppercase tracking-[0.2em] text-faint max-md:[@media(max-height:740px)]:hidden md:left-12"
         >
           <span className="relative flex h-9 w-5 items-start justify-center rounded-full border border-faint p-1">
             <motion.span
