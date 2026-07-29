@@ -330,9 +330,17 @@ textarea,
     animation: none;
   }
   /* Without the sweep the gradient would freeze mid-slide and leave the word
-     half-white, so drop the clip entirely and let it render as plain type. */
+     half-white, so drop the clip entirely and let it render as plain type.
+     The base rule's `background-color` is the floor for when the gradient
+     image fails to cover a glyph under `background-clip: text` — with the
+     clip dropped to `border-box` here that same fill now paints the whole
+     inline box instead, and since it is the SAME muted colour as the text
+     set two lines below, the word rendered as a solid tinted rectangle with
+     the letters blended invisibly into it. Must be cleared, not just
+     overridden downstream. */
   .sheen {
     background-image: none;
+    background-color: transparent;
     -webkit-background-clip: border-box;
     background-clip: border-box;
     color: var(--color-muted);
