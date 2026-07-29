@@ -7,7 +7,6 @@
 //   engine.setPointer(x, y)        // normalized 0..1, y up (eased internally)
 //   engine.setCopyRect(...)        // screen box the field should keep clear of
 //   engine.pulse()                 // click shockwave
-//   engine.renderOnce(p)           // single settled frame (reduced motion)
 //   engine.resize(); engine.pause(); engine.resume(); engine.dispose();
 //
 // Requires WebGL2 + EXT_color_buffer_float (the simulation lives in float
@@ -671,31 +670,6 @@ export class LatentEngine {
     return r;
   }
 
-  /** Draw one settled frame — used under prefers-reduced-motion. */
-  renderOnce(progress = 0.3) {
-    this.progress = this.progressTarget = clamp01(progress);
-    this.prevProgress = this.progress;
-    this.shape = this.prevShape = this.shapeAt(this.progress);
-    this.formationIndex = Math.floor(this.shape + 0.5);
-    this.settle = 1;
-    this.boot = 1;
-    this.transitionAge = TRANSITION_ACCENT_SECONDS;
-    this.transitionPhase = -1;
-    if (this.shape > 5.15) {
-      this.yaw = 0;
-      this.pitch = 0;
-      this.faceOn = 1;
-    }
-    this.animTime = 12;
-    // Run the simulation forward so the particles have actually arrived at
-    // their formation before the single frame is drawn.
-    for (let i = 0; i < 220; i++) {
-      this.animTime += 1 / 60;
-      this.simulate(1 / 60);
-    }
-    this.draw();
-  }
-
   resize(): boolean {
     const canvas = this.canvas;
     const gl = this.gl;
@@ -1262,8 +1236,4 @@ export class LatentEngine {
     this.frameCount++;
     this.raf = requestAnimationFrame(this.loop);
   };
-}
-
-function clamp01(p: number): number {
-  return Math.min(Math.max(p, 0), 1);
 }

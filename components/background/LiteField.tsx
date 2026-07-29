@@ -29,7 +29,6 @@ export default function LiteField({ onDead }: { onDead?: () => void }) {
     if (!canvas || dead) return;
 
     const nav = navigator as Navigator & { deviceMemory?: number };
-    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
     const engine = new LiteEngine();
     const die = () => {
@@ -59,20 +58,6 @@ export default function LiteField({ onDead }: { onDead?: () => void }) {
     };
     syncRanges();
     engine.setProgress(scrollProgress());
-
-    if (reduce) {
-      engine.renderOnce();
-      const onResizeStill = () => {
-        engine.resize();
-        syncRanges();
-        engine.renderOnce();
-      };
-      window.addEventListener("resize", onResizeStill);
-      return () => {
-        window.removeEventListener("resize", onResizeStill);
-        engine.dispose();
-      };
-    }
 
     // Same opt-in readout as the WebGL field, so a machine on the far end of a
     // call can be diagnosed without owning it.

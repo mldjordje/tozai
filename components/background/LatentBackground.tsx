@@ -14,10 +14,14 @@ import { measureSectionRanges, scrollProgress } from "@/lib/latent/sections";
  * injects turbulence and the field re-settles into the next form; the cursor
  * pushes it aside and it springs back. Everything else is deliberately still.
  *
- * Fallbacks: one settled frame under prefers-reduced-motion, a CSS gradient
- * when WebGL2 or float render targets are unavailable, and the same gradient
- * when the GPU turns out to be a software rasteriser or simply cannot hold a
- * watchable frame rate at the cheapest quality step.
+ * Fallbacks: a Canvas2D lite field when WebGL2 or float render targets are
+ * unavailable, when the GPU is a software rasteriser, when the loop never
+ * produces a frame at all, or when it can't hold a watchable rate at the
+ * cheapest quality step — and the same gradient again if even that fails.
+ * prefers-reduced-motion is measured and shown in the debug overlay but not
+ * acted on: it reports true on far more machines than have actually opted
+ * into less motion, and honouring it produced a single frozen frame that
+ * read as a broken page rather than a deliberate choice.
  *
  * Append `?latent=debug` to the URL for an on-page readout of the GPU, the
  * chosen profile and the live frame rate — the only practical way to diagnose a
@@ -45,6 +49,13 @@ export default function LatentBackground({ onReady }: { onReady?: () => void }) 
     canvas.addEventListener("webglcontextcreationerror", onCreationError);
 
     const coarse = window.matchMedia("(pointer: coarse)").matches;
+    // Measured, shown in the debug overlay, and deliberately NOT acted on: too
+    // many machines report this true by an OS/browser default the visitor
+    // never chose (battery saver, a corporate image), and honouring it meant
+    // those visitors got a single frozen frame that read as a broken page
+    // rather than as a deliberate accessibility choice. A confirmed capable
+    // desktop GPU (GTX 1070 Ti) surfaced this: `reduce` was the entire reason
+    // its background looked dead.
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const nav = navigator as Navigator & {
       deviceMemory?: number;
@@ -55,9 +66,7 @@ export default function LatentBackground({ onReady }: { onReady?: () => void }) 
       viewportHeight: window.innerHeight,
       deviceMemory: nav.deviceMemory,
       hardwareConcurrency: nav.hardwareConcurrency,
-      // Reduced motion renders one settled frame, but even that should not
-      // synchronously simulate a quarter-million particles 220 times.
-      saveData: coarse || reduce || nav.connection?.saveData,
+      saveData: coarse || nav.connection?.saveData,
     });
 
     const mode = new URLSearchParams(window.location.search).get("latent");
@@ -191,59 +200,6 @@ export default function LatentBackground({ onReady }: { onReady?: () => void }) 
     };
 
     syncSectionRanges();
-
-    if (reduce) {
-      engine.setPointer(0.62, 0.6);
-      syncCopyRect();
-      // This single settled frame runs outside the animation loop, so none of
-      // the loop's own safety nets (the try/catch around simulate/draw, the
-      // stall watchdog) apply to it. A throw here used to leave the canvas
-      // frozen on whatever the GPU last cleared it to, with no reason recorded
-      // anywhere — exactly "the background doesn't work" with nothing to show
-      // for it in the debug overlay.
-      const settle = (progress: number) => {
-        try {
-          engine.renderOnce(progress);
-          return true;
-        } catch (err) {
-          reportFailure(engine);
-          if (!engine.getFailReason()) {
-            setDiag(
-              [
-                `FALLBACK — reduced-motion render threw: ` +
-                  (err instanceof Error ? err.message : String(err)),
-              ].join("\n"),
-            );
-          }
-          setFailed(true);
-          return false;
-        }
-      };
-      if (!settle(0.05)) {
-        return () => {
-          window.clearInterval(diagTimer);
-          canvas.removeEventListener("webglcontextcreationerror", onCreationError);
-          canvas.removeEventListener("webglcontextlost", onContextLost);
-          engine.dispose();
-        };
-      }
-      const onResize = () => {
-        if (!engine.resize()) {
-          setFailed(true);
-          return;
-        }
-        syncSectionRanges();
-        settle(0.05);
-      };
-      window.addEventListener("resize", onResize);
-      return () => {
-        window.clearInterval(diagTimer);
-        window.removeEventListener("resize", onResize);
-        canvas.removeEventListener("webglcontextcreationerror", onCreationError);
-        canvas.removeEventListener("webglcontextlost", onContextLost);
-        engine.dispose();
-      };
-    }
 
     const onScroll = () => {
       engine.setProgress(scrollProgress());

@@ -293,13 +293,6 @@ export class LiteEngine {
     if (!this.running && this.ctx) this.start();
   }
 
-  /** One settled frame, for prefers-reduced-motion. */
-  renderOnce() {
-    this.progress = this.progressTarget;
-    for (let s = 0; s < 90; s++) this.step(1 / 60);
-    this.draw();
-  }
-
   getDiagnostics(): LiteDiagnostics {
     return {
       particles: this.count,
