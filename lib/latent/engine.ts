@@ -1215,8 +1215,21 @@ export class LatentEngine {
     this.pulseV *= Math.exp(-dt * 3.2);
     this.animTime += dt;
 
-    this.simulate(dt);
-    this.draw();
+    // A throw inside these two silently kills the rAF chain — the canvas just
+    // freezes on its last frame with no error surfaced anywhere. That read as
+    // "the background doesn't work" with no reason in the debug overlay, on a
+    // machine easily capable of running the field (a discrete desktop GPU),
+    // because every diagnostic this file had only covered mount()-time
+    // bail-outs and the governor's own abort, not a runtime exception.
+    try {
+      this.simulate(dt);
+      this.draw();
+    } catch (err) {
+      this.fail(`runtime error: ${err instanceof Error ? err.message : String(err)}`);
+      this.pause();
+      this.onGiveUp?.();
+      return;
+    }
     this.raf = requestAnimationFrame(this.loop);
   };
 }
