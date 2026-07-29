@@ -209,8 +209,15 @@ export class LatentEngine {
   ];
 
   // Copy column to keep clear, in normalized screen coords (0..1, y up).
+  // Eased, like every other input: the box is measured from whichever heading is
+  // most visible, so scrolling past a section change SWAPS it to a different
+  // heading in one step. Applied raw that is a rectangular void appearing at a
+  // new place in a single frame — a hard black box for the second the spring
+  // takes to refill the old one.
   private copyRect: [number, number, number, number] = [0, 0, 0, 0];
+  private copyTarget: [number, number, number, number] = [0, 0, 0, 0];
   private copyAmt = 0;
+  private copyAmtTarget = 0;
 
   // First-load ramp: the field opens as chaos and resolves into the hero core
   // as the preloader lifts, instead of appearing already finished.
@@ -382,10 +389,12 @@ export class LatentEngine {
   }
 
   /** Copy column to keep the field clear of, in normalized screen coords
-   *  (0..1, y up). Strength 0 disables it. */
+   *  (0..1, y up). Strength 0 disables it. Both are targets — the loop chases
+   *  them, so a heading swap slides the box instead of teleporting it. */
   setCopyRect(x0: number, y0: number, x1: number, y1: number, strength = 1) {
-    this.copyRect = [x0, y0, x1, y1];
-    this.copyAmt = strength;
+    if (![x0, y0, x1, y1, strength].every(Number.isFinite)) return;
+    this.copyTarget = [x0, y0, x1, y1];
+    this.copyAmtTarget = strength;
   }
 
   /**
@@ -614,6 +623,7 @@ export class LatentEngine {
   }
 
   setPointer(x: number, y: number) {
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return;
     const speed = Math.hypot(x - this.pointerTarget[0], y - this.pointerTarget[1]);
     this.energy = Math.min(1, this.energy + speed * 4);
     this.pointerTarget = [x, y];
@@ -856,6 +866,12 @@ export class LatentEngine {
     const gl = this.gl;
     if (!gl || !this.simProg || !this.canvas) return;
 
+    // A zero-height canvas makes `aspect` infinite, and every uniform derived
+    // from it non-finite — which the shader turns into NaN state that then
+    // persists in the ping-pong textures long after the layout has recovered.
+    // It happens: a hidden ancestor, an orientation change mid-frame.
+    if (this.canvas.width < 1 || this.canvas.height < 1) return;
+
     const { cx, cy, scale, camZ } = this.layout();
     // Pointer -> VIEW units on the z=0 plane, matching pointVertexShader. The
     // shader compares this against uRot*p, so no inverse is needed here; the
@@ -951,6 +967,7 @@ export class LatentEngine {
     const gl = this.gl;
     const canvas = this.canvas;
     if (!gl || !canvas || !this.pointProg || !this.showProg) return;
+    if (canvas.width < 1 || canvas.height < 1) return;
     const brightProg = this.brightProg;
     const blurProg = this.blurProg;
 
@@ -1141,6 +1158,28 @@ export class LatentEngine {
     this.pointer[0] += (this.pointerTarget[0] - this.pointer[0]) * Math.min(1, dt * 6);
     this.pointer[1] += (this.pointerTarget[1] - this.pointer[1]) * Math.min(1, dt * 6);
     this.energy *= Math.exp(-dt * 2.4);
+
+    // Copy box: slide the corners toward their target, and hold the push back
+    // while it is still travelling. A swap to a different heading is a jump of
+    // most of the viewport, and dragging a live exclusion box across the field
+    // would scrape a trail through it — so the box fades out, moves, and fades
+    // back in, which is invisible.
+    //
+    // The deadband is what keeps that from firing during ordinary scrolling: the
+    // box TRACKS the heading continuously, so it always lags its target a little
+    // (~0.07 of the viewport at speed, against a chase rate of dt*9), and
+    // suppressing the push for that would quietly halve the effect exactly when
+    // the copy is moving. Only a discontinuity — a different heading taking over
+    // — clears 0.18.
+    const kCopy = Math.min(1, dt * 9);
+    let travel = 0;
+    for (let i = 0; i < 4; i++) {
+      travel = Math.max(travel, Math.abs(this.copyTarget[i] - this.copyRect[i]));
+      this.copyRect[i] += (this.copyTarget[i] - this.copyRect[i]) * kCopy;
+    }
+    const jump = Math.max(0, travel - 0.18);
+    this.copyAmt +=
+      (this.copyAmtTarget / (1 + jump * 30) - this.copyAmt) * Math.min(1, dt * 4);
 
     // Scroll velocity envelope: fast attack, slow release.
     // Boot ramp. Eased so the resolve decelerates into place rather than
