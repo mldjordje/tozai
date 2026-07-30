@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import type { SessionUser } from "@/lib/auth/user-token";
 import BrandLogo from "@/components/brand/Logo";
+import InstallPWAButton from "@/components/pwa/InstallPWAButton";
 
 const LINKS = [
   { href: "/nalog", label: "Pregled", icon: LayoutDashboard },
@@ -80,15 +81,18 @@ export default function AccountShell({
         <Link href="/" aria-label="TOZA AI — početna" className="text-base">
           <BrandLogo markClassName="size-7" />
         </Link>
-        <button
-          type="button"
-          onClick={() => setMenuOpen((v) => !v)}
-          aria-label={menuOpen ? "Zatvori meni" : "Otvori meni"}
-          aria-expanded={menuOpen}
-          className="rounded-lg border border-line p-2 text-muted"
-        >
-          {menuOpen ? <X size={18} /> : <Menu size={18} />}
-        </button>
+        <div className="flex items-center gap-2">
+          <InstallPWAButton />
+          <button
+            type="button"
+            onClick={() => setMenuOpen((v) => !v)}
+            aria-label={menuOpen ? "Zatvori meni" : "Otvori meni"}
+            aria-expanded={menuOpen}
+            className="rounded-lg border border-line p-2 text-muted"
+          >
+            {menuOpen ? <X size={18} /> : <Menu size={18} />}
+          </button>
+        </div>
       </header>
 
       {menuOpen && (
@@ -114,6 +118,7 @@ export default function AccountShell({
                 <span className="block truncate text-xs text-faint">{user.email}</span>
               </span>
             </div>
+            <InstallPWAButton className="mt-4 rounded-lg border border-line px-3 py-1.5 text-xs text-muted transition-colors hover:text-fg" />
             <a
               href="/api/auth/logout"
               className="mt-4 flex items-center gap-2 text-sm text-faint transition-colors hover:text-fg"

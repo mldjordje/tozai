@@ -23,6 +23,7 @@ import {
   Menu,
   X,
 } from "lucide-react";
+import InstallPWAButton from "@/components/pwa/InstallPWAButton";
 
 type BadgeKey = "newMaterials" | "newRequests" | "unpaidOrders" | "sessionsNoLink";
 
@@ -138,6 +139,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
             );
           })}
         </nav>
+        <InstallPWAButton className="adm__logout adm__side-install" />
         <button className="adm__logout adm__side-logout" onClick={logout}>
           Odjava
         </button>
@@ -161,6 +163,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
           <div className="adm__brand adm__brand--mobile">
             TOZA AI <small>ADMIN</small>
           </div>
+          <InstallPWAButton className="adm__logout" />
           <button className="adm__logout adm__top-logout" onClick={logout}>
             Odjava
           </button>

@@ -262,9 +262,10 @@ button.adm__chip:disabled{opacity:.3;cursor:default;text-decoration:line-through
 .adm__nav-item:hover{color:#fff;background:rgba(255,255,255,.04)}
 .adm__nav-item[aria-current=page]{color:#fff;background:rgba(46,107,255,.16)}
 .adm__nav-badge{margin-left:auto;display:grid;place-items:center;min-width:18px;height:18px;padding:0 5px;border-radius:999px;background:var(--neon,#6c94ff);color:#000;font-style:normal;font-size:10px;font-weight:700}
-.adm__side-logout{margin-top:auto;align-self:stretch;text-align:center}
+.adm__side-install{margin-top:auto;align-self:stretch;text-align:center}
+.adm__side-logout{align-self:stretch;text-align:center}
 .adm__body{flex:1;min-width:0}
-.adm__top--shell{justify-content:flex-end}
+.adm__top--shell{justify-content:flex-end;gap:12px}
 .adm__brand--mobile{display:none;margin-right:auto}
 .adm__burger{display:none}
 @media(max-width:900px){
