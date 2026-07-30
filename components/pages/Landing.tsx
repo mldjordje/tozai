@@ -116,8 +116,10 @@ export default async function Landing({ locale }: { locale: Locale }) {
 
         <TextStrip items={copy.strip_items} />
 
-        {/* Proof — pinned horizontal showcase */}
+        {/* Proof — horizontal showcase: swipeable on touch, scroll-driven while
+            pinned on desktop, every card opening full-size */}
         <ResultsShowcase
+          locale={locale}
           ctaHref={inquiryHref}
           shots={shots.length ? shots : undefined}
           eyebrow={copy.results_eyebrow}

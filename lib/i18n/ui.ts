@@ -53,6 +53,15 @@ export type UiStrings = {
     empty: string;
     back: string;
   };
+  /** The proof rail on the landing and the full-size view behind each card. */
+  results: {
+    open: (handle: string) => string;
+    swipe: string;
+    prev: string;
+    next: string;
+    close: string;
+    position: (index: number, total: number) => string;
+  };
   inquiry: {
     backToPackages: string;
     title: string;
@@ -196,6 +205,14 @@ const sr: UiStrings = {
     all: "Sve",
     empty: "Radovi se uskoro pojavljuju ovde.",
     back: "Nazad",
+  },
+  results: {
+    open: (handle) => `Otvori rezultat: ${handle}`,
+    swipe: "Prevuci levo za još rezultata",
+    prev: "Prethodni rezultat",
+    next: "Sledeći rezultat",
+    close: "Zatvori",
+    position: (index, total) => `Rezultat ${index} od ${total}`,
   },
   inquiry: {
     backToPackages: "Nazad na pakete",
@@ -354,6 +371,14 @@ const en: UiStrings = {
     all: "All",
     empty: "Work is coming here shortly.",
     back: "Back",
+  },
+  results: {
+    open: (handle) => `Open result: ${handle}`,
+    swipe: "Swipe for more results",
+    prev: "Previous result",
+    next: "Next result",
+    close: "Close",
+    position: (index, total) => `Result ${index} of ${total}`,
   },
   inquiry: {
     backToPackages: "Back to packages",
