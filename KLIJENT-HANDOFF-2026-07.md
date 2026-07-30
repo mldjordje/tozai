@@ -227,24 +227,24 @@ ostaju bezbedno sačuvane u Vercel projektu `toza-ai.rs`.
 
 ## 9. Google ulaz u admin
 
-Google admin pristup je pripremljen za:
+U admin panel ulazi **samo jedan Google nalog**:
 
-- `svetozartoza.markovic02@gmail.com`
 - `tozaayt@gmail.com`
 
-Za aktivaciju treba napraviti Google OAuth Web Client i dodati produkcijski
-redirect:
-
-`https://toza-ai.rs/api/auth/google/callback`
+Adresa je upisana u kod (`ADMIN_OWNER_EMAIL` u `lib/auth/admin-access.ts`), ne u
+env. Promena vlasnika panela je zato izmena koda koja se vidi u `git log`, a ne
+podešavanje na dashboard-u koje niko ne pregleda.
 
 Potrebne Vercel promenljive:
 
 - `GOOGLE_CLIENT_ID`;
-- `GOOGLE_CLIENT_SECRET`;
-- `ADMIN_BOOTSTRAP_EMAILS` sa oba emaila, odvojena zarezom.
+- `GOOGLE_CLIENT_SECRET`.
 
-Admin lozinka se **za sada ne uklanja**. Tek kada se potvrdi da oba Google naloga
-ulaze u panel, u posebnom poslednjem koraku može se ugasiti lozinka.
+Redirect na Google OAuth Web Client-u: `https://toza-ai.rs/api/auth/google/callback`.
+
+Admin lozinka je **ugašena** — `ADMIN_PASSWORD` i `/api/admin/login` više ne
+postoje, kao ni `ADMIN_BOOTSTRAP_EMAILS`. Te promenljive se mogu obrisati iz
+Vercel-a; kod ih ne čita.
 
 ## 10. Monri
 

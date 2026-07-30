@@ -2,9 +2,9 @@ import { NextResponse, type NextRequest } from "next/server";
 import { SESSION_COOKIE_NAME, verifySessionToken } from "@/lib/auth/session";
 import { USER_SESSION_COOKIE, verifyUserSession } from "@/lib/auth/user-token";
 
-// Two independent doors, two cookies:
-//   /admin, /api/admin  → staff session (owner password, or Google for staff)
-//   /nalog, /api/nalog  → customer session (Google only)
+// Two independent doors, two cookies, and both are Google-only:
+//   /admin, /api/admin  → owner session (one allowlisted Google account)
+//   /nalog, /api/nalog  → customer session
 // Neither cookie grants access to the other's area.
 
 function deny(request: NextRequest, loginPath: string) {
@@ -26,8 +26,9 @@ export async function middleware(request: NextRequest) {
     return user ? NextResponse.next() : deny(request, "/prijava");
   }
 
-  // login page and login API stay public
-  if (pathname === "/admin/login" || pathname === "/api/admin/login") {
+  // The login page stays public. There is no login API any more — the only way
+  // in is the Google round trip, which lands on /api/auth/google/callback.
+  if (pathname === "/admin/login") {
     return NextResponse.next();
   }
 

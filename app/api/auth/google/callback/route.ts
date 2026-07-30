@@ -14,8 +14,7 @@ import {
   signSessionToken,
   verifySessionToken,
 } from "@/lib/auth/session";
-import { getStaffByEmail } from "@/lib/staff";
-import { isBootstrapAdmin, wantsAdminDestination } from "@/lib/auth/admin-access";
+import { isAdminOwner, wantsAdminDestination } from "@/lib/auth/admin-access";
 import { saveCalendarCredentials } from "@/lib/google/calendar";
 
 export const runtime = "nodejs";
@@ -107,9 +106,9 @@ export async function GET(request: NextRequest) {
   // Three things have to hold before a refresh token is stored: the txn cookie
   // says "calendar" (and it is signed by us, so it can only come from the
   // admin-gated start route), the browser still holds a valid admin session,
-  // and the Google account that came back is actually staff. Any one of them
-  // alone would be too weak — the last one is what stops an admin from wiring
-  // the studio's bookings into some unrelated calendar.
+  // and the Google account that came back is the owner's. Any one of them alone
+  // would be too weak — the last one is what stops the studio's bookings being
+  // wired into some unrelated calendar.
   if (txn.mode === "calendar") {
     const adminSession = await verifySessionToken(
       request.cookies.get(SESSION_COOKIE_NAME)?.value,
@@ -118,14 +117,7 @@ export async function GET(request: NextRequest) {
     if (role !== "owner" && role !== "staff") {
       return calendarRedirect(origin, "pristup");
     }
-
-    let staff = null;
-    try {
-      staff = await getStaffByEmail(email);
-    } catch {
-      staff = null;
-    }
-    if (!staff && !isBootstrapAdmin(email)) {
+    if (!isAdminOwner(email)) {
       return calendarRedirect(origin, "nalog");
     }
     if (!tokens.refresh_token) {
@@ -161,17 +153,12 @@ export async function GET(request: NextRequest) {
     avatar: user.avatar_url,
   });
 
-  // Team door: if this address is on `staff`, the same Google login also opens
-  // the admin panel — set the admin session cookie alongside the customer one
-  // and land them in the panel instead of the client dashboard.
+  // Owner door: one allowlisted address, checked against the constant rather
+  // than against the `staff` table. A row in that table used to be enough on its
+  // own, which made "who can read the studio's books" a question about database
+  // state — reachable from any admin surface that can write to it.
   let staffMember = null;
-  try {
-    staffMember = await getStaffByEmail(email);
-  } catch {
-    // staff table missing (pre-migration) — treat as a plain customer login.
-  }
-  const bootstrapAdmin = isBootstrapAdmin(email);
-  if (!staffMember && bootstrapAdmin) {
+  if (isAdminOwner(email)) {
     const seeded = (await sql`
       INSERT INTO staff (email, name, role, active, google_id, avatar_url)
       VALUES (${email.toLowerCase()}, ${name ?? "Owner"}, 'owner', true, ${googleId}, ${avatar})
@@ -188,13 +175,11 @@ export async function GET(request: NextRequest) {
   if (staffMember) {
     await sql`
       UPDATE staff
-      SET google_id = ${googleId},
-          avatar_url = ${avatar},
-          name = CASE WHEN name = '' OR name = 'Owner' THEN COALESCE(${name}, name) ELSE name END
+      SET name = CASE WHEN name = '' OR name = 'Owner' THEN COALESCE(${name}, name) ELSE name END
       WHERE id = ${staffMember.id}
     `;
     const adminToken = await signSessionToken({
-      role: staffMember.role,
+      role: "owner",
       userId: staffMember.id,
       name: staffMember.name,
     });

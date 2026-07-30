@@ -4,6 +4,17 @@ import type { NextResponse } from "next/server";
 export const SESSION_COOKIE_NAME = "tozai_admin_session";
 const SESSION_TTL_SECONDS = 60 * 60 * 24 * 30;
 
+/**
+ * Admin sessions issued before this moment are refused (2026-07-30T21:21:02Z).
+ *
+ * These tokens are stateless and last 30 days, so deleting the password login
+ * did not retire the cookies it had already handed out — the shared password
+ * would have kept opening the panel for a month after it stopped existing.
+ * Moving this line forward is how an admin session is revoked; it only touches
+ * the staff cookie, so customers stay signed in.
+ */
+const ADMIN_SESSION_EPOCH = 1785446462;
+
 function getSecret() {
   const secret = process.env.AUTH_JWT_SECRET;
   if (!secret) {
@@ -27,6 +38,9 @@ export async function verifySessionToken(token: string | undefined) {
   }
   try {
     const { payload } = await jwtVerify(token, getSecret());
+    if (typeof payload.iat !== "number" || payload.iat < ADMIN_SESSION_EPOCH) {
+      return null;
+    }
     return payload;
   } catch {
     return null;

@@ -5,7 +5,7 @@ export default function AdminLoginPage() {
   return (
     <div className="adm-login">
       <Suspense fallback={null}>
-        <AdminLoginForm passwordEnabled={Boolean(process.env.ADMIN_PASSWORD)} />
+        <AdminLoginForm />
       </Suspense>
     </div>
   );
