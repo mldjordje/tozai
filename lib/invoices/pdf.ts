@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import fontkit from "@pdf-lib/fontkit";
 import { PDFDocument, rgb, type PDFFont, type PDFPage } from "pdf-lib";
-import { paymentAccountForCurrency } from "./rules";
+import { settlementAccount } from "./rules";
 
 // Invoice / proforma renderer.
 //
@@ -52,8 +52,22 @@ export type InvoiceDocument = {
     bankAddress?: string | null;
   };
   buyer: InvoiceParty;
-  /** Reference the payer must quote, so the studio can match the transfer. */
-  reference: string;
+  /** The day the service was delivered. A mandatory element of a Serbian
+   *  invoice, and not the same as `issuedAt` — a proforma has no supply yet, so
+   *  it is null there. */
+  supplyDate?: Date | null;
+  /** Where the document was issued. "Mesto i datum izdavanja" is one required
+   *  element; only the date half was ever printed. */
+  placeOfIssue?: string | null;
+  /** Numeric model-97 reference, when the issuer uses one. Null means the payment
+   *  purpose below is printed instead — see lib/invoices/rules.ts. */
+  reference: string | null;
+  /** What the payer should write as the purpose of payment. The document's own
+   *  number, which is what a buyer can actually match a transfer against. */
+  paymentPurpose: string;
+  /** Dinar settlement line for a domestic invoice denominated in euros: the
+   *  amount is invoiced in EUR and paid in RSD. */
+  settlementNote?: string | null;
   vatNote: string;
 };
 
@@ -70,6 +84,8 @@ const LABELS = {
     invoice: "RAČUN",
     number: "Broj",
     issued: "Datum izdavanja",
+    place: "Mesto izdavanja",
+    supply: "Datum prometa",
     due: "Rok plaćanja",
     seller: "Izdavalac",
     buyer: "Kupac",
@@ -82,6 +98,8 @@ const LABELS = {
     recipient: "Primalac",
     account: "Račun",
     reference: "Poziv na broj",
+    model: "Model",
+    purpose: "Svrha uplate",
     pib: "PIB",
     mb: "Matični broj",
     rateNote: (rate: string, date: string) => `Obračunato po srednjem kursu NBS ${rate} RSD/EUR na dan ${date}.`,
@@ -94,6 +112,8 @@ const LABELS = {
     invoice: "INVOICE",
     number: "No.",
     issued: "Date of issue",
+    place: "Place of issue",
+    supply: "Date of supply",
     due: "Payment due",
     seller: "Supplier",
     buyer: "Customer",
@@ -106,6 +126,8 @@ const LABELS = {
     recipient: "Beneficiary",
     account: "Account / IBAN",
     reference: "Payment reference",
+    model: "Model",
+    purpose: "Payment purpose",
     pib: "Tax ID",
     mb: "Company No.",
     rateNote: (rate: string, date: string) => `RSD equivalent at the NBS middle rate ${rate} RSD/EUR on ${date}.`,
@@ -254,10 +276,18 @@ export async function renderInvoicePdf(doc: InvoiceDocument): Promise<Uint8Array
   }
 
   y -= 6;
-  text(`${t.issued}: ${formatDate(doc.issuedAt)}`, right, 9, { align: "right", color: MUTED });
-  y -= 12;
-  if (doc.dueDate) {
-    text(`${t.due}: ${formatDate(doc.dueDate)}`, right, 9, { align: "right", color: MUTED });
+  // "Mesto i datum izdavanja" and "datum prometa" are both required elements of a
+  // Serbian invoice. The supply date is the day the service was delivered, which
+  // is why it is a separate line and not a restatement of the issue date — a
+  // proforma leaves it out entirely, since nothing has been supplied yet.
+  for (const line of [
+    doc.placeOfIssue ? `${t.place}: ${doc.placeOfIssue}` : null,
+    `${t.issued}: ${formatDate(doc.issuedAt)}`,
+    doc.supplyDate ? `${t.supply}: ${formatDate(doc.supplyDate)}` : null,
+    doc.dueDate ? `${t.due}: ${formatDate(doc.dueDate)}` : null,
+  ]) {
+    if (!line) continue;
+    text(line, right, 9, { align: "right", color: MUTED });
     y -= 12;
   }
 
@@ -333,9 +363,10 @@ export async function renderInvoicePdf(doc: InvoiceDocument): Promise<Uint8Array
   y -= 20;
 
   // ---- how to pay ----------------------------------------------------------
-  // The payment account follows the invoice currency. Foreign documents also
-  // print the shared SWIFT and bank details needed for an international transfer.
-  const accountValue = paymentAccountForCurrency(doc.currency, {
+  // A domestic transfer settles in dinars whatever the invoice is denominated in,
+  // so the account follows the SCOPE and not just the currency. Foreign documents
+  // also print the SWIFT and bank details an international transfer needs.
+  const accountValue = settlementAccount(doc.scope, doc.currency, {
     domestic: doc.seller.bankAccount,
     eur: doc.seller.eurAccount,
     usd: doc.seller.usdAccount,
@@ -354,13 +385,30 @@ export async function renderInvoicePdf(doc: InvoiceDocument): Promise<Uint8Array
           ["Bank address", doc.seller.bankAddress],
         ] as [string, string | null | undefined][])
       : []),
-    [t.reference, doc.reference],
+    // The model only appears next to a reference that actually has check digits.
+    // A "Poziv na broj" line holding something a bank field will not accept is
+    // worse than no line at all — it invites the buyer to type it and fail.
+    ...(doc.reference
+      ? ([
+          [t.model, "97"],
+          [t.reference, doc.reference],
+        ] as [string, string | null | undefined][])
+      : []),
+    [t.purpose, doc.paymentPurpose],
   ];
   for (const [label, value] of payRows) {
     if (!value) continue;
     text(`${label}:`, MARGIN, 9, { color: MUTED });
     text(value, MARGIN + 110, 9, { font: bold });
     y -= 14;
+  }
+
+  if (doc.settlementNote) {
+    y -= 2;
+    for (const line of wrap(doc.settlementNote, regular, 8.5, contentWidth)) {
+      text(line, MARGIN, 8.5, { color: MUTED });
+      y -= 11;
+    }
   }
 
   y -= 14;

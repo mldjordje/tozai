@@ -11,6 +11,7 @@ const EMPTY: Settings = {
   address: "", city: "", company_name: "", pib: "", mb: "", bank_account: "",
   eur_account: "", usd_account: "", iban: "", swift: "", bank_name: "", bank_address: "",
   vat_note_domestic: "", vat_note_foreign: "", invoice_due_days: "5",
+  payment_reference_model: "none",
   activity_code: "", registration_number: "",
 };
 
@@ -19,7 +20,14 @@ type Social = { label: string; url: string };
 const SECTIONS: {
   title: string;
   hint?: string;
-  fields: { key: string; label: string; placeholder?: string }[];
+  fields: {
+    key: string;
+    label: string;
+    placeholder?: string;
+    /** Renders a select instead of a free-text input, for the fields where only a
+     *  fixed set of values means anything to the document renderer. */
+    choices?: { value: string; label: string }[];
+  }[];
 }[] = [
   {
     title: "Brend i kontakt",
@@ -54,6 +62,14 @@ const SECTIONS: {
       { key: "activity_code", label: "Šifra delatnosti" },
       { key: "registration_number", label: "Broj rešenja / registracije" },
       { key: "invoice_due_days", label: "Rok plaćanja (dana)", placeholder: "5" },
+      {
+        key: "payment_reference_model",
+        label: "Poziv na broj",
+        choices: [
+          { value: "none", label: "Ne koristim (piše se svrha uplate)" },
+          { value: "97", label: "Model 97 — automatski iz broja dokumenta" },
+        ],
+      },
     ],
   },
   {
@@ -143,15 +159,31 @@ export function PodesavanjaTab() {
                 {sec.fields.map((f) => (
                   <label key={f.key} className="adm__content-field">
                     <span>{f.label}</span>
-                    <input
-                      type="text"
-                      placeholder={f.placeholder}
-                      value={settings[f.key] ?? ""}
-                      onChange={(e) => {
-                        setSettings({ ...settings, [f.key]: e.target.value });
-                        setSaved(false);
-                      }}
-                    />
+                    {f.choices ? (
+                      <select
+                        value={settings[f.key] ?? f.choices[0].value}
+                        onChange={(e) => {
+                          setSettings({ ...settings, [f.key]: e.target.value });
+                          setSaved(false);
+                        }}
+                      >
+                        {f.choices.map((choice) => (
+                          <option key={choice.value} value={choice.value}>
+                            {choice.label}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input
+                        type="text"
+                        placeholder={f.placeholder}
+                        value={settings[f.key] ?? ""}
+                        onChange={(e) => {
+                          setSettings({ ...settings, [f.key]: e.target.value });
+                          setSaved(false);
+                        }}
+                      />
+                    )}
                   </label>
                 ))}
               </div>

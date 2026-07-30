@@ -27,6 +27,7 @@ type FormState = {
   kind: "proforma" | "invoice";
   scope: "domestic" | "foreign";
   issuedAt: string;
+  supplyDate: string;
   dueDate: string;
   item: string;
   amount: string;
@@ -57,6 +58,7 @@ function initialForm(): FormState {
     kind: "invoice",
     scope: "domestic",
     issuedAt: isoDate(),
+    supplyDate: isoDate(),
     dueDate: isoDate(5),
     item: "",
     amount: "",
@@ -199,6 +201,18 @@ export function FaktureTab() {
           <Field label="Datum izdavanja">
             <input type="date" required value={form.issuedAt} onChange={(event) => set("issuedAt", event.target.value)} />
           </Field>
+          {/* Obavezan element računa i nije isto što i datum izdavanja: ovde ide
+              dan kada je usluga izvršena. Predračun ga ne prikazuje jer promet
+              još nije nastao. */}
+          {form.kind === "invoice" && (
+            <Field label="Datum prometa">
+              <input
+                type="date"
+                value={form.supplyDate}
+                onChange={(event) => set("supplyDate", event.target.value)}
+              />
+            </Field>
+          )}
           <Field label="Rok plaćanja">
             <input type="date" value={form.dueDate} onChange={(event) => set("dueDate", event.target.value)} />
           </Field>

@@ -385,8 +385,11 @@ button.adm__chip:disabled{opacity:.3;cursor:default;text-decoration:line-through
 .adm__content-field{display:flex;flex-direction:column;gap:6px}
 .adm__content-field span{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:10px;letter-spacing:.12em;text-transform:uppercase}
 .adm__content-changed{padding:2px 8px;border-radius:999px;background:rgba(108,148,255,.2);color:var(--neon);font-style:normal;font-size:8px}
-.adm__content-field input,.adm__content-field textarea{padding:10px 12px;border:1px solid var(--line);border-radius:4px;background:rgba(255,255,255,.03);color:#fff;font:inherit;font-size:13px;resize:vertical}
-.adm__content-field input:focus,.adm__content-field textarea:focus{outline:none;border-color:var(--neon)}
+.adm__content-field input,.adm__content-field textarea,.adm__content-field select{padding:10px 12px;border:1px solid var(--line);border-radius:4px;background:rgba(255,255,255,.03);color:#fff;font:inherit;font-size:13px;resize:vertical}
+.adm__content-field input:focus,.adm__content-field textarea:focus,.adm__content-field select:focus{outline:none;border-color:var(--neon)}
+/* The dark panel's own background does not reach the native dropdown list, so the
+   options need their own colours or they render dark-on-dark. */
+.adm__content-field select option{background:#14141a;color:#fff}
 /* Field hints are prose, not labels — the uppercase/tracked label rule above
    would otherwise catch them by being the more specific selector. */
 .adm__content-field .adm__hint,.adm__content-grid>div>.adm__hint{text-transform:none;letter-spacing:0;font-size:11px;line-height:1.5}

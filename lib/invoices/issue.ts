@@ -1,10 +1,16 @@
 import "server-only";
 import { put } from "@vercel/blob";
 import { getSql } from "@/lib/db";
-import { paymentReference } from "@/lib/payments/manual";
 import { getMiddleRate } from "./fx";
 import { renderInvoicePdf, type InvoiceDocument, type InvoiceParty } from "./pdf";
-import { invoiceScope, paymentAccountForCurrency, type InvoiceKind } from "./rules";
+import {
+  belgradeToday,
+  invoiceScope,
+  paymentAccountForCurrency,
+  paymentReferenceFor,
+  referenceModel,
+  type InvoiceKind,
+} from "./rules";
 export type { InvoiceKind } from "./rules";
 
 export class InvoiceConfigurationError extends Error {}
@@ -31,6 +37,10 @@ export type ManualInvoiceInput = {
   kind: InvoiceKind;
   scope: "domestic" | "foreign";
   issuedAt: string;
+  /** The day the service was delivered. Editable because it is exactly what an
+   *  invoice raised after the fact needs to state — billing last month's work
+   *  with this month's date on the promet line is the error the field prevents. */
+  supplyDate: string | null;
   dueDate: string | null;
   item: string;
   amount: number;
@@ -73,7 +83,59 @@ type SettingsRow = {
   vat_note_domestic: string | null;
   vat_note_foreign: string | null;
   invoice_due_days: number | null;
+  payment_reference_model: string | null;
 };
+
+/** Columns every document render needs from the single settings row. Written once
+ *  because it is selected from three places and a column missing from one of them
+ *  is a field silently absent from that one document. */
+const SETTINGS_COLUMNS = `name, company_name, address, city, email, phone, pib, mb,
+       bank_account, eur_account, usd_account, iban, swift, bank_name, bank_address,
+       vat_note_domestic, vat_note_foreign, invoice_due_days, payment_reference_model`;
+
+/** sql.query, not the template tag: an interpolation into the tag becomes a bound
+ *  parameter, which cannot be a column list. The string is a constant above with
+ *  no caller input in it. */
+async function loadSettings(): Promise<SettingsRow> {
+  const sql = getSql();
+  const rows = (await sql.query(
+    `SELECT ${SETTINGS_COLUMNS} FROM studio_settings WHERE id = 1`,
+  )) as SettingsRow[];
+  return rows[0] ?? ({} as SettingsRow);
+}
+
+/**
+ * The payment fields for one document: the reference the bank will accept, the
+ * purpose line, and the dinar settlement note where one is needed.
+ *
+ * Shared by all three entry points so an order-issued document, a manual one and
+ * a re-render can never disagree about what the buyer was told to pay.
+ */
+function paymentFields(args: {
+  number: string;
+  scope: "domestic" | "foreign";
+  currency: string;
+  rsdAmount: number | null;
+  model: string | null;
+}): Pick<InvoiceDocument, "reference" | "paymentPurpose" | "settlementNote"> {
+  const reference = paymentReferenceFor(args.number, referenceModel(args.model));
+  const foreignCurrency = args.currency.trim().toUpperCase() !== "RSD";
+
+  let settlementNote: string | null = null;
+  if (args.scope === "domestic" && foreignCurrency) {
+    const rsd = args.rsdAmount
+      ? `${args.rsdAmount.toLocaleString("sr-RS", {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        })} RSD`
+      : null;
+    settlementNote = rsd
+      ? `Uplata se vrši u dinarima na navedeni račun, u iznosu od ${rsd}.`
+      : "Uplata se vrši u dinarima na navedeni račun, po srednjem kursu NBS na dan uplate.";
+  }
+
+  return { reference, paymentPurpose: args.number, settlementNote };
+}
 
 function str(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value.trim() : null;
@@ -126,20 +188,18 @@ export async function issueInvoice(
     };
   }
 
-  const settingsRows = (await sql`
-    SELECT name, company_name, address, city, email, phone, pib, mb,
-           bank_account, eur_account, usd_account, iban, swift, bank_name, bank_address,
-           vat_note_domestic, vat_note_foreign, invoice_due_days
-    FROM studio_settings WHERE id = 1
-  `) as SettingsRow[];
-  const settings = settingsRows[0] ?? ({} as SettingsRow);
+  const settings = await loadSettings();
 
   const buyer = buyerFrom(order);
   const scope = invoiceScope(buyer.country);
   const rate = await getMiddleRate(order.currency);
 
   const dueDays = settings.invoice_due_days ?? 5;
-  const year = new Date().getFullYear();
+  // Belgrade, not the server's UTC clock: see belgradeToday(). The year here picks
+  // the number series, so getting it from the wrong timezone puts a January
+  // document in the previous year's sequence.
+  const today = belgradeToday();
+  const year = today.year;
   const prefix = PREFIX[kind];
 
   // The number is allocated inside the INSERT so the MAX and the write are one
@@ -153,7 +213,7 @@ export async function issueInvoice(
   const inserted = (await sql`
     INSERT INTO invoices (
       order_id, kind, scope, number, amount, currency, item, buyer,
-      issued_at, due_date, amount_rsd, fx_rate, fx_date
+      issued_at, supply_date, due_date, amount_rsd, fx_rate, fx_date
     )
     SELECT ${orderId}, ${kind}, ${scope},
            ${prefix} || '-' || ${year}::text || '-' ||
@@ -166,8 +226,12 @@ export async function issueInvoice(
              )::text, 4, '0'),
            ${order.amount}, ${order.currency}, ${order.item},
            ${JSON.stringify(buyer)}::jsonb,
-           CURRENT_DATE,
-           CURRENT_DATE + ${dueDays}::int,
+           ${today.iso}::date,
+           -- A proforma precedes the work, so it has no date of supply. An
+           -- invoice here is raised once the order is paid and delivered, so the
+           -- supply is today's.
+           ${kind === "invoice" ? today.iso : null}::date,
+           ${today.iso}::date + ${dueDays}::int,
            ${rate ? order.amount * rate.rate : null},
            ${rate?.rate ?? null},
            ${rate?.date ?? null}
@@ -188,12 +252,16 @@ export async function issueInvoice(
   }
 
   const { id, number } = inserted[0];
-  const issuedAt = new Date();
+  // Noon, so formatting the date back out in any nearby timezone lands on the same
+  // calendar day the row stores.
+  const issuedAt = new Date(`${today.iso}T12:00:00Z`);
   const document: InvoiceDocument = {
     kind,
     scope,
     number,
     issuedAt,
+    supplyDate: kind === "invoice" ? issuedAt : null,
+    placeOfIssue: settings.city,
     dueDate: new Date(issuedAt.getTime() + dueDays * 86_400_000),
     item: order.item,
     amount: order.amount,
@@ -218,7 +286,13 @@ export async function issueInvoice(
       bankAddress: settings.bank_address,
     },
     buyer,
-    reference: paymentReference(orderId),
+    ...paymentFields({
+      number,
+      scope,
+      currency: order.currency,
+      rsdAmount: rate ? order.amount * rate.rate : null,
+      model: settings.payment_reference_model,
+    }),
     vatNote:
       (scope === "foreign" ? settings.vat_note_foreign : settings.vat_note_domestic) ?? "",
   };
@@ -262,13 +336,7 @@ export async function issueManualInvoice(
   input: ManualInvoiceInput,
 ): Promise<IssuedInvoice> {
   const sql = getSql();
-  const settingsRows = (await sql`
-    SELECT name, company_name, address, city, email, phone, pib, mb,
-           bank_account, eur_account, usd_account, iban, swift, bank_name, bank_address,
-           vat_note_domestic, vat_note_foreign, invoice_due_days
-    FROM studio_settings WHERE id = 1
-  `) as SettingsRow[];
-  const settings = settingsRows[0] ?? ({} as SettingsRow);
+  const settings = await loadSettings();
   const paymentAccount = paymentAccountForCurrency(input.currency, {
     domestic: settings.bank_account,
     eur: settings.eur_account,
@@ -287,7 +355,7 @@ export async function issueManualInvoice(
   const inserted = (await sql`
     INSERT INTO invoices (
       order_id, kind, scope, number, amount, currency, item, buyer,
-      issued_at, due_date, amount_rsd, fx_rate, fx_date
+      issued_at, supply_date, due_date, amount_rsd, fx_rate, fx_date
     )
     SELECT NULL, ${input.kind}, ${input.scope},
            ${prefix} || '-' || ${year}::text || '-' ||
@@ -301,6 +369,10 @@ export async function issueManualInvoice(
            ${input.amount}, ${input.currency}, ${input.item},
            ${JSON.stringify(input.buyer)}::jsonb,
            ${input.issuedAt}::date,
+           -- Falls back to the issue date rather than to NULL: a manual invoice
+           -- with no promet date stated is the document that is missing a required
+           -- element, and for same-day work the two genuinely coincide.
+           ${input.kind === "invoice" ? (input.supplyDate ?? input.issuedAt) : null}::date,
            ${input.dueDate}::date,
            ${rate ? input.amount * rate.rate : null},
            ${rate?.rate ?? null},
@@ -311,11 +383,14 @@ export async function issueManualInvoice(
   const { id, number } = inserted[0];
   const issuedAt = new Date(`${input.issuedAt}T12:00:00Z`);
   const dueDate = input.dueDate ? new Date(`${input.dueDate}T12:00:00Z`) : null;
+  const supplyIso = input.kind === "invoice" ? (input.supplyDate ?? input.issuedAt) : null;
   const document: InvoiceDocument = {
     kind: input.kind,
     scope: input.scope,
     number,
     issuedAt,
+    supplyDate: supplyIso ? new Date(`${supplyIso}T12:00:00Z`) : null,
+    placeOfIssue: settings.city,
     dueDate,
     item: input.item,
     amount: input.amount,
@@ -340,7 +415,13 @@ export async function issueManualInvoice(
       bankAddress: settings.bank_address,
     },
     buyer: input.buyer,
-    reference: number,
+    ...paymentFields({
+      number,
+      scope: input.scope,
+      currency: input.currency,
+      rsdAmount: rate ? input.amount * rate.rate : null,
+      model: settings.payment_reference_model,
+    }),
     vatNote:
       (input.scope === "foreign" ? settings.vat_note_foreign : settings.vat_note_domestic) ?? "",
   };
@@ -376,7 +457,7 @@ export async function renderStoredInvoice(invoiceId: number): Promise<{ bytes: U
   const sql = getSql();
   const rows = (await sql`
     SELECT i.id, i.order_id, i.kind, i.scope, i.number, i.amount::float8 AS amount, i.currency,
-           i.item, i.buyer, i.issued_at, i.due_date,
+           i.item, i.buyer, i.issued_at, i.supply_date, i.due_date,
            i.amount_rsd::float8 AS amount_rsd, i.fx_rate::float8 AS fx_rate, i.fx_date,
            o.item AS order_item
     FROM invoices i
@@ -393,6 +474,7 @@ export async function renderStoredInvoice(invoiceId: number): Promise<{ bytes: U
     item: string | null;
     buyer: InvoiceParty | null;
     issued_at: string;
+    supply_date: string | null;
     due_date: string | null;
     amount_rsd: number | null;
     fx_rate: number | null;
@@ -402,18 +484,15 @@ export async function renderStoredInvoice(invoiceId: number): Promise<{ bytes: U
   const row = rows[0];
   if (!row) return null;
 
-  const settingsRows = (await sql`
-    SELECT name, company_name, address, city, email, phone, pib, mb,
-           bank_account, eur_account, usd_account, iban, swift, bank_name, bank_address, vat_note_domestic, vat_note_foreign
-    FROM studio_settings WHERE id = 1
-  `) as SettingsRow[];
-  const settings = settingsRows[0] ?? ({} as SettingsRow);
+  const settings = await loadSettings();
 
   const bytes = await renderInvoicePdf({
     kind: row.kind,
     scope: row.scope,
     number: row.number,
     issuedAt: new Date(row.issued_at),
+    supplyDate: row.supply_date ? new Date(row.supply_date) : null,
+    placeOfIssue: settings.city,
     dueDate: row.due_date ? new Date(row.due_date) : null,
     item: row.item ?? row.order_item ?? "—",
     amount: row.amount,
@@ -441,7 +520,13 @@ export async function renderStoredInvoice(invoiceId: number): Promise<{ bytes: U
       bankAddress: settings.bank_address,
     },
     buyer: row.buyer ?? { name: null },
-    reference: row.order_id ? paymentReference(row.order_id) : row.number,
+    ...paymentFields({
+      number: row.number,
+      scope: row.scope,
+      currency: row.currency,
+      rsdAmount: row.amount_rsd,
+      model: settings.payment_reference_model,
+    }),
     vatNote: (row.scope === "foreign" ? settings.vat_note_foreign : settings.vat_note_domestic) ?? "",
   });
 

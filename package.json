@@ -9,6 +9,7 @@
     "lint": "next lint",
     "db:init": "node scripts/init-db.mjs",
     "db:migrate:currency-accounts": "node scripts/migrate-currency-accounts.mjs",
+    "db:migrate:invoice-legal": "node scripts/migrate-invoice-legal-fields.mjs",
     "db:packages:2026-07": "node scripts/set-packages-2026-07.mjs",
     "email:check": "node scripts/check-outbox.mjs"
   },

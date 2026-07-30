@@ -10,7 +10,7 @@ const FIELDS = [
   "name", "logo_url", "currency", "locale", "phone", "email", "notify_email", "address", "city",
   "company_name", "pib", "mb", "bank_account", "instagram", "tiktok", "youtube", "linkedin",
   "eur_account", "usd_account", "iban", "swift", "bank_name", "bank_address", "vat_note_domestic", "vat_note_foreign",
-  "invoice_due_days",
+  "invoice_due_days", "payment_reference_model",
   "activity_code", "registration_number",
 ] as const;
 type Field = (typeof FIELDS)[number];
@@ -21,7 +21,7 @@ export async function GET() {
     SELECT name, logo_url, currency, locale, phone, email, notify_email, address, city,
            company_name, pib, mb, bank_account, instagram, tiktok, youtube, linkedin
            , eur_account, usd_account, iban, swift, bank_name, bank_address, vat_note_domestic, vat_note_foreign,
-           invoice_due_days::text AS invoice_due_days
+           invoice_due_days::text AS invoice_due_days, payment_reference_model
            , activity_code, registration_number, social_links
     FROM studio_settings WHERE id = 1
   `) as Record<string, unknown>[];
@@ -95,6 +95,13 @@ export async function PUT(request: Request) {
         WHEN ${"invoice_due_days" in v}
         THEN ${dueDays ?? 5}
         ELSE invoice_due_days
+      END,
+      -- Only the two values the renderer understands can be stored. Anything else
+      -- would silently become "no reference at all" on every future document.
+      payment_reference_model = CASE
+        WHEN ${"payment_reference_model" in v}
+        THEN ${v.payment_reference_model === "97" ? "97" : "none"}
+        ELSE payment_reference_model
       END,
       instagram = CASE WHEN ${"instagram" in v} THEN ${v.instagram ?? null} ELSE instagram END,
       tiktok = CASE WHEN ${"tiktok" in v} THEN ${v.tiktok ?? null} ELSE tiktok END,

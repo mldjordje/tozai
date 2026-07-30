@@ -44,6 +44,7 @@ export async function POST(request: Request) {
   const kind = body.kind === "invoice" ? "invoice" : body.kind === "proforma" ? "proforma" : null;
   const scope = body.scope === "foreign" ? "foreign" : body.scope === "domestic" ? "domestic" : null;
   const issuedAt = text(body.issuedAt, 10);
+  const supplyDate = text(body.supplyDate, 10);
   const dueDate = text(body.dueDate, 10);
   const item = text(body.item, 500);
   const amount = Number(body.amount);
@@ -54,6 +55,11 @@ export async function POST(request: Request) {
   }
   if (!validDate(issuedAt) || (dueDate && !validDate(dueDate))) {
     return NextResponse.json({ ok: false, message: "Datum izdavanja ili dospeća nije ispravan." }, { status: 400 });
+  }
+  // Unvalidated it would reach the INSERT as a ::date cast and throw a 500 for
+  // what is a typo in a form field.
+  if (supplyDate && !validDate(supplyDate)) {
+    return NextResponse.json({ ok: false, message: "Datum prometa nije ispravan." }, { status: 400 });
   }
   if (dueDate && dueDate < issuedAt) {
     return NextResponse.json({ ok: false, message: "Datum dospeća ne može biti pre datuma izdavanja." }, { status: 400 });
@@ -81,6 +87,7 @@ export async function POST(request: Request) {
     kind,
     scope,
     issuedAt,
+    supplyDate: supplyDate || null,
     dueDate: dueDate || null,
     item,
     amount,

@@ -701,7 +701,11 @@ function Placed({
           <p className="text-xs uppercase tracking-[0.2em] text-faint">Podaci za uplatu</p>
           <dl className="mt-5 space-y-4 text-sm">
             <Row k="Iznos" v={money(manual.amount, manual.currency)} />
-            <Row k="Poziv na broj" v={manual.reference} />
+            {/* "Svrha uplate", not "Poziv na broj": the poziv-na-broj field in
+                e-banking takes digits with a model-97 checksum, and this is an
+                order code with letters in it. Labelling it as the reference sent
+                buyers to a field that rejects the value. */}
+            <Row k="Svrha uplate" v={manual.reference} />
             {manual.payee.name && <Row k="Primalac" v={manual.payee.name} />}
             {manual.payee.account && <Row k="Račun" v={manual.payee.account} />}
             {manual.payee.pib && <Row k="PIB" v={manual.payee.pib} />}

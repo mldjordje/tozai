@@ -702,6 +702,20 @@ await sql`
   WHERE id = 1
 `;
 
+// Date of supply — the day the service was actually delivered. A mandatory
+// element of a Serbian invoice and explicitly NOT the same thing as the date of
+// issue or the date of payment, which is why it needs its own column rather than
+// being printed from issued_at. Backfilled to issued_at for documents that
+// predate it: for the sales this system has handled the two coincide.
+await sql`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS supply_date DATE`;
+await sql`UPDATE invoices SET supply_date = issued_at WHERE supply_date IS NULL`;
+
+// Poziv na broj model: 'none' or '97'. Defaults to 'none' because an issuer who
+// does not already use a payment reference should not have one invented for
+// them — see the note in lib/invoices/rules.ts. With 'none' the document prints
+// its own number as the payment purpose.
+await sql`ALTER TABLE studio_settings ADD COLUMN IF NOT EXISTS payment_reference_model TEXT NOT NULL DEFAULT 'none'`;
+
 // Google Calendar connection for automatic Meet rooms on booked sessions.
 // The refresh token belongs to the studio account and is what lets the server
 // create an event when nobody is logged in — the buyer books at 23:00 and the
