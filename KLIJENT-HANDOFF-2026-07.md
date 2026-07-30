@@ -1,7 +1,7 @@
 # TOZA AI — uputstvo za nove funkcije
 
-Ovo uputstvo je namenjeno vlasniku sajta. Admin lozinka za sada ostaje aktivna
-i koristi se kao i do sada.
+Ovo uputstvo je namenjeno vlasniku sajta. Admin lozinka **više ne postoji** — u
+panel se ulazi isključivo Google nalogom (vidi odeljak 9).
 
 Produkcijski sajt: `https://toza-ai.rs`
 
@@ -227,11 +227,12 @@ ostaju bezbedno sačuvane u Vercel projektu `toza-ai.rs`.
 
 ## 9. Google ulaz u admin
 
-U admin panel ulazi **samo jedan Google nalog**:
+U admin panel ulaze **dva Google naloga**:
 
 - `tozaayt@gmail.com`
+- `svetozartoza.markovic02@gmail.com`
 
-Adresa je upisana u kod (`ADMIN_OWNER_EMAIL` u `lib/auth/admin-access.ts`), ne u
+Adrese su upisane u kod (`ADMIN_OWNER_EMAILS` u `lib/auth/admin-access.ts`), ne u
 env. Promena vlasnika panela je zato izmena koda koja se vidi u `git log`, a ne
 podešavanje na dashboard-u koje niko ne pregleda.
 

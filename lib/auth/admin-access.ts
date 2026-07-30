@@ -1,8 +1,8 @@
 /**
  * Who may open the admin panel.
  *
- * Exactly one Google account. Two weaker doors used to stand beside it and both
- * are gone:
+ * Two named Google accounts, both the studio's own. Two weaker doors used to
+ * stand beside them and both are gone:
  *
  * - `ADMIN_PASSWORD`, a single shared secret that opened the studio's books to
  *   anyone it was ever pasted to, and that nothing rotated.
@@ -13,15 +13,20 @@
  * Changing who owns the panel is a code change on purpose — it should be
  * reviewable and it should show up in `git log`.
  */
-export const ADMIN_OWNER_EMAIL = "tozaayt@gmail.com";
+export const ADMIN_OWNER_EMAILS: readonly string[] = [
+  "tozaayt@gmail.com",
+  "svetozartoza.markovic02@gmail.com",
+];
+
+const OWNERS = new Set(ADMIN_OWNER_EMAILS);
 
 export function normalizeEmail(value: string | null | undefined): string {
   return (value ?? "").trim().toLowerCase();
 }
 
-/** True only for the address that owns the panel. */
+/** True only for an address that owns the panel. */
 export function isAdminOwner(email: string | null | undefined): boolean {
-  return normalizeEmail(email) === ADMIN_OWNER_EMAIL;
+  return OWNERS.has(normalizeEmail(email));
 }
 
 export function wantsAdminDestination(path: string): boolean {
