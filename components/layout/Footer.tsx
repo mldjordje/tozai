@@ -108,11 +108,25 @@ export default function Footer({
           </div>
         </div>
 
-        <div className="mt-14 flex flex-col gap-3 border-t border-line pt-7 text-xs text-faint sm:flex-row sm:items-center sm:justify-between">
+        <div className="mt-14 flex flex-col gap-4 border-t border-line pt-7 text-xs text-faint sm:flex-row sm:items-center sm:justify-between">
           <p>
             © {new Date().getFullYear()} TOZA AI. {t.footer.rights}
           </p>
-          <p>{response}</p>
+          {/* Reachable from every page: a policy nobody can find is not a
+              published policy, and Google's OAuth review looks for these. */}
+          <nav className="flex flex-wrap items-center gap-x-5 gap-y-2">
+            {t.footer.legalLinks.map((link) => (
+              <Link
+                key={link.href}
+                href={localePath(locale, link.href)}
+                className="transition-colors duration-300 hover:text-fg"
+              >
+                {link.label}
+              </Link>
+            ))}
+            <span className="hidden sm:inline">{response}</span>
+          </nav>
+          <p className="sm:hidden">{response}</p>
         </div>
       </div>
     </footer>

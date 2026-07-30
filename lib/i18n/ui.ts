@@ -30,6 +30,8 @@ export type UiStrings = {
     contact: string;
     writeUs: string;
     rights: string;
+    /** Privacy policy and terms — also the two URLs Google's OAuth review reads. */
+    legalLinks: { href: string; label: string }[];
   };
   packages: {
     popular: string;
@@ -186,6 +188,10 @@ const sr: UiStrings = {
     contact: "Kontakt",
     writeUs: "Piši nam kroz upit →",
     rights: "Sva prava zadržana.",
+    legalLinks: [
+      { href: "/privatnost", label: "Politika privatnosti" },
+      { href: "/uslovi", label: "Uslovi korišćenja" },
+    ],
   },
   packages: {
     popular: "Najpopularnije",
@@ -352,6 +358,10 @@ const en: UiStrings = {
     contact: "Contact",
     writeUs: "Write to us →",
     rights: "All rights reserved.",
+    legalLinks: [
+      { href: "/privatnost", label: "Privacy Policy" },
+      { href: "/uslovi", label: "Terms of Service" },
+    ],
   },
   packages: {
     popular: "Most popular",
