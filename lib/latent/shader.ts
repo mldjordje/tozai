@@ -544,12 +544,25 @@ void main() {
   // Wrapped diffuse. A hard Lambert terminator aliases badly across a point
   // cloud — half the form would simply vanish — so the falloff wraps around
   // and the unlit side keeps just enough presence to read as mass.
-  float key  = pow(dot(n, KEY_DIR)  * 0.5 + 0.5, 2.15);
-  float fill = pow(dot(n, FILL_DIR) * 0.5 + 0.5, 2.8);
+  //
+  // Every base is clamped, and that clamp is not defensive tidying: pow(x, y)
+  // is UNDEFINED in GLSL ES for x < 0, and hardware that computes it as
+  // exp2(y * log2(x)) returns NaN. All three bases are mathematically in [0, 1]
+  // — but each is built from a dot product of two unit vectors, so rounding puts
+  // it a few ULPs BELOW zero for the particles sitting exactly at a lamp's
+  // antipode. One NaN here is a NaN colour, and additive blending spreads it
+  // over the sprite's whole footprint in the HDR buffer: a hard axis-aligned
+  // black square the size of gl_PointSize, gone on the next frame's clear.
+  //
+  // The sim shader's own NaN guard cannot catch this. Nothing in the ping-ponged
+  // state is bad — the NaN is born here, in the render, from finite input.
+  float key  = pow(max(dot(n, KEY_DIR)  * 0.5 + 0.5, 0.0), 2.15);
+  float fill = pow(max(dot(n, FILL_DIR) * 0.5 + 0.5, 0.0), 2.8);
   // Rim: brightest where the form normal turns away from the camera, i.e. at
   // the silhouette. This is what separates the object from the background and
   // is the most recognisable studio move there is.
-  float rim  = pow(1.0 - abs(dot(n, VIEW_DIR)), 4.2) * max(dot(n, RIM_DIR), 0.0);
+  float rim  = pow(max(1.0 - abs(dot(n, VIEW_DIR)), 0.0), 4.2)
+             * max(dot(n, RIM_DIR), 0.0);
 
   // Ambient dropped hard. A lifted floor is what makes a dark render look
   // cheap: it greys out the unlit side so the key has nothing to be brighter
@@ -584,8 +597,15 @@ void main() {
   // it describes the surface instead of flashing the entire formation.
   if (uTransitionPhase >= 0.0) {
     float sweepCenter = mix(-2.2, 2.2, uTransitionPhase);
-    float band = exp(-pow((vSweep - sweepCenter) * 5.8, 2.0))
-               * sin(uTransitionPhase * 3.14159265);
+    // Squared by multiplication, not pow(x, 2.0). The base here is negative for
+    // every particle on one side of the band — that is the whole point of a
+    // signed distance — and a negative base is undefined for pow(). Some drivers
+    // fold an integral exponent into a multiply and it works; the ones that do
+    // not return NaN for half the field. Same failure as the lighting bases
+    // above, and this branch only runs DURING a formation change, i.e. while the
+    // page is being scrolled.
+    float sd = (vSweep - sweepCenter) * 5.8;
+    float band = exp(-(sd * sd)) * sin(uTransitionPhase * 3.14159265);
     lit += mix(RIM_COL, KEY_COL, 0.38) * band * (0.16 + rim * 0.84) * 0.42;
   }
 
@@ -604,8 +624,8 @@ void main() {
   // follows the sweep for free instead of being faked with a second pass.
   if (uShimmer >= 0.0) {
     float shimmerCenter = mix(-2.7, 2.7, uShimmer);
-    float band = exp(-pow((vSweep - shimmerCenter) * 1.9, 2.0))
-               * sin(uShimmer * 3.14159265);
+    float sd = (vSweep - shimmerCenter) * 1.9;
+    float band = exp(-(sd * sd)) * sin(uShimmer * 3.14159265);
     lit += mix(RIM_COL, KEY_COL, 0.30) * band * (0.10 + rim * 0.62 + key * 0.46) * 0.58;
   }
 
@@ -633,7 +653,19 @@ void main() {
   float spread = 1.0 + vCoc * 1.9;
   lum /= vStretch * spread * spread;
 
-  outColor = vec4(lit * lum * mask, 1.0);
+  // Last line of defence. Under additive blending a single non-finite or
+  // negative component does not stay local to its own pixel — it poisons the
+  // destination texel for the sprite's whole footprint, and the bright pass then
+  // carries it into the bloom chain and spreads it wider still. Dropping the
+  // particle costs one point out of a quarter of a million, which is invisible;
+  // letting it through costs a black square.
+  //
+  // Written as !(x < limit) because every comparison against NaN is false, so
+  // only the negated form catches it. The limit is far past anything the rig
+  // produces (a hot specular lands around 3).
+  vec3 col = lit * lum * mask;
+  if (!(dot(col, col) < 1.0e8)) col = vec3(0.0);
+  outColor = vec4(max(col, 0.0), 1.0);
 }
 `;
 
@@ -765,6 +797,14 @@ void main() {
   // form somewhere to actually be bright.
   c *= 1.0 / (1.0 + sceneLum * 0.95);
   c += texture(uBloom, uv + off * 0.5).rgb * uBloomAmt;
+
+  // Anything non-finite that reached the buffers becomes EMPTY FIELD here, not a
+  // hole. A NaN texel left alone survives the curve and prints black, and black
+  // is not what the background looks like — the grade below puts a charcoal
+  // floor, a vignette and grain on every pixel, so a zeroed one is
+  // indistinguishable from the space between particles. That is the difference
+  // between a visible artefact and a frame with one fewer particle in it.
+  if (!(dot(c, c) < 1.0e12)) c = vec3(0.0);
 
   // No anamorphic streak here on purpose. Wide horizontal taps of a
   // quarter-res bloom buffer ghost into visible horizontal lines across the
