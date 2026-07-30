@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { SaobracajPanel } from "./SaobracajPanel";
 
 type Data = {
   totals: { clients: number; orders: number; revenue: number; pending: number; invoices: number };
@@ -26,6 +27,11 @@ export function AnalitikaTab() {
     <div className="adm__dash">
       {error && <p className="adm__err" role="alert">{error}</p>}
       {!data && !error && <p className="adm__empty">Učitavanje…</p>}
+
+      {/* Traffic first: it is the top of the funnel the sales numbers below are
+          the bottom of. Fetches independently, so Vercel being unreachable never
+          hides the database's own figures. */}
+      <SaobracajPanel />
 
       {data && (
         <>
