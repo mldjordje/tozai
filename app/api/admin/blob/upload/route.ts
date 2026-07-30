@@ -16,9 +16,13 @@ export const runtime = "nodejs";
 // token is only ever issued to someone already inside the panel.
 
 /** Generous enough for a short 4K clip, small enough that a mis-drop cannot
- *  quietly fill the store. */
+ *  quietly fill the store. Mirrored in lib/blob-upload.ts, which refuses an
+ *  oversized file before sending it — keep the two in step. */
 const MAX_BYTES = 200 * 1024 * 1024;
 
+// The uploader names the content type itself rather than letting the SDK fall
+// back to application/octet-stream, which these wildcards reject. See the
+// EXTENSION_TYPES note in lib/blob-upload.ts.
 const ALLOWED = ["image/*", "video/*"];
 
 export async function POST(request: Request): Promise<NextResponse> {
