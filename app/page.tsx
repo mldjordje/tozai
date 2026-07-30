@@ -9,7 +9,7 @@ import Landing, { landingMetadata } from "@/components/pages/Landing";
 // is indexed and shared.
 export const revalidate = 60;
 
-export const metadata = landingMetadata("sr");
+export const generateMetadata = () => landingMetadata("sr");
 
 export default function Home() {
   return <Landing locale="sr" />;
