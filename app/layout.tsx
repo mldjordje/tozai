@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Inter, Instrument_Serif } from "next/font/google";
+import { Analytics } from "@vercel/analytics/next";
 import SmoothScroll from "@/components/providers/SmoothScroll";
 import "./globals.css";
 
@@ -53,6 +54,10 @@ export default function RootLayout({
     <html lang="sr" className={`${inter.variable} ${instrumentSerif.variable}`}>
       <body>
         <SmoothScroll>{children}</SmoothScroll>
+        {/* Vercel Web Analytics. The script only loads on Vercel deployments —
+            locally it no-ops — and it still needs Analytics switched on for the
+            project in the dashboard (the adspire.rs team, not web.wise018). */}
+        <Analytics />
       </body>
     </html>
   );
