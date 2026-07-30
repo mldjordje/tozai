@@ -111,6 +111,10 @@ export default function Hero({
   primaryLabel = DEFAULTS.hero_cta_primary,
   secondaryHref = "#edukacija",
   secondaryLabel = DEFAULTS.hero_cta_secondary,
+  // The education checkout. Optional: without a purchasable hour pack there is
+  // nothing to buy, and a third button that only scrolls is noise.
+  tertiaryHref,
+  tertiaryLabel,
   eyebrow = DEFAULTS.hero_eyebrow,
   title = DEFAULTS.hero_title,
   lead1 = DEFAULTS.hero_lead_1,
@@ -121,6 +125,8 @@ export default function Hero({
   primaryLabel?: string;
   secondaryHref?: string;
   secondaryLabel?: string;
+  tertiaryHref?: string;
+  tertiaryLabel?: string;
   /** Admin-editable copy — see lib/content/landing.ts. `title` splits on "\n"
    *  for the line break and marks the `*word*` as the sheened accent. */
   eyebrow?: string;
@@ -255,6 +261,11 @@ export default function Hero({
             <CTAButton href={secondaryHref} variant="ghost">
               {secondaryLabel}
             </CTAButton>
+            {tertiaryHref && tertiaryLabel && (
+              <CTAButton href={tertiaryHref} variant="ghost">
+                {tertiaryLabel}
+              </CTAButton>
+            )}
           </motion.div>
         </motion.div>
 

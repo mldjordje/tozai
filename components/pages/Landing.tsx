@@ -17,7 +17,7 @@ import { getPublicPackages, type Package } from "@/lib/packages";
 import { getPublicContact } from "@/lib/settings";
 import { toClipPackage, toHourPack } from "@/lib/content/offerings";
 import { getLandingContent } from "@/lib/content/landing.server";
-import { getPublicResultShots } from "@/lib/results";
+import { getLandingCover, getPublicResultShots } from "@/lib/results";
 import { localePath, type Locale } from "@/lib/i18n/config";
 
 // The home page, rendered once per language.
@@ -81,6 +81,8 @@ export default async function Landing({ locale }: { locale: Locale }) {
           primaryLabel={copy.hero_cta_primary}
           secondaryHref="#paketi"
           secondaryLabel={copy.hero_cta_secondary}
+          tertiaryHref={consultPkg ? consultHref : undefined}
+          tertiaryLabel={consultPkg ? consultLabel : undefined}
           eyebrow={copy.hero_eyebrow}
           title={copy.hero_title}
           lead1={copy.hero_lead_1}
@@ -212,17 +214,43 @@ export default async function Landing({ locale }: { locale: Locale }) {
 }
 
 /** Shared by both language routes, so each one declares the other as its
- *  alternate and search engines index them as one page in two languages. */
-export function landingMetadata(locale: Locale) {
+ *  alternate and search engines index them as one page in two languages.
+ *
+ *  Async because the link-preview image is the proof rail's first shot, which
+ *  lives in the database — see getLandingCover(). Both routes run this inside
+ *  their own ISR window, so the fetch is amortised, not per-request. */
+export async function landingMetadata(locale: Locale) {
+  const title = "TOZA AI — Build Your Business With AI";
+  const description =
+    locale === "en"
+      ? "AI video ads and private AI training. Send a brief and get a private quote."
+      : "AI video reklame i privatna AI edukacija. Pošalji upit i dobij privatnu procenu.";
+  const cover = await getLandingCover(locale);
+  const images = [
+    { url: cover.url, width: cover.width, height: cover.height, alt: cover.alt },
+  ];
+
   return {
-    title: "TOZA AI — Build Your Business With AI",
-    description:
-      locale === "en"
-        ? "AI video ads and private AI training. Send a brief and get a private quote."
-        : "AI video reklame i privatna AI edukacija. Pošalji upit i dobij privatnu procenu.",
+    title,
+    description,
     alternates: {
       canonical: localePath(locale, "/"),
       languages: { sr: "/", en: "/en" },
     },
+    // Declared on both: WhatsApp/Viber/Messenger read og:image, X reads
+    // twitter:image, and "summary_large_image" is what makes it render as a
+    // banner instead of a thumbnail beside the text.
+    // `type` and `locale` are repeated from app/layout.tsx on purpose: Next
+    // replaces the parent's openGraph object wholesale rather than merging into
+    // it, so anything omitted here is simply dropped from the page.
+    openGraph: {
+      title,
+      description,
+      images,
+      url: localePath(locale, "/"),
+      type: "website" as const,
+      locale: locale === "en" ? "en_US" : "sr_RS",
+    },
+    twitter: { card: "summary_large_image" as const, title, description, images },
   };
 }
