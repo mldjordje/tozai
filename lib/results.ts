@@ -33,30 +33,11 @@ export function shotSize(shot: Pick<ResultShot, "width" | "height" | "wide">) {
   };
 }
 
-/** The link-preview (og:image) cover, used when the DB has no active rows or is
- *  unreachable. Mirrors the first entry of the static rail in
- *  components/sections/ResultsShowcase.tsx, so the preview shows the same shot
- *  the visitor sees first either way. Relative — metadataBase in app/layout.tsx
- *  makes it absolute. */
-const FALLBACK_COVER = {
-  url: "/media/results/ig-toza.png",
-  alt: "toza.aii — Instagram profil, 187K pratilaca, verifikovan",
-  ...FALLBACK_SIZE.wide,
-} as const;
-
-/**
- * The first shot of the proof rail, as an og:image.
- *
- * Chats and social cards fetch one image, and until now there was none — a
- * shared link rendered as a bare grey box. It reads the same query the section
- * does, so whatever the admin sorts to the front of /admin/rezultati becomes
- * the cover with no second place to update.
- */
-export async function getLandingCover(locale: Locale = DEFAULT_LOCALE) {
-  const [first] = await getPublicResultShots(locale);
-  if (!first) return FALLBACK_COVER;
-  return { url: first.image_url, alt: first.alt, ...shotSize(first) };
-}
+// The link preview used to be the first shot of this rail — an Instagram
+// profile screenshot, follower count and all. It is now drawn from the brand
+// instead (app/opengraph-image.tsx), so there is no cover helper here any more.
+// The screenshots stay where they belong: on the page, in context, under the
+// line about past results.
 
 /**
  * Landing-safe: an unreachable database reads as "no shots" and the section

@@ -17,7 +17,7 @@ import { getPublicPackages, type Package } from "@/lib/packages";
 import { getLegalIdentity, getPublicContact, type LegalIdentity } from "@/lib/settings";
 import { toClipPackage, toHourPack } from "@/lib/content/offerings";
 import { getLandingContent } from "@/lib/content/landing.server";
-import { getLandingCover, getPublicResultShots } from "@/lib/results";
+import { getPublicResultShots } from "@/lib/results";
 import { localePath, type Locale } from "@/lib/i18n/config";
 import { normalizeSocialUrl } from "@/lib/socials";
 
@@ -302,10 +302,12 @@ export default async function Landing({ locale }: { locale: Locale }) {
 /** Shared by both language routes, so each one declares the other as its
  *  alternate and search engines index them as one page in two languages.
  *
- *  Async because the link-preview image is the proof rail's first shot, which
- *  lives in the database — see getLandingCover(). Both routes run this inside
- *  their own ISR window, so the fetch is amortised, not per-request. */
-export async function landingMetadata(locale: Locale) {
+ *  The link-preview image is no longer named here. It comes from the
+ *  opengraph-image file convention (app/opengraph-image.tsx and its English
+ *  counterpart), which Next fills in for both og: and twitter: — see that file
+ *  for why a follower-count screenshot should not be the picture on a shared
+ *  link. Naming `images` here would override it. */
+export function landingMetadata(locale: Locale) {
   // The title and the description are the two lines a link crawler reads when
   // the page is shared on Meta or TikTok, usually the only ones. Both describe
   // the service, name the registered entity behind it, and promise nothing
@@ -322,11 +324,6 @@ export async function landingMetadata(locale: Locale) {
     locale === "en"
       ? "AI video production and private 1-on-1 AI training. A registered studio in Niš, Serbia. Sending a brief is free and commits you to nothing."
       : "AI video produkcija i privatna 1-na-1 AI edukacija. Registrovan studio iz Niša. Upit je besplatan i ne obavezuje te na kupovinu.";
-  const cover = await getLandingCover(locale);
-  const images = [
-    { url: cover.url, width: cover.width, height: cover.height, alt: cover.alt },
-  ];
-
   return {
     title,
     description,
@@ -343,11 +340,10 @@ export async function landingMetadata(locale: Locale) {
     openGraph: {
       title,
       description,
-      images,
       url: localePath(locale, "/"),
       type: "website" as const,
       locale: locale === "en" ? "en_US" : "sr_RS",
     },
-    twitter: { card: "summary_large_image" as const, title, description, images },
+    twitter: { card: "summary_large_image" as const, title, description },
   };
 }
