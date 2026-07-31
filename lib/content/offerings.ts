@@ -66,7 +66,7 @@ export type HourPack = {
 export const CLIP_PACKAGES: ClipPackage[] = [
   {
     id: "ai-performance-ads",
-    name: "AI Performance Ads",
+    name: "AI Platform Ads",
     headline:
       "Video oglasi za Meta i TikTok. Format, dužina i uvodni kadar prilagođeni platformi na kojoj se prikazuju.",
     features: [],
@@ -74,9 +74,9 @@ export const CLIP_PACKAGES: ClipPackage[] = [
   },
   {
     id: "ai-virality-growth",
-    name: "AI Virality Growth",
+    name: "AI Short-Form Series",
     headline:
-      "Serijski kratki sadržaj za organski rast. Planiramo teme, tempo objavljivanja i više varijanti uvoda za testiranje.",
+      "Serijski kratki sadržaj za društvene mreže. Planiramo teme, tempo objavljivanja i više varijanti uvoda za testiranje.",
     features: [],
     cta: "Pošalji upit",
   },
@@ -90,7 +90,7 @@ export const CLIP_PACKAGES: ClipPackage[] = [
   },
   {
     id: "ai-vsl-architect",
-    name: "AI VSL Architect",
+    name: "AI VSL Production",
     headline:
       "Video Sales Letters. Scenario struktuiran oko jedne jasne ponude i jednog poziva na akciju.",
     features: [],
@@ -98,7 +98,7 @@ export const CLIP_PACKAGES: ClipPackage[] = [
   },
   {
     id: "3d-medical-vision",
-    name: "3D Medical Vision",
+    name: "3D Medical Visuals",
     headline:
       "Medicinske i naučne 3D vizuelizacije. Visok nivo detalja, za edukaciju i prezentacije.",
     features: [],
@@ -106,7 +106,7 @@ export const CLIP_PACKAGES: ClipPackage[] = [
   },
   {
     id: "ai-toon-storytelling",
-    name: "AI Toon Storytelling",
+    name: "AI 3D Storytelling",
     headline:
       "Animirano pripovedanje u 3D crtanom stilu. Dizajn likova i emotivna priča oko tvog brenda.",
     features: [],
@@ -187,35 +187,35 @@ export const HOUR_PACKS: HourPack[] = [
   {
     id: "ai-strategy-call",
     hours: 1,
-    label: "AI Strategy Call",
+    label: "AI konsultacije — 1h",
     price: "€99",
     perHour: "€99 / sat",
   },
   {
     id: "ai-kickstart",
     hours: 2,
-    label: "AI Kickstart",
+    label: "AI mentorstvo — 2h",
     price: "€180",
     perHour: "€90 / sat",
   },
   {
     id: "ai-content-accelerator",
     hours: 5,
-    label: "AI Content Accelerator",
+    label: "AI mentorstvo — 5h",
     price: "€400",
     perHour: "€80 / sat",
   },
   {
     id: "ai-business-mastery",
     hours: 10,
-    label: "AI Business Mastery",
+    label: "AI mentorstvo — 10h",
     price: "€700",
     perHour: "€70 / sat",
   },
   {
     id: "full-ai-transformation",
     hours: 20,
-    label: "Full AI Transformation",
+    label: "AI mentorstvo — 20h",
     price: "€1.200",
     perHour: "€60 / sat",
   },

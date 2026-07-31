@@ -33,7 +33,7 @@ const SERVICES = {
   "services-ai-performance-ads":
     "Video ads for Meta and TikTok. Format, length and opening shot matched to the platform they run on.",
   "services-ai-virality-growth":
-    "Short-form content in series, for organic growth. We plan the topics, the posting rhythm and several hook variants to test.",
+    "Short-form content in series for social platforms. We plan the topics, the posting rhythm and several hook variants to test.",
   "services-ai-cinematic-ads":
     "Ads with a cinematic finish. Framing, pace and tone written for your brand, not off a template.",
   "services-ai-vsl-architect":

@@ -83,31 +83,31 @@ export type LandingContent = {
 // landing, not /uslovi.
 export const DEFAULTS: LandingContent = {
   hero_eyebrow: "AI Video Studio",
-  hero_title: "Build Your Business\nWith *AI*.",
+  hero_title: "AI video,\n*po meri*.",
   hero_lead_1: "Ne pričamo o AI. Pravimo sa njim.",
-  hero_lead_2: "Brže. Jeftinije. Bez snimanja.",
+  hero_lead_2: "Od ideje do isporuke. Bez klasičnog snimanja.",
   hero_body:
-    "Kreiramo AI video reklame i pružamo privatnu AI edukaciju — sadržaj koji zaustavlja skrol i uči te da ga praviš sam.",
+    "Izrađujemo AI video reklame po briefu i držimo privatnu 1-na-1 AI edukaciju.",
   hero_cta_primary: "Poruči AI video",
   hero_cta_secondary: "Pogledaj pakete",
 
-  stats_eyebrow: "01 — Brojevi",
-  stats_title: "Brojevi koji rade *za sebe*.",
-  // Each row is backed by a screenshot in the Rezultati rail. "5000+ AI Videos
-  // Created" and "100+ Clients" used to sit here and were removed: nothing on
-  // the site evidenced either.
+  stats_eyebrow: "01 — Studio",
+  stats_title: "Jasno je *ko smo i šta radimo*.",
+  // Keep the landing rail factual and identity-led. Audience and view counts
+  // remain visible on their individual portfolio screenshots, where a visitor
+  // can inspect the source instead of being asked to trust an aggregate claim.
   stats: [
-    { value: "300K+", label: "Pratilaca na profilima iz portfolija" },
-    { value: "100M+", label: "Pregleda — dokazi u sekciji Rezultati" },
-    { value: "2+", label: "Godine rada sa AI sadržajem" },
+    { value: "AI", label: "Video produkcija po briefu" },
+    { value: "1-na-1", label: "Privatna AI edukacija" },
+    { value: "Niš", label: "Registrovan studio u Srbiji" },
   ],
 
   strip_items: ["AI VIDEO", "VIRAL SADRŽAJ", "AI EDUKACIJA", "TOZA AI"],
 
   results_eyebrow: "Real rezultati",
-  results_title: "Svaki kadar je AI. Svaki broj je *stvaran*.",
+  results_title: "Javni primeri rada i *profili iza njih*.",
   results_body:
-    "300K+ pratilaca i 100+ miliona pregleda na profilima koje vodimo — skroluj i pregledaj dokaze.",
+    "Pogledaj odabrane AI radove i snimke javnih profila koje vodimo. Rezultati prethodnih projekata nisu garancija budućeg učinka.",
   results_card_title: "Hoćeš ovakav *sadržaj*?",
   results_cta: "Pošalji upit",
 
@@ -148,30 +148,30 @@ export const DEFAULTS: LandingContent = {
  */
 export const DEFAULTS_EN: LandingContent = {
   hero_eyebrow: "AI Video Studio",
-  hero_title: "Build Your Business\nWith *AI*.",
+  hero_title: "AI video,\n*made to order*.",
   hero_lead_1: "We don't talk about AI. We build with it.",
-  hero_lead_2: "Faster. Cheaper. No film crew.",
+  hero_lead_2: "From brief to delivery. No traditional film shoot.",
   hero_body:
-    "We make AI video ads and run private AI training — content that stops the scroll, and the skills to make it yourself.",
+    "We produce AI video ads to a brief and provide private 1-on-1 AI training.",
   hero_cta_primary: "Order an AI video",
   hero_cta_secondary: "See the packages",
 
-  stats_eyebrow: "01 — Numbers",
-  stats_title: "Numbers that speak *for themselves*.",
-  // Mirrors the Serbian rail — same three provable figures, same reason. See
-  // the COPY RULE above DEFAULTS before adding a fourth.
+  stats_eyebrow: "01 — Studio",
+  stats_title: "Clear about *who we are and what we do*.",
+  // Mirrors the Serbian identity-led rail. Performance figures belong beside
+  // their source in the portfolio, not as an aggregate marketing promise.
   stats: [
-    { value: "300K+", label: "Followers across the profiles in our portfolio" },
-    { value: "100M+", label: "Views — the proof is in the Results section" },
-    { value: "2+", label: "Years working with AI content" },
+    { value: "AI", label: "Video production to a brief" },
+    { value: "1-on-1", label: "Private AI training" },
+    { value: "Niš", label: "Registered studio in Serbia" },
   ],
 
   strip_items: ["AI VIDEO", "VIRAL CONTENT", "AI EDUCATION", "TOZA AI"],
 
   results_eyebrow: "Real results",
-  results_title: "Every frame is AI. Every number is *real*.",
+  results_title: "Public work samples and *the profiles behind them*.",
   results_body:
-    "300K+ followers and 100M+ views on the profiles we run — scroll through the proof.",
+    "See selected AI work and snapshots of public profiles we manage. Past project results do not guarantee future performance.",
   results_card_title: "Want content *like this*?",
   results_cta: "Send a brief",
 

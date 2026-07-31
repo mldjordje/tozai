@@ -32,13 +32,6 @@ if (!url) {
 }
 const sql = neon(url);
 
-/** Same shape the existing rows use: "<grp>-<name>", slugified. */
-const slugFor = (grp, name) =>
-  `${grp}-${name}`
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-
 // --- the catalogue, in display order ---------------------------------------
 
 // Descriptions say what the studio delivers, never what it will earn the buyer,
@@ -50,42 +43,49 @@ const slugFor = (grp, name) =>
 // this seed must not put the old copy back.
 const SERVICES = [
   [
-    "AI Performance Ads",
+    "AI Platform Ads",
     "Video oglasi za Meta i TikTok. Format, dužina i uvodni kadar prilagođeni platformi na kojoj se prikazuju.",
+    "services-ai-performance-ads",
   ],
   [
-    "AI Virality Growth",
-    "Serijski kratki sadržaj za organski rast. Planiramo teme, tempo objavljivanja i više varijanti uvoda za testiranje.",
+    "AI Short-Form Series",
+    "Serijski kratki sadržaj za društvene mreže. Planiramo teme, tempo objavljivanja i više varijanti uvoda za testiranje.",
+    "services-ai-virality-growth",
   ],
   [
     "AI Cinematic Ads",
     "Reklame filmskog kvaliteta. Kadar, tempo i ton pisani za tvoj brend, ne po šablonu.",
+    "services-ai-cinematic-ads",
   ],
   [
-    "AI VSL Architect",
+    "AI VSL Production",
     "Video Sales Letters. Scenario struktuiran oko jedne jasne ponude i jednog poziva na akciju.",
+    "services-ai-vsl-architect",
   ],
   [
-    "3D Medical Vision",
+    "3D Medical Visuals",
     "Medicinske i naučne 3D vizuelizacije. Visok nivo detalja, za edukaciju i prezentacije.",
+    "services-3d-medical-vision",
   ],
   [
-    "AI Toon Storytelling",
+    "AI 3D Storytelling",
     "Animirano pripovedanje u 3D crtanom stilu. Dizajn likova i emotivna priča oko tvog brenda.",
+    "services-ai-toon-storytelling",
   ],
 ];
 
 const EDUCATION = [
-  ["AI Strategy Call", 1, 99],
-  ["AI Kickstart", 2, 180],
-  ["AI Content Accelerator", 5, 400],
-  ["AI Business Mastery", 10, 700],
-  ["Full AI Transformation", 20, 1200],
+  ["AI konsultacije — 1h", 1, 99, "education-ai-strategy-call"],
+  ["AI mentorstvo — 2h", 2, 180, "education-ai-kickstart"],
+  ["AI mentorstvo — 5h", 5, 400, "education-ai-content-accelerator"],
+  ["AI mentorstvo — 10h", 10, 700, "education-ai-business-mastery"],
+  ["AI mentorstvo — 20h", 20, 1200, "education-full-ai-transformation"],
 ];
 
 const rows = [
-  ...SERVICES.map(([name, description], sort) => ({
+  ...SERVICES.map(([name, description, slug], sort) => ({
     grp: "services",
+    slug,
     category: "AI Video",
     name,
     // null price renders as "na upit" anywhere a price is shown at all; the
@@ -99,8 +99,9 @@ const rows = [
     hours: null,
     sort,
   })),
-  ...EDUCATION.map(([name, hours, price], sort) => ({
+  ...EDUCATION.map(([name, hours, price, slug], sort) => ({
     grp: "education",
+    slug,
     category: "Edukacija",
     name,
     price,
@@ -119,7 +120,7 @@ const rows = [
 
 // --- apply -----------------------------------------------------------------
 
-const keep = rows.map((r) => slugFor(r.grp, r.name));
+const keep = rows.map((r) => r.slug);
 
 const retired = await sql`
   UPDATE packages
@@ -130,7 +131,7 @@ const retired = await sql`
 for (const r of retired) console.log(`retired  ${r.grp}/${r.name} (#${r.id})`);
 
 for (const r of rows) {
-  const slug = slugFor(r.grp, r.name);
+  const slug = r.slug;
   const [row] = await sql`
     INSERT INTO packages (
       grp, category, name, price, currency, unit, description, features,

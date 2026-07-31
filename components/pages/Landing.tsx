@@ -313,8 +313,7 @@ export async function landingMetadata(locale: Locale) {
   //
   // Set here and not left to app/layout.tsx: a page-level `title` replaces the
   // layout's outright, so the layout's value never reaches "/" or "/en". The
-  // headline on the page itself ("Build Your Business With AI") is a different
-  // thing — a visitor reads it in context, a classifier reads this in isolation.
+  // The headline on the page itself follows the same deliverable-first rule.
   const title =
     locale === "en"
       ? "TOZA AI — AI video production and AI education"
