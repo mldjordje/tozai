@@ -37,6 +37,16 @@ function pickFeatured(items: Package[]): Package | undefined {
   return items.find((item) => item.highlighted) ?? items[0];
 }
 
+/** Desktop column count for the numbers rail, so the row stays full instead of
+ *  ending in empty columns — the studio can keep between one and eight stats in
+ *  /admin/sadrzaj, and four of them was only ever the shipped default. Written
+ *  as whole class names because Tailwind reads the source, not the runtime. */
+function statColumns(count: number): string {
+  if (count <= 2) return "md:grid-cols-2";
+  if (count === 3 || count === 6) return "md:grid-cols-3";
+  return "md:grid-cols-4";
+}
+
 /** Social profile URLs, absolute and stripped of share-sheet tracking. A URL
  *  the parser rejects is dropped rather than emitted broken. */
 function canonicalProfiles(socials: { url: string }[]): string[] {
@@ -109,9 +119,11 @@ export default async function Landing({ locale }: { locale: Locale }) {
   // crawler to match against the one it already knows.
   const orgSchema = organizationSchema(identity, canonicalProfiles(contact.socials));
   const projects = services.filter((item) => item.flow === "project");
-  const clipPackages = projects.map(toClipPackage);
+  // Wrapped rather than passed by reference: map's second argument is the
+  // index, which would arrive where the mapper expects the locale.
+  const clipPackages = projects.map((item) => toClipPackage(item, locale));
   const serviceHours = services.filter((item) => item.flow === "hours");
-  const hourPacks = [...education, ...serviceHours].map(toHourPack);
+  const hourPacks = [...education, ...serviceHours].map((item) => toHourPack(item, locale));
 
   // The free brief — the funnel's real entry point, and what "Book a Call"
   // was gesturing at without linking to.
@@ -148,6 +160,7 @@ export default async function Landing({ locale }: { locale: Locale }) {
 
       <main className="relative">
         <Hero
+          locale={locale}
           primaryHref={inquiryHref}
           primaryLabel={copy.hero_cta_primary}
           secondaryHref="#paketi"
@@ -169,7 +182,7 @@ export default async function Landing({ locale }: { locale: Locale }) {
               text={copy.stats_title}
               className="display mb-16 max-w-2xl text-4xl md:mb-24 md:text-7xl"
             />
-            <div className="grid grid-cols-2 gap-x-8 gap-y-14 md:grid-cols-4">
+            <div className={`grid grid-cols-2 gap-x-8 gap-y-14 ${statColumns(copy.stats.length)}`}>
               {copy.stats.map((s, i) => (
                 <Reveal key={s.label} delay={i * 0.09}>
                   <CountUp
@@ -293,11 +306,19 @@ export default async function Landing({ locale }: { locale: Locale }) {
  *  lives in the database — see getLandingCover(). Both routes run this inside
  *  their own ISR window, so the fetch is amortised, not per-request. */
 export async function landingMetadata(locale: Locale) {
-  const title = "TOZA AI — Build Your Business With AI";
-  // This is the sentence a link crawler reads when the page is shared on Meta
-  // or TikTok, usually the only one. It describes the service, names the
-  // registered entity behind it, and promises nothing about the buyer's
-  // revenue — see the COPY RULE in lib/content/landing.ts for why.
+  // The title and the description are the two lines a link crawler reads when
+  // the page is shared on Meta or TikTok, usually the only ones. Both describe
+  // the service, name the registered entity behind it, and promise nothing
+  // about the buyer's revenue — see the COPY RULE in lib/content/landing.ts.
+  //
+  // Set here and not left to app/layout.tsx: a page-level `title` replaces the
+  // layout's outright, so the layout's value never reaches "/" or "/en". The
+  // headline on the page itself ("Build Your Business With AI") is a different
+  // thing — a visitor reads it in context, a classifier reads this in isolation.
+  const title =
+    locale === "en"
+      ? "TOZA AI — AI video production and AI education"
+      : "TOZA AI — AI video produkcija i AI edukacija";
   const description =
     locale === "en"
       ? "AI video production and private 1-on-1 AI training. A registered studio in Niš, Serbia. Sending a brief is free and commits you to nothing."

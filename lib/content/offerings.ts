@@ -10,6 +10,9 @@
 // wholesale — a different set of services, not a different price — needs this
 // file touched, and then scripts/set-packages-2026-07.mjs is the other half.
 
+import { DEFAULT_LOCALE, type Locale } from "@/lib/i18n/config";
+import { ui } from "@/lib/i18n/ui";
+
 export type ClipPackage = {
   id: string;
   name: string;
@@ -136,7 +139,13 @@ function formatPrice(price: number | null, currency: string): string {
 }
 
 // services rail → AI-clip package card (#paketi).
-export function toClipPackage(p: PackageRow): ClipPackage {
+//
+// The row arrives already resolved into one language by packageColumns(), but
+// two strings on the card are not columns: the CTA when the studio has not set
+// one, and the per-hour rate below. Both took the Serbian wording regardless of
+// route, which is how an English page ended up with "Pošalji upit" under an
+// English headline. The locale is threaded in so they follow the page.
+export function toClipPackage(p: PackageRow, locale: Locale = DEFAULT_LOCALE): ClipPackage {
   return {
     id: String(p.id),
     name: p.name,
@@ -144,19 +153,19 @@ export function toClipPackage(p: PackageRow): ClipPackage {
     priceNote: p.unit ?? undefined,
     headline: p.description ?? "",
     features: p.features,
-    cta: p.cta_label ?? "Pošalji upit",
+    cta: p.cta_label ?? ui(locale).nav.cta,
     featured: p.highlighted,
     slug: p.slug ?? undefined,
   };
 }
 
 // education rail → 1-on-1 hour-pack card (#edukacija).
-export function toHourPack(p: PackageRow): HourPack {
+export function toHourPack(p: PackageRow, locale: Locale = DEFAULT_LOCALE): HourPack {
   const hours =
     (p.hours ?? Number((p.name.match(/\d+/) ?? p.unit?.match(/\d+/) ?? [])[0])) || 0;
   const perHour =
     hours > 0 && p.price != null && p.currency === "EUR"
-      ? `€${Math.round(p.price / hours)} / sat`
+      ? `€${Math.round(p.price / hours)} / ${ui(locale).education.hour}`
       : undefined;
   return {
     id: String(p.id),

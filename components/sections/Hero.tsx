@@ -6,6 +6,8 @@ import CTAButton from "@/components/ui/CTAButton";
 import { useIntroReleased } from "@/lib/intro";
 import { DEFAULTS } from "@/lib/content/landing";
 import { plainText } from "@/components/ui/AccentText";
+import { DEFAULT_LOCALE, type Locale } from "@/lib/i18n/config";
+import { ui } from "@/lib/i18n/ui";
 
 const EXPO = [0.16, 1, 0.3, 1] as const;
 
@@ -103,6 +105,10 @@ function parseWord(raw: string) {
 }
 
 export default function Hero({
+  // Every visible string here is admin-editable except the scroll cue, which is
+  // interface furniture and therefore comes from ui() — it was hard-coded in
+  // Serbian and read "Skroluj" on the English page.
+  locale = DEFAULT_LOCALE,
   // Both hero CTAs pointed at anchors that dead-ended: "Book a Call" landed on
   // a section whose own button scrolled back to the top, and "Explore Services"
   // landed on the stats block. They now open the two things that can actually
@@ -121,6 +127,7 @@ export default function Hero({
   lead2 = DEFAULTS.hero_lead_2,
   body = DEFAULTS.hero_body,
 }: {
+  locale?: Locale;
   primaryHref?: string;
   primaryLabel?: string;
   secondaryHref?: string;
@@ -283,7 +290,7 @@ export default function Hero({
               className="h-1.5 w-1.5 rounded-full bg-accent"
             />
           </span>
-          Skroluj
+          {ui(locale).hero.scroll}
         </motion.div>
       </div>
     </section>

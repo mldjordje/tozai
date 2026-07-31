@@ -41,30 +41,37 @@ const slugFor = (grp, name) =>
 
 // --- the catalogue, in display order ---------------------------------------
 
+// Descriptions say what the studio delivers, never what it will earn the buyer,
+// and never name another company's brand as a style. The originals here did
+// both — ROI, "milionski pregledi", "Pixar stil" — and were rewritten on
+// 31 Jul 2026 after Meta restricted the studio's Instagram from sharing links
+// under "fraud, scams and deceptive practices". They are kept in sync with
+// lib/content/offerings.ts, whose COPY RULE explains the constraint; re-running
+// this seed must not put the old copy back.
 const SERVICES = [
   [
     "AI Performance Ads",
-    "Prodaja vođena podacima. Optimizovani video oglasi za Meta i TikTok sa fokusom na maksimalan povraćaj investicije (ROI).",
+    "Video oglasi za Meta i TikTok. Format, dužina i uvodni kadar prilagođeni platformi na kojoj se prikazuju.",
   ],
   [
     "AI Virality Growth",
-    "Dominacija algoritmom. Naučno vođena strategija rasta koja koristi AI za postizanje milionskih pregleda i organsku ekspanziju.",
+    "Serijski kratki sadržaj za organski rast. Planiramo teme, tempo objavljivanja i više varijanti uvoda za testiranje.",
   ],
   [
     "AI Cinematic Ads",
-    "Brending budućnosti. Vrhunske reklame filmskog kvaliteta koje pozicioniraju vaš biznis kao lidera u industriji.",
+    "Reklame filmskog kvaliteta. Kadar, tempo i ton pisani za tvoj brend, ne po šablonu.",
   ],
   [
     "AI VSL Architect",
-    "Prodajna moć u svakom kadru. Psihološki optimizovani Video Sales Letters koji drastično povećavaju stopu konverzije.",
+    "Video Sales Letters. Scenario struktuiran oko jedne jasne ponude i jednog poziva na akciju.",
   ],
   [
     "3D Medical Vision",
-    "Preciznost koja edukuje. Kompleksne medicinske i naučne vizuelizacije kroz naprednu 3D AI tehnologiju visokog nivoa detalja.",
+    "Medicinske i naučne 3D vizuelizacije. Visok nivo detalja, za edukaciju i prezentacije.",
   ],
   [
     "AI Toon Storytelling",
-    "Magija u Pixar stilu. Emotivne i vizuelno zapanjujuće animacije koje oživljavaju vaš brend kroz vrhunski 3D umetnički stil.",
+    "Animirano pripovedanje u 3D crtanom stilu. Dizajn likova i emotivna priča oko tvog brenda.",
   ],
 ];
 

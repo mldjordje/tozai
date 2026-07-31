@@ -13,6 +13,10 @@ import { type Locale } from "./config";
 // is a build error instead of a "footer.rights" leaking onto the page.
 
 export type UiStrings = {
+  hero: {
+    /** The scroll cue at the foot of the first screen. */
+    scroll: string;
+  };
   nav: {
     links: { href: string; label: string }[];
     account: string;
@@ -156,6 +160,9 @@ export type UiStrings = {
 };
 
 const sr: UiStrings = {
+  hero: {
+    scroll: "Skroluj",
+  },
   nav: {
     links: [
       { href: "/#portfolio", label: "Rezultati" },
@@ -326,6 +333,9 @@ const sr: UiStrings = {
 };
 
 const en: UiStrings = {
+  hero: {
+    scroll: "Scroll",
+  },
   nav: {
     links: [
       { href: "/#portfolio", label: "Results" },

@@ -53,14 +53,27 @@ function controller(identity: LegalIdentity, locale: Locale): string {
   return [name, where, ids].filter(Boolean).join(", ");
 }
 
+/**
+ * How to reach the controller — the route a data subject uses to exercise their
+ * rights, so it has to work rather than merely be filled in.
+ *
+ * The inquiry form is always named, not only as a fallback. The public email is
+ * currently withheld (SHOW_PUBLIC_EMAIL in lib/settings.ts), which would
+ * otherwise leave a phone number as the single written channel for a request
+ * that is supposed to be answerable in writing.
+ */
 function contactLine(identity: LegalIdentity, locale: Locale): string {
-  const parts = [identity.email, identity.phone].filter(Boolean).join(" · ");
-  if (!parts) {
+  const direct = [identity.email, identity.phone].filter(Boolean).join(" · ");
+  const form =
+    locale === "en"
+      ? "or through the inquiry form on the site"
+      : "ili kroz formu za upit na sajtu";
+  if (!direct) {
     return locale === "en"
       ? "Contact us through the inquiry form on the site."
       : "Kontaktiraj nas kroz formu za upit na sajtu.";
   }
-  return parts;
+  return `${direct} ${form}`;
 }
 
 export function privacyPolicy(identity: LegalIdentity, locale: Locale): LegalDocument {
