@@ -65,11 +65,27 @@ export type LandingContent = {
   footer_response: string;
 };
 
+// COPY RULE — read before editing anything below, and before editing the same
+// fields in /admin/sadrzaj.
+//
+// This page is shared as a link on Meta and TikTok, where an automated reviewer
+// reads it long before a buyer does. Two shapes get a domain flagged under
+// "fraud, scams and deceptive practices", and the site was restricted once for
+// carrying them:
+//
+//   1. Promised outcomes — earnings, profit, return on investment, guaranteed
+//      reach or conversion. Say what we make, not what it will do for them.
+//   2. Numbers with no visible proof. Every figure here has to be one a visitor
+//      can check in the Rezultati rail below it; an impressive invented one
+//      costs more than it earns.
+//
+// The terms page disclaiming results does not help: the classifier reads the
+// landing, not /uslovi.
 export const DEFAULTS: LandingContent = {
   hero_eyebrow: "AI Video Studio",
   hero_title: "Build Your Business\nWith *AI*.",
-  hero_lead_1: "Ne učimo AI. Gradimo biznise uz AI.",
-  hero_lead_2: "Pametnije. Brže. Profitabilnije.",
+  hero_lead_1: "Ne pričamo o AI. Pravimo sa njim.",
+  hero_lead_2: "Brže. Jeftinije. Bez snimanja.",
   hero_body:
     "Kreiramo AI video reklame i pružamo privatnu AI edukaciju — sadržaj koji zaustavlja skrol i uči te da ga praviš sam.",
   hero_cta_primary: "Poruči AI video",
@@ -77,11 +93,13 @@ export const DEFAULTS: LandingContent = {
 
   stats_eyebrow: "01 — Brojevi",
   stats_title: "Brojevi koji rade *za sebe*.",
+  // Each row is backed by a screenshot in the Rezultati rail. "5000+ AI Videos
+  // Created" and "100+ Clients" used to sit here and were removed: nothing on
+  // the site evidenced either.
   stats: [
-    { value: "16M+", label: "Monthly Views" },
-    { value: "5000+", label: "AI Videos Created" },
-    { value: "100+", label: "Clients" },
-    { value: "2+", label: "Years Creating Content" },
+    { value: "300K+", label: "Pratilaca na profilima iz portfolija" },
+    { value: "100M+", label: "Pregleda — dokazi u sekciji Rezultati" },
+    { value: "2+", label: "Godine rada sa AI sadržajem" },
   ],
 
   strip_items: ["AI VIDEO", "VIRAL SADRŽAJ", "AI EDUKACIJA", "TOZA AI"],
@@ -90,7 +108,7 @@ export const DEFAULTS: LandingContent = {
   results_title: "Svaki kadar je AI. Svaki broj je *stvaran*.",
   results_body:
     "300K+ pratilaca i 100+ miliona pregleda na profilima koje vodimo — skroluj i pregledaj dokaze.",
-  results_card_title: "Hoćeš ovakve *brojke*?",
+  results_card_title: "Hoćeš ovakav *sadržaj*?",
   results_cta: "Pošalji upit",
 
   packages_eyebrow: "02 — Paketi",
@@ -101,7 +119,7 @@ export const DEFAULTS: LandingContent = {
     "Slanje upita je besplatno i ne obavezuje te na kupovinu. Cena je vidljiva samo na tvom nalogu, nakon procene.",
 
   education_eyebrow: "03 — Privatna edukacija",
-  education_title: "Nauči da praviš sadržaj *koji prodaje*.",
+  education_title: "Nauči da praviš sadržaj *sam*.",
   education_body:
     "1-na-1 mentorstvo. Kupuješ sate, rezervišeš termin, učiš tačno ono što tvom biznisu treba.",
   education_pills: ["1-na-1 mentorstvo", "Tvoj tempo", "Konkretno za tvoj biznis"],
@@ -131,8 +149,8 @@ export const DEFAULTS: LandingContent = {
 export const DEFAULTS_EN: LandingContent = {
   hero_eyebrow: "AI Video Studio",
   hero_title: "Build Your Business\nWith *AI*.",
-  hero_lead_1: "We don't teach AI. We build businesses with it.",
-  hero_lead_2: "Smarter. Faster. More profitable.",
+  hero_lead_1: "We don't talk about AI. We build with it.",
+  hero_lead_2: "Faster. Cheaper. No film crew.",
   hero_body:
     "We make AI video ads and run private AI training — content that stops the scroll, and the skills to make it yourself.",
   hero_cta_primary: "Order an AI video",
@@ -140,11 +158,12 @@ export const DEFAULTS_EN: LandingContent = {
 
   stats_eyebrow: "01 — Numbers",
   stats_title: "Numbers that speak *for themselves*.",
+  // Mirrors the Serbian rail — same three provable figures, same reason. See
+  // the COPY RULE above DEFAULTS before adding a fourth.
   stats: [
-    { value: "16M+", label: "Monthly Views" },
-    { value: "5000+", label: "AI Videos Created" },
-    { value: "100+", label: "Clients" },
-    { value: "2+", label: "Years Creating Content" },
+    { value: "300K+", label: "Followers across the profiles in our portfolio" },
+    { value: "100M+", label: "Views — the proof is in the Results section" },
+    { value: "2+", label: "Years working with AI content" },
   ],
 
   strip_items: ["AI VIDEO", "VIRAL CONTENT", "AI EDUCATION", "TOZA AI"],
@@ -153,7 +172,7 @@ export const DEFAULTS_EN: LandingContent = {
   results_title: "Every frame is AI. Every number is *real*.",
   results_body:
     "300K+ followers and 100M+ views on the profiles we run — scroll through the proof.",
-  results_card_title: "Want numbers *like these*?",
+  results_card_title: "Want content *like this*?",
   results_cta: "Send a brief",
 
   packages_eyebrow: "02 — Packages",
@@ -164,7 +183,7 @@ export const DEFAULTS_EN: LandingContent = {
     "Sending a brief is free and commits you to nothing. The price is visible only in your account, after we quote it.",
 
   education_eyebrow: "03 — Private education",
-  education_title: "Learn to make content *that sells*.",
+  education_title: "Learn to make the content *yourself*.",
   education_body:
     "1-on-1 mentoring. Buy hours, book a slot, learn exactly what your business needs.",
   education_pills: ["1-on-1 mentoring", "Your pace", "Built around your business"],

@@ -51,12 +51,21 @@ export type HourPack = {
 // same order, so an unreachable database renders the real catalogue rather than
 // a set of placeholder tiers that no longer exist. Edits belong in the admin
 // panel; this list only has to stay recognisable.
+//
+// COPY RULE — applies here and, more importantly, to the same `description`
+// field in /admin/paketi, which overrides everything below.
+//
+// A package headline describes the deliverable. It does not promise a business
+// outcome — no ROI, no guaranteed reach, no conversion lift — and it does not
+// name another company's brand as a style ("Pixar-style"). Both shapes read to
+// Meta's automated review as deceptive commercial practice, and both were on
+// this page when the studio's Instagram was restricted from sharing links.
 export const CLIP_PACKAGES: ClipPackage[] = [
   {
     id: "ai-performance-ads",
     name: "AI Performance Ads",
     headline:
-      "Prodaja vođena podacima. Optimizovani video oglasi za Meta i TikTok sa fokusom na maksimalan povraćaj investicije (ROI).",
+      "Video oglasi za Meta i TikTok. Format, dužina i uvodni kadar prilagođeni platformi na kojoj se prikazuju.",
     features: [],
     cta: "Pošalji upit",
   },
@@ -64,7 +73,7 @@ export const CLIP_PACKAGES: ClipPackage[] = [
     id: "ai-virality-growth",
     name: "AI Virality Growth",
     headline:
-      "Dominacija algoritmom. Naučno vođena strategija rasta koja koristi AI za postizanje milionskih pregleda i organsku ekspanziju.",
+      "Serijski kratki sadržaj za organski rast. Planiramo teme, tempo objavljivanja i više varijanti uvoda za testiranje.",
     features: [],
     cta: "Pošalji upit",
   },
@@ -72,7 +81,7 @@ export const CLIP_PACKAGES: ClipPackage[] = [
     id: "ai-cinematic-ads",
     name: "AI Cinematic Ads",
     headline:
-      "Brending budućnosti. Vrhunske reklame filmskog kvaliteta koje pozicioniraju vaš biznis kao lidera u industriji.",
+      "Reklame filmskog kvaliteta. Kadar, tempo i ton pisani za tvoj brend, ne po šablonu.",
     features: [],
     cta: "Pošalji upit",
   },
@@ -80,7 +89,7 @@ export const CLIP_PACKAGES: ClipPackage[] = [
     id: "ai-vsl-architect",
     name: "AI VSL Architect",
     headline:
-      "Prodajna moć u svakom kadru. Psihološki optimizovani Video Sales Letters koji drastično povećavaju stopu konverzije.",
+      "Video Sales Letters. Scenario struktuiran oko jedne jasne ponude i jednog poziva na akciju.",
     features: [],
     cta: "Pošalji upit",
   },
@@ -88,7 +97,7 @@ export const CLIP_PACKAGES: ClipPackage[] = [
     id: "3d-medical-vision",
     name: "3D Medical Vision",
     headline:
-      "Preciznost koja edukuje. Kompleksne medicinske i naučne vizuelizacije kroz naprednu 3D AI tehnologiju visokog nivoa detalja.",
+      "Medicinske i naučne 3D vizuelizacije. Visok nivo detalja, za edukaciju i prezentacije.",
     features: [],
     cta: "Pošalji upit",
   },
@@ -96,7 +105,7 @@ export const CLIP_PACKAGES: ClipPackage[] = [
     id: "ai-toon-storytelling",
     name: "AI Toon Storytelling",
     headline:
-      "Magija u Pixar stilu. Emotivne i vizuelno zapanjujuće animacije koje oživljavaju vaš brend kroz vrhunski 3D umetnički stil.",
+      "Animirano pripovedanje u 3D crtanom stilu. Dizajn likova i emotivna priča oko tvog brenda.",
     features: [],
     cta: "Pošalji upit",
   },

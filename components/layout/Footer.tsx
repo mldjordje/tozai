@@ -1,6 +1,6 @@
 import Link from "next/link";
 import BrandLogo from "@/components/brand/Logo";
-import { type PublicContact } from "@/lib/settings";
+import { getLegalIdentity, type PublicContact } from "@/lib/settings";
 import SocialLinks from "@/components/ui/SocialLinks";
 import { DEFAULTS } from "@/lib/content/landing";
 import { DEFAULT_LOCALE, localePath, type Locale } from "@/lib/i18n/config";
@@ -14,8 +14,15 @@ import { ui } from "@/lib/i18n/ui";
  *
  * Contact rows render only when the owner has filled them in /admin/podesavanja,
  * so the footer never shows an empty "Email:" label or a mailto: to nowhere.
+ *
+ * It also names the legal entity behind the site. That used to live only on
+ * /uslovi, which meant an automated reviewer reading the landing page saw a
+ * commercial offer, a Gmail address and a mobile number, and no evidence that a
+ * registered business stood behind any of it. The identity is read here rather
+ * than threaded through three call sites, and it comes from the same
+ * studio_settings row the proforma prints, so it cannot drift.
  */
-export default function Footer({
+export default async function Footer({
   locale = DEFAULT_LOCALE,
   contact,
   inquiryHref,
@@ -30,6 +37,15 @@ export default function Footer({
 }) {
   const socials = contact.socials;
   const t = ui(locale);
+  const identity = await getLegalIdentity();
+  // Rendered as one line, skipping whatever the studio has not filled in — a
+  // half-empty "PIB:" label would undercut the point of showing it at all.
+  const registration = [
+    identity.companyName,
+    identity.pib && `PIB ${identity.pib}`,
+    identity.mb && `MB ${identity.mb}`,
+    [identity.address, identity.city].filter(Boolean).join(", ") || null,
+  ].filter(Boolean) as string[];
 
   return (
     <footer className="relative z-10 border-t border-line bg-bg/80 px-6 py-16 backdrop-blur-md md:px-12">
@@ -108,7 +124,15 @@ export default function Footer({
           </div>
         </div>
 
-        <div className="mt-14 flex flex-col gap-4 border-t border-line pt-7 text-xs text-faint sm:flex-row sm:items-center sm:justify-between">
+        {registration.length > 0 && (
+          <p className="mt-14 border-t border-line pt-7 text-xs leading-relaxed text-faint">
+            {registration.join(" · ")}
+          </p>
+        )}
+
+        <div
+          className={`${registration.length > 0 ? "mt-6" : "mt-14 border-t border-line pt-7"} flex flex-col gap-4 text-xs text-faint sm:flex-row sm:items-center sm:justify-between`}
+        >
           <p>
             © {new Date().getFullYear()} TOZA AI. {t.footer.rights}
           </p>

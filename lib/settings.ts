@@ -21,6 +21,29 @@ const EMPTY: PublicContact = {
 };
 
 /**
+ * Whether the studio's email address is shown to the public.
+ *
+ * Off since 31 Jul 2026. The address on file is a gmail.com one, and a
+ * commercial site whose only written contact is a free mailbox reads as
+ * untrustworthy to the automated reviewers that scan a shared link — the same
+ * review that restricted the studio's Instagram. Turn this back on the day a
+ * @toza-ai.rs mailbox exists and is set in /admin/podesavanja.
+ *
+ * Deliberately a flag and not a blank field in the database: the same column is
+ * the seller's email on every proforma and invoice (lib/invoices/issue.ts), and
+ * an invoice without the seller's contact details is not a valid one. This
+ * hides the address on the public pages only.
+ *
+ * The phone number is unaffected and remains the public contact, alongside the
+ * inquiry form.
+ */
+const SHOW_PUBLIC_EMAIL = false;
+
+function publicEmail(email: string | null): string | null {
+  return SHOW_PUBLIC_EMAIL ? email : null;
+}
+
+/**
  * Who the legal pages are about.
  *
  * A privacy policy has to name the party that decides what happens to the data,
@@ -64,7 +87,7 @@ export async function getLegalIdentity(): Promise<LegalIdentity> {
       mb: row.mb,
       address: row.address,
       city: row.city,
-      email: row.email,
+      email: publicEmail(row.email),
       phone: row.phone,
     };
   } catch {
@@ -84,7 +107,7 @@ export async function getPublicContact(): Promise<PublicContact> {
     const row = rows[0];
     if (!row) return EMPTY;
     return {
-      email: row.email,
+      email: publicEmail(row.email),
       phone: row.phone,
       // Cleaned on read as well as on write: a row edited straight in the
       // database must not be able to render a dead icon on the landing.

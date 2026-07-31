@@ -20,10 +20,16 @@ const instrumentSerif = Instrument_Serif({
   display: "swap",
 });
 
+// The description and the og:description are the only copy a link crawler is
+// guaranteed to read, so they describe the service and name the studio — they
+// never promise an outcome. Words about profit, earnings or return on
+// investment belong in neither: a commercial page whose first indexed sentence
+// promises money reads to an automated reviewer like a scam, whatever the rest
+// of the site says.
 export const metadata: Metadata = {
-  title: "TOZA AI — Build Your Business With AI",
+  title: "TOZA AI — AI video produkcija i AI edukacija",
   description:
-    "Kreiramo AI video reklame i pružamo privatnu AI edukaciju. Pametnije. Brže. Profitabilnije.",
+    "Studio za AI video produkciju i privatnu 1-na-1 AI edukaciju. Svetozar Marković PR TOZA AI, Niš. Upit je besplatan i ne obavezuje na kupovinu.",
   metadataBase: new URL("https://toza-ai.rs"),
   // No `icons` here on purpose: app/icon.svg is the file convention, which Next
   // fingerprints and links itself. A config-based `icons` entry replaces that
@@ -31,9 +37,9 @@ export const metadata: Metadata = {
   // favicon keeps showing it — the tab icon is the one asset users have already
   // cached and will not re-request without a new URL.
   openGraph: {
-    title: "TOZA AI — Build Your Business With AI",
+    title: "TOZA AI — AI video produkcija i AI edukacija",
     description:
-      "AI video reklame i privatna AI edukacija. Pametnije. Brže. Profitabilnije.",
+      "AI video produkcija i privatna 1-na-1 AI edukacija. Registrovan studio iz Niša. Upit je besplatan.",
     type: "website",
     locale: "sr_RS",
   },

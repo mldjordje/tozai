@@ -14,11 +14,12 @@ import ResultsShowcase from "@/components/sections/ResultsShowcase";
 import Packages from "@/components/sections/Packages";
 import Education from "@/components/sections/Education";
 import { getPublicPackages, type Package } from "@/lib/packages";
-import { getPublicContact } from "@/lib/settings";
+import { getLegalIdentity, getPublicContact, type LegalIdentity } from "@/lib/settings";
 import { toClipPackage, toHourPack } from "@/lib/content/offerings";
 import { getLandingContent } from "@/lib/content/landing.server";
 import { getLandingCover, getPublicResultShots } from "@/lib/results";
 import { localePath, type Locale } from "@/lib/i18n/config";
+import { normalizeSocialUrl } from "@/lib/socials";
 
 // The home page, rendered once per language.
 //
@@ -36,14 +37,77 @@ function pickFeatured(items: Package[]): Package | undefined {
   return items.find((item) => item.highlighted) ?? items[0];
 }
 
+/** Social profile URLs, absolute and stripped of share-sheet tracking. A URL
+ *  the parser rejects is dropped rather than emitted broken. */
+function canonicalProfiles(socials: { url: string }[]): string[] {
+  return socials
+    .map((social) => {
+      try {
+        const url = new URL(normalizeSocialUrl(social.url));
+        url.search = "";
+        url.hash = "";
+        return url.toString().replace(/\/$/, "");
+      } catch {
+        return null;
+      }
+    })
+    .filter((url): url is string => url !== null);
+}
+
+/**
+ * Who runs this site, in the form a machine reads.
+ *
+ * The footer already prints the registration details for people. This says the
+ * same thing to the crawlers that score a shared link — the studio's Instagram
+ * was restricted under "fraud, scams and deceptive practices" while the only
+ * evidence of a real business sat in prose on /uslovi. A structured
+ * Organization node with a legal name, a street address and a tax number is
+ * cheap to emit and is the thing an automated reviewer can actually verify.
+ *
+ * Emitted only when the studio has filled the fields in; a schema.org node
+ * full of nulls is worse than none. The email is left out on purpose while
+ * SHOW_PUBLIC_EMAIL is off (lib/settings.ts).
+ */
+function organizationSchema(identity: LegalIdentity, socials: string[]): string | null {
+  if (!identity.companyName) return null;
+  return JSON.stringify({
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    name: "TOZA AI",
+    legalName: identity.companyName,
+    url: "https://toza-ai.rs",
+    ...(identity.pib ? { taxID: identity.pib, vatID: `RS${identity.pib}` } : {}),
+    ...(identity.mb ? { identifier: identity.mb } : {}),
+    ...(identity.phone ? { telephone: identity.phone } : {}),
+    ...(identity.address || identity.city
+      ? {
+          address: {
+            "@type": "PostalAddress",
+            ...(identity.address ? { streetAddress: identity.address } : {}),
+            ...(identity.city ? { addressLocality: identity.city } : {}),
+            addressCountry: "RS",
+          },
+        }
+      : {}),
+    ...(socials.length ? { sameAs: socials } : {}),
+  });
+}
+
 export default async function Landing({ locale }: { locale: Locale }) {
-  const [services, education, contact, copy, shots] = await Promise.all([
+  const [services, education, contact, copy, shots, identity] = await Promise.all([
     getPublicPackages("services", locale),
     getPublicPackages("education", locale),
     getPublicContact(),
     getLandingContent(locale),
     getPublicResultShots(locale),
+    getLegalIdentity(),
   ]);
+  // Normalised, because sameAs has to be absolute: a scheme-less profile URL
+  // would resolve against our own origin and point the crawler at a 404. The
+  // query string goes too — these are pasted out of the apps' share sheets and
+  // arrive carrying igsh/utm tracking, which makes the profile harder for a
+  // crawler to match against the one it already knows.
+  const orgSchema = organizationSchema(identity, canonicalProfiles(contact.socials));
   const projects = services.filter((item) => item.flow === "project");
   const clipPackages = projects.map(toClipPackage);
   const serviceHours = services.filter((item) => item.flow === "hours");
@@ -71,6 +135,13 @@ export default async function Landing({ locale }: { locale: Locale }) {
 
   return (
     <>
+      {orgSchema && (
+        <script
+          type="application/ld+json"
+          // Server-rendered from our own database, never from user input.
+          dangerouslySetInnerHTML={{ __html: orgSchema }}
+        />
+      )}
       <Preloader />
       <LatentBackground />
       <Nav locale={locale} ctaHref={inquiryHref} ctaLabel={copy.results_cta} />
@@ -223,10 +294,14 @@ export default async function Landing({ locale }: { locale: Locale }) {
  *  their own ISR window, so the fetch is amortised, not per-request. */
 export async function landingMetadata(locale: Locale) {
   const title = "TOZA AI — Build Your Business With AI";
+  // This is the sentence a link crawler reads when the page is shared on Meta
+  // or TikTok, usually the only one. It describes the service, names the
+  // registered entity behind it, and promises nothing about the buyer's
+  // revenue — see the COPY RULE in lib/content/landing.ts for why.
   const description =
     locale === "en"
-      ? "AI video ads and private AI training. Send a brief and get a private quote."
-      : "AI video reklame i privatna AI edukacija. Pošalji upit i dobij privatnu procenu.";
+      ? "AI video production and private 1-on-1 AI training. A registered studio in Niš, Serbia. Sending a brief is free and commits you to nothing."
+      : "AI video produkcija i privatna 1-na-1 AI edukacija. Registrovan studio iz Niša. Upit je besplatan i ne obavezuje te na kupovinu.";
   const cover = await getLandingCover(locale);
   const images = [
     { url: cover.url, width: cover.width, height: cover.height, alt: cover.alt },
