@@ -42,7 +42,35 @@ function failRedirect(origin: string, reason: string) {
   return response;
 }
 
+/**
+ * Every *expected* failure below already redirects with a reason the panel can
+ * render. An unexpected throw did not: it surfaced as a bare 500 on Google's
+ * redirect back, which tells the operator nothing, leaves no trace in the
+ * panel, and is indistinguishable from the app being down.
+ *
+ * So: log it where Vercel will keep it, and send the browser somewhere that
+ * explains itself.
+ */
 export async function GET(request: NextRequest) {
+  try {
+    return await handleCallback(request);
+  } catch (error) {
+    console.error("[google-callback] unhandled failure", error);
+    const origin = request.nextUrl.origin;
+    let wasCalendar = false;
+    try {
+      const txn = await verifyOAuthTxnToken(request.cookies.get(OAUTH_TXN_COOKIE)?.value);
+      wasCalendar = txn?.mode === "calendar";
+    } catch {
+      // The cookie is unreadable too — fall through to the sign-in page.
+    }
+    return wasCalendar
+      ? calendarRedirect(origin, "greska")
+      : failRedirect(origin, "nepoznato");
+  }
+}
+
+async function handleCallback(request: NextRequest) {
   const origin = request.nextUrl.origin;
   const clientId = process.env.GOOGLE_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;

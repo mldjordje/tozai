@@ -87,6 +87,7 @@ const REASON_LABEL: Record<string, string> = {
   purchase: "Kupovina",
   manual: "Ručno dodato",
   correction: "Korekcija",
+  offline: "Čas van aplikacije",
   booking: "Termin",
   refund: "Povraćaj",
 };
@@ -114,6 +115,11 @@ export function KlijentiTab() {
   const [hoursValue, setHoursValue] = useState("");
   const [hoursKind, setHoursKind] = useState("education");
   const [hoursNote, setHoursNote] = useState("");
+  // Taking hours off used to mean typing a minus sign into a box labelled
+  // "Dodaj sate" — the one operation the studio needs after every lesson held
+  // over the phone, and nothing on screen said it was possible.
+  const [hoursMode, setHoursMode] = useState<"add" | "subtract">("add");
+  const [hoursReason, setHoursReason] = useState<"offline" | "correction">("offline");
   const [pkgId, setPkgId] = useState("");
   const [pkgAmount, setPkgAmount] = useState("");
   const [pkgNote, setPkgNote] = useState("");
@@ -214,18 +220,26 @@ export function KlijentiTab() {
 
   const addHours = async () => {
     if (openId == null) return;
-    const hours = Number(hoursValue.replace(",", "."));
-    if (!Number.isFinite(hours) || hours === 0) {
-      setGrantMsg({ tone: "err", text: "Unesi broj sati (može i negativan za korekciju)." });
+    // The box takes a plain positive number; the Dodaj/Oduzmi switch decides
+    // the sign, so nobody has to remember that "-2" is how you spend an hour.
+    const typed = Math.abs(Number(hoursValue.replace(",", ".")));
+    if (!Number.isFinite(typed) || typed === 0) {
+      setGrantMsg({ tone: "err", text: "Unesi broj sati." });
       return;
     }
+    const hours = hoursMode === "subtract" ? -typed : typed;
     setGrantBusy(true);
     setGrantMsg(null);
     try {
       const res = await fetch(`/api/admin/clients/${openId}/hours`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ hours, kind: hoursKind, note: hoursNote }),
+        body: JSON.stringify({
+          hours,
+          kind: hoursKind,
+          note: hoursNote,
+          reason: hoursMode === "subtract" ? hoursReason : undefined,
+        }),
       });
       const data = await res.json();
       if (!data.ok) {
@@ -346,14 +360,33 @@ export function KlijentiTab() {
                   <h4>Plaćeno kešom — upiši ručno</h4>
                   <div className="adm__grant-cols">
                     <section className="adm__grant-card">
-                      <strong>Dodaj sate</strong>
+                      <strong>Sati u wallet-u</strong>
+                      <div className="adm__mode" role="group" aria-label="Dodaj ili oduzmi sate">
+                        <button
+                          type="button"
+                          aria-pressed={hoursMode === "add"}
+                          onClick={() => setHoursMode("add")}
+                        >
+                          Dodaj
+                        </button>
+                        <button
+                          type="button"
+                          aria-pressed={hoursMode === "subtract"}
+                          onClick={() => setHoursMode("subtract")}
+                        >
+                          Oduzmi
+                        </button>
+                      </div>
                       <p className="adm__hint">
-                        Ide pravo u wallet. Klijent odmah može da bira termine. Negativan broj = korekcija.
+                        {hoursMode === "add"
+                          ? "Ide pravo u wallet. Klijent odmah može da bira termine i dobija mejl."
+                          : "Skida sate sa stanja — za čas koji je održan van aplikacije. Klijent ne dobija mejl."}
                       </p>
                       <div className="adm__grant-row">
                         <input
                           type="number"
                           step="0.5"
+                          min="0"
                           placeholder="npr. 5"
                           value={hoursValue}
                           onChange={(e) => setHoursValue(e.target.value)}
@@ -363,14 +396,32 @@ export function KlijentiTab() {
                           <option value="consulting">Consulting</option>
                         </select>
                       </div>
+                      {hoursMode === "subtract" && (
+                        <select
+                          aria-label="Razlog oduzimanja"
+                          value={hoursReason}
+                          onChange={(e) =>
+                            setHoursReason(e.target.value as "offline" | "correction")
+                          }
+                        >
+                          <option value="offline">Čas održan van aplikacije</option>
+                          <option value="correction">Ispravka greške</option>
+                        </select>
+                      )}
                       <input
                         type="text"
-                        placeholder="napomena (npr. keš 21.7.)"
+                        placeholder={
+                          hoursMode === "add" ? "napomena (npr. keš 21.7.)" : "napomena (npr. čas 21.7.)"
+                        }
                         value={hoursNote}
                         onChange={(e) => setHoursNote(e.target.value)}
                       />
                       <button type="button" onClick={addHours} disabled={grantBusy}>
-                        {grantBusy ? "Upisujem…" : "Dodaj sate"}
+                        {grantBusy
+                          ? "Upisujem…"
+                          : hoursMode === "add"
+                            ? "Dodaj sate"
+                            : "Oduzmi sate"}
                       </button>
                     </section>
 

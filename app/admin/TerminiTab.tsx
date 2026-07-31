@@ -37,8 +37,10 @@ type Calendar = {
 const CONNECT_RESULT: Record<string, string> = {
   ok: "Google kalendar je povezan.",
   pristup: "Nemaš admin sesiju — prijavi se pa probaj ponovo.",
-  nalog: "Taj Google nalog nije u timu. Poveži nalog studija.",
+  nalog: "Taj Google nalog nema pristup panelu. Poveži nalog vlasnika studija.",
   "bez-tokena": "Google nije vratio refresh token. Probaj ponovo i potvrdi pristup kalendaru.",
+  greska:
+    "Povezivanje je puklo na našoj strani. Meet link u međuvremenu nalepi ručno — detalji greške su u Vercel logovima.",
 };
 
 const FILTERS: { key: Filter; label: string }[] = [
@@ -277,6 +279,19 @@ export function TerminiTab() {
                     >
                       Napravi Meet link
                     </button>
+                  )}
+                  {/* The manual road, for as long as the calendar is not
+                      connected: Google opens a fresh room in a new tab, the
+                      link comes back into the field beside this button. */}
+                  {open && !b.meet_url && !calendar?.connected && (
+                    <a
+                      className="adm__gcal-make"
+                      href="https://meet.google.com/new"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      Otvori Meet i napravi sobu ↗
+                    </a>
                   )}
                   <div className="adm__pf-row">
                     <input

@@ -2,17 +2,22 @@ import { NextResponse } from "next/server";
 import { getSql } from "@/lib/db";
 import { queueQuietly } from "@/lib/email";
 import { formatHours, HOUR_KIND_LABEL } from "@/lib/format";
+import { ledgerReason } from "@/lib/hours-ledger";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// Hand hours to a client who paid outside the shop — cash, on the spot.
+// Hand hours to a client who paid outside the shop — cash, on the spot — or
+// take them back off.
 //
 // This writes a row into the same ledger a card purchase writes to, so the
 // wallet, the booking calendar and the CRM history all treat cash hours as
-// ordinary hours. A negative amount is a correction (hours given by mistake,
-// or a session settled off the books) and is refused if it would push the
-// balance below zero — a negative wallet has no meaning.
+// ordinary hours. A negative amount is refused if it would push the balance
+// below zero — a negative wallet has no meaning.
+//
+// The two reasons hours come off by hand are not the same thing and the history
+// should not pretend they are: a lesson held over the phone is the client
+// *using* an hour, while undoing a mis-keyed grant is a mistake being erased.
 //
 // Staff-only: /api/admin/* sits behind the admin session in middleware.ts.
 
@@ -65,9 +70,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     );
   }
 
+  const reason = ledgerReason(hours, body.reason);
+
   await sql`
     INSERT INTO hour_entries (user_id, kind, hours, reason, note)
-    VALUES (${userId}, ${kind}, ${hours}, ${hours > 0 ? "manual" : "correction"}, ${note})
+    VALUES (${userId}, ${kind}, ${hours}, ${reason}, ${note})
   `;
 
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? new URL(request.url).origin;
@@ -93,5 +100,5 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     });
   }
 
-  return NextResponse.json({ ok: true, kind, hours, balance: balance + hours });
+  return NextResponse.json({ ok: true, kind, hours, reason, balance: balance + hours });
 }

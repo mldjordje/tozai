@@ -23,7 +23,17 @@ const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 // store a refresh token instead of signing somebody in.
 
 export async function GET() {
-  return NextResponse.json({ ok: true, status: await getCalendarStatus() });
+  try {
+    return NextResponse.json({ ok: true, status: await getCalendarStatus() });
+  } catch (error) {
+    // A throw here (an unmigrated column, an unreachable database) used to take
+    // the whole Termini tab down with a 500 rather than just the calendar box.
+    console.error("[google-kalendar] status read failed", error);
+    return NextResponse.json(
+      { ok: false, message: "Ne mogu da pročitam status kalendara." },
+      { status: 500 },
+    );
+  }
 }
 
 export async function POST(request: NextRequest) {

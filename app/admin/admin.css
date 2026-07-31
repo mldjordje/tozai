@@ -345,6 +345,11 @@ button.adm__chip:disabled{opacity:.3;cursor:default;text-decoration:line-through
 .adm__grant-cols{display:grid;grid-template-columns:1fr 1fr;gap:14px}
 .adm__grant-card{display:flex;flex-direction:column;gap:8px;padding:14px;border:1px solid var(--line);border-radius:4px;background:rgba(255,255,255,.02)}
 .adm__grant-card strong{font-size:13px}
+/* Add / subtract, said out loud rather than implied by a minus sign. */
+.adm__mode{display:grid;grid-template-columns:1fr 1fr;gap:4px;padding:3px;border:1px solid var(--line);border-radius:999px}
+.adm__mode button{padding:7px 10px;border:0;border-radius:999px;background:none;color:var(--muted);font:inherit;font-size:11px;letter-spacing:.1em;text-transform:uppercase;cursor:pointer;transition:background .2s,color .2s}
+.adm__mode button:hover{color:#fff}
+.adm__mode button[aria-pressed=true]{background:rgba(46,107,255,.18);color:#fff}
 .adm__grant-card p{margin:0}
 .adm__grant-card input,.adm__grant-card select{width:100%;padding:9px 12px;border:1px solid var(--line);border-radius:4px;background:rgba(255,255,255,.03);color:#fff;font:inherit;font-size:13px}
 .adm__grant-card input:focus,.adm__grant-card select:focus{outline:none;border-color:var(--neon)}
@@ -373,7 +378,8 @@ button.adm__chip:disabled{opacity:.3;cursor:default;text-decoration:line-through
 .adm__gcal button:hover:not(:disabled){background:rgba(46,107,255,.3)}
 .adm__gcal button:disabled{opacity:.35;cursor:default}
 .adm__gcal-result{padding:10px 14px;border:1px solid rgba(108,148,255,.4);border-radius:4px;color:var(--neon)}
-.adm__gcal-make{align-self:flex-start;padding:6px 12px;border:1px solid var(--line);border-radius:999px;background:none;color:var(--muted);font-size:9px;letter-spacing:.1em;text-transform:uppercase;cursor:pointer;transition:all .2s}
+.adm__gcal-make{display:inline-block;align-self:flex-start;padding:6px 12px;border:1px solid var(--line);border-radius:999px;background:none;color:var(--muted);font-size:9px;letter-spacing:.1em;text-transform:uppercase;text-decoration:none;cursor:pointer;transition:all .2s}
+a.adm__gcal-make:hover{border-color:var(--neon);color:#fff}
 .adm__gcal-make:hover:not(:disabled){border-color:var(--neon);color:#fff}
 .adm__gcal-make:disabled{opacity:.35;cursor:default}
 @media(max-width:700px){.adm__session{grid-template-columns:1fr}.adm__gcal{flex-direction:column;align-items:flex-start}}
