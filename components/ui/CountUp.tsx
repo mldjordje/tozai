@@ -6,6 +6,12 @@ import { animate, useInView } from "framer-motion";
 /**
  * Animated stat: counts from 0 to the numeric prefix when scrolled into
  * view, keeping any suffix ("M+", "K", "+") static. "16M+" -> 0..16 + "M+".
+ *
+ * A value is only counted when its leading number is the whole quantity — a
+ * digit anywhere in the suffix means the string is not one. "1-na-1" would
+ * otherwise be read as the number 1 followed by the text "-na-1", and the rail
+ * would render "0-na-1" until the animation ran and reached the same number it
+ * started from. Those values are printed as written.
  */
 export default function CountUp({
   value,
@@ -14,7 +20,8 @@ export default function CountUp({
   value: string;
   className?: string;
 }) {
-  const match = value.match(/^([\d.,]+)(.*)$/);
+  const parsed = value.match(/^([\d.,]+)(.*)$/);
+  const match = parsed && !/\d/.test(parsed[2]) ? parsed : null;
   const target = match ? parseFloat(match[1].replace(",", ".")) : 0;
   const suffix = match ? match[2] : value;
   const ref = useRef<HTMLSpanElement>(null);
