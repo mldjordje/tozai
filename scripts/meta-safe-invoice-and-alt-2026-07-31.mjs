@@ -8,13 +8,13 @@
 //    studio issues, which is the one document a client keeps and forwards to
 //    their own accountant. Set to the English wording of the domestic note.
 //
-// 2. One proof-rail caption claimed the studio's Instagram is "verifikovan" /
-//    "verified". Alt text is read by crawlers, and a claim about a platform
-//    badge is one a reviewer can check against the account itself — a claim
-//    worth nothing if true and worth a lot against us if not. The follower
-//    count stays: the screenshot underneath it is the evidence.
-//
 // Idempotent: re-running writes the same values.
+//
+// The "verifikovan" / "verified" wording in the proof-rail alt text was briefly
+// removed here and then put back: @toza.aii carries the badge, so it is a
+// checkable fact about the account rather than a claim about results, and a
+// reviewer confirming it is a point in the studio's favour. It is listed as a
+// non-change below so nobody removes it again for the same wrong reason.
 
 import { config } from "dotenv";
 import { neon } from "@neondatabase/serverless";
@@ -46,11 +46,15 @@ const VAT_NOTE_FOREIGN =
   console.log(`${rows.length ? "updated  " : "unchanged"}  vat_note_foreign`);
 }
 
+// The captions the rail should carry, in both languages. Written out rather
+// than left alone so the pair cannot drift: the English column is what /en
+// renders, and a Serbian caption leaking onto the English page is how this
+// started.
 const ALTS = [
   {
-    from: "toza.aii — Instagram profil, 207K pratilaca, verifikovan",
-    alt: "toza.aii — Instagram profil, 207K pratilaca",
-    alt_en: "toza.aii — Instagram profile, 207K followers",
+    match: "toza.aii",
+    alt: "toza.aii — Instagram profil, 207K pratilaca, verifikovan",
+    alt_en: "toza.aii — Instagram profile, 207K followers, verified",
   },
 ];
 
@@ -58,7 +62,8 @@ for (const row of ALTS) {
   const rows = await sql`
     UPDATE result_shots
        SET alt = ${row.alt}, alt_en = ${row.alt_en}
-     WHERE alt = ${row.from} OR (alt = ${row.alt} AND alt_en IS DISTINCT FROM ${row.alt_en})
+     WHERE alt LIKE ${row.match + "%"}
+       AND (alt IS DISTINCT FROM ${row.alt} OR alt_en IS DISTINCT FROM ${row.alt_en})
     RETURNING id
   `;
   console.log(`${rows.length ? "updated  " : "unchanged"}  alt: ${row.alt}`);
