@@ -252,8 +252,8 @@ export default async function Landing({ locale }: { locale: Locale }) {
             }
             body={
               locale === "en"
-                ? "Describe what you need and we come back with a price and a timeline. The build is delivered by the studio's partner development team."
-                : "Opiši šta ti treba i javljamo se sa procenom cene i roka. Izradu vodi partnerski razvojni tim sa kojim radimo."
+                ? "Describe what you need and we come back with a price and a timeline."
+                : "Opiši šta ti treba i javljamo se sa procenom cene i roka."
             }
             note={
               locale === "en"
