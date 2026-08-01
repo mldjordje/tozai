@@ -297,6 +297,23 @@ button.adm__chip:disabled{opacity:.3;cursor:default;text-decoration:line-through
 .adm__dash{display:flex;flex-direction:column;gap:26px}
 .adm__dash-date{margin:0;color:var(--muted);font-size:11px;letter-spacing:.18em;text-transform:uppercase}
 .adm__dash .adm__stats{margin-bottom:0}
+.adm__stat--revenue{min-width:0}
+.adm__revenue-value{display:flex;align-items:center;gap:10px}
+.adm__revenue-value strong{min-width:0}
+.adm__revenue-edit,.adm__revenue-adjust button,.adm__revenue-actions button{display:grid;place-items:center;border:1px solid var(--line);background:rgba(255,255,255,.03);color:var(--muted);cursor:pointer;transition:border-color .2s,color .2s,background .2s}
+.adm__revenue-edit{width:28px;height:28px;border-radius:50%}
+.adm__revenue-edit:hover,.adm__revenue-adjust button:hover,.adm__revenue-actions button:hover:not(:disabled){border-color:var(--neon);background:rgba(46,107,255,.12);color:#fff}
+.adm__revenue-editor{display:grid;grid-template-columns:minmax(80px,1fr) auto;gap:8px}
+.adm__revenue-editor input{min-width:0;border:1px solid var(--line);border-radius:4px;background:rgba(255,255,255,.04);color:#fff;font:inherit;font-variant-numeric:tabular-nums}
+.adm__revenue-editor input:focus{outline:none;border-color:var(--neon)}
+.adm__revenue-total{grid-column:1/-1;width:100%;padding:7px 9px;font-size:20px!important}
+.adm__revenue-adjust{display:grid;grid-template-columns:30px minmax(54px,1fr) 30px}
+.adm__revenue-adjust input{width:100%;padding:6px;text-align:center;font-size:12px}
+.adm__revenue-adjust button{width:30px;border-radius:4px}
+.adm__revenue-actions{display:flex;gap:5px}
+.adm__revenue-actions button{width:30px;border-radius:4px}
+.adm__revenue-actions button:first-child{border-color:rgba(80,200,120,.45);color:#7ee2a0}
+.adm__revenue-actions button:disabled{opacity:.4;cursor:default}
 .adm__dash-section h3{margin:0 0 12px;font-family:var(--font-display,var(--display));font-size:16px;text-transform:uppercase;letter-spacing:.06em}
 .adm__row--dash{grid-template-columns:90px 1fr}
 .adm__quick{display:flex;flex-wrap:wrap;gap:10px}

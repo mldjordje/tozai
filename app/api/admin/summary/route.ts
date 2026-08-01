@@ -4,13 +4,14 @@ import { getSql } from "@/lib/db";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+const REVENUE_OVERRIDE_KEY = "admin_dashboard_revenue";
+
 // Dashboard headline counts. Reads real tables; everything is 0 until orders
 // start flowing, which is correct for a fresh platform.
 export async function GET() {
   const sql = getSql();
-  const monthStart = new Date();
-  monthStart.setDate(1);
-  const monthStartIso = monthStart.toISOString().slice(0, 10);
+  const monthKey = new Date().toISOString().slice(0, 7);
+  const monthStartIso = `${monthKey}-01`;
 
   const [counts] = (await sql`
     SELECT
@@ -21,7 +22,11 @@ export async function GET() {
       (SELECT COUNT(*)::int FROM packages WHERE active) AS active_packages,
       (SELECT COUNT(*)::int FROM projects
         WHERE status IN ('onboarding', 'u_izradi', 'na_reviziji')) AS active_projects,
-      (SELECT COUNT(*)::int FROM project_materials WHERE seen_at IS NULL) AS new_materials
+      (SELECT COUNT(*)::int FROM project_materials WHERE seen_at IS NULL) AS new_materials,
+      (SELECT (value ->> 'revenueMonth')::numeric
+         FROM site_content
+        WHERE key = ${REVENUE_OVERRIDE_KEY}
+          AND value ->> 'month' = ${monthKey}) AS revenue_override
   `) as {
     clients: number;
     orders_pending: number;
@@ -30,6 +35,7 @@ export async function GET() {
     active_packages: number;
     active_projects: number;
     new_materials: number;
+    revenue_override: number | null;
   }[];
 
   const recent = (await sql`
@@ -55,11 +61,42 @@ export async function GET() {
       clients: counts.clients,
       ordersPending: counts.orders_pending,
       ordersMonth: counts.orders_month,
-      revenueMonth: Number(counts.revenue_month),
+      revenueMonth: Number(counts.revenue_override ?? counts.revenue_month),
       activePackages: counts.active_packages,
       activeProjects: counts.active_projects,
       newMaterials: counts.new_materials,
     },
     recent,
   });
+}
+
+export async function PUT(request: Request) {
+  let body: { revenueMonth?: unknown };
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ ok: false, message: "Neispravan zahtev." }, { status: 400 });
+  }
+
+  const revenueMonth = Number(body.revenueMonth);
+  if (!Number.isFinite(revenueMonth) || revenueMonth < 0 || revenueMonth > 1_000_000_000) {
+    return NextResponse.json(
+      { ok: false, message: "Zarada mora biti broj između 0 i 1.000.000.000." },
+      { status: 400 },
+    );
+  }
+
+  const normalizedRevenue = Math.round(revenueMonth * 100) / 100;
+  const month = new Date().toISOString().slice(0, 7);
+  const value = JSON.stringify({ month, revenueMonth: normalizedRevenue });
+  const sql = getSql();
+
+  await sql`
+    INSERT INTO site_content (key, value, updated_at)
+    VALUES (${REVENUE_OVERRIDE_KEY}, ${value}::jsonb, now())
+    ON CONFLICT (key) DO UPDATE
+      SET value = EXCLUDED.value, updated_at = now()
+  `;
+
+  return NextResponse.json({ ok: true, revenueMonth: normalizedRevenue });
 }
