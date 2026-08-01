@@ -32,6 +32,13 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
+  // Local dev only: skip the Google round trip so the panel is reachable
+  // without OAuth credentials configured. NODE_ENV is "production" in every
+  // deployed build, so this never runs outside `next dev`.
+  if (process.env.NODE_ENV === "development") {
+    return NextResponse.next();
+  }
+
   const session = await verifySessionToken(request.cookies.get(SESSION_COOKIE_NAME)?.value);
   const role = session?.role === "admin" ? "owner" : session?.role;
   if (role !== "owner" && role !== "staff") {

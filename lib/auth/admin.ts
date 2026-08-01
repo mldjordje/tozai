@@ -32,5 +32,13 @@ export function toAdminSession(payload: JWTPayload | null): AdminSession | null 
 // scope data per role must call this themselves.
 export async function getAdminSession(): Promise<AdminSession | null> {
   const store = await cookies();
-  return toAdminSession(await verifySessionToken(store.get(SESSION_COOKIE_NAME)?.value));
+  const session = toAdminSession(await verifySessionToken(store.get(SESSION_COOKIE_NAME)?.value));
+  if (session) return session;
+  // Local dev only — see middleware.ts. Mirrors its bypass so routes that read
+  // the session directly (rather than relying on the middleware gate) still
+  // see an owner. Never runs in a deployed build.
+  if (process.env.NODE_ENV === "development") {
+    return { role: "owner", userId: null, name: "Dev" };
+  }
+  return null;
 }
