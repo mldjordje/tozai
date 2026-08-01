@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   const sql = getSql();
   const requests = await sql`
-    SELECT r.id, r.user_id, r.package_id, r.service_name, r.project_title, r.brief,
+    SELECT r.id, r.user_id, r.package_id, r.kind, r.service_name, r.project_title, r.brief,
            r.buyer_type, r.clip_count, r.business_name, r.business_description,
            r.budget_eur::float8 AS budget_eur,
            r.status, r.quoted_amount::float8 AS quoted_amount, r.currency,

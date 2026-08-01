@@ -3,8 +3,8 @@
 import { useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { DEFAULT_LOCALE, type Locale } from "@/lib/i18n/config";
-import { ui, type UiStrings } from "@/lib/i18n/ui";
 import { countryOptions, defaultCountry, isSerbia } from "@/lib/countries";
+import { TIMEFRAMES, type Timeframe } from "@/lib/build-requests";
 import {
   Area,
   EASE,
@@ -17,31 +17,23 @@ import {
   fixedDigits,
 } from "@/components/checkout/fields";
 
-type T = UiStrings["inquiry"];
-
 /**
- * The brief that starts an AI video job. There is no price here on purpose —
- * the studio quotes each job by hand, so this form's only job is to collect
- * enough to quote from, and to make that obvious while the buyer types.
+ * The brief that starts a web / app / automation job (grp='razvoj').
  *
- * WHY THE SIGNED-OUT SCREEN SHOWS NOTHING ELSE. Every "Pošalji upit" on the
- * landing arrives here, and most of the people who click it have no account. A
- * service card sitting above the sign-in button pushed the only useful control
- * off a phone screen, to describe a service the buyer had just read about one
- * click earlier. Signed out, this page is a sign-in screen and nothing more;
- * the service is chosen inside the form, where it can actually be changed.
+ * Same shape as the video brief and posts into the same table, because
+ * everything after a brief is identical: the studio quotes by hand, the buyer
+ * accepts, that becomes an order and then a project. What differs is what has
+ * to be asked, and that is the whole reason this is a second form rather than a
+ * flag on the first one.
  *
- * WHY SERVICES ARE A MULTI-SELECT. A buyer who wants commercials and avatars
- * used to have to send two briefs describing the same business twice, and the
- * studio quoted them as two unrelated jobs. One brief now carries the whole
- * list; the request keeps a primary package so the order and project it turns
- * into still point at one row, and `service_name` carries the joined label.
+ * WHY BUDGET IS OPTIONAL HERE AND REQUIRED ON THE VIDEO BRIEF. Somebody
+ * ordering three clips knows roughly what clips cost. Somebody asking for a web
+ * shop usually does not, and making them commit to a number they cannot
+ * estimate is how that brief gets abandoned instead of sent. A blank budget is
+ * a question for the first call, not a reason to lose the lead.
  *
- * WHY THE SUBMIT BUTTON IS NEVER DISABLED. It used to be, and on a phone that
- * read as a dead button: the minimums are invisible, so a buyer who wrote two
- * short sentences tapped a button that simply did nothing and left. Now the tap
- * always does something — it validates, scrolls to the first problem and says
- * what is missing. Live counters mean it rarely gets that far.
+ * WHY TIMEFRAME IS A SELECT. "When do you need it" typed free-form comes back
+ * as "asap" and means nothing. Four buckets are enough to schedule against.
  */
 
 type PackageSummary = {
@@ -63,8 +55,8 @@ type ProfileSummary = {
   country: string | null;
 };
 
-/** Mirrors the server-side minimums in /api/nalog/video-zahtevi. Kept here as
- *  one object so the hint text, the counter and the check can never disagree. */
+/** Mirrors the server-side minimums in /api/nalog/razvoj-zahtevi. One object so
+ *  the hint text, the counter and the check can never disagree. */
 const MIN = {
   name: 2,
   businessName: 2,
@@ -72,9 +64,239 @@ const MIN = {
   idea: 50,
 } as const;
 
-/** Mirrors MAX_SERVICES_PER_REQUEST on the server. Past four this stops being
- *  one brief the studio can price and starts being a catalogue. */
-const MAX_SERVICES = 4;
+/** Mirrors MAX_SERVICES_PER_REQUEST on the server. There are only three
+ *  packages on this rail, so this is a ceiling rather than a real constraint. */
+const MAX_SERVICES = 3;
+
+const COPY = {
+  sr: {
+    backToPackages: "← Nazad na usluge",
+    title: "Opiši",
+    titleAccent: "projekat",
+    signInEyebrow: "Prijava",
+    signInTitle: "Prvo se prijavi",
+    signInBody:
+      "Upit se čuva na tvom nalogu — tamo stižu procena, rok i sve dalje poruke. Prijava traje deset sekundi.",
+    signInCta: "Nastavi sa Google nalogom",
+    signInNote: "Koristimo samo ime i mejl. Ne objavljujemo ništa i ne šaljemo newsletter.",
+    formEyebrow: "Upit",
+    formTitle: "Šta ti",
+    formTitleAccent: "treba",
+    formBody:
+      "Što konkretnije opišeš, to je procena tačnija. Cena i rok stižu na tvoj nalog — do tada te ništa ne obavezuje.",
+    services: "Usluga",
+    servicesHint: "Izaberi šta ti treba. Možeš označiti više stvari u istom upitu.",
+    servicesChosen: (count: number, max: number) => ` — izabrano ${count} / ${max}`,
+    servicesRequired: "Izaberi bar jednu uslugu.",
+    servicesFull: (max: number) => `Najviše ${max} usluge u jednom upitu.`,
+    buyerType: "Naručilac",
+    individual: "Fizičko lice",
+    company: "Pravno lice",
+    fullName: "Ime i prezime",
+    contactPerson: "Kontakt osoba",
+    phone: "Telefon",
+    billingTitle: "Podaci za račun",
+    billingBody:
+      "Trebaju nam samo ako prihvatiš ponudu — tada se predračun izdaje odmah, bez dodatnog dopisivanja.",
+    legalName: "Pun naziv firme",
+    legalNamePlaceholder: "npr. Primer DOO Niš",
+    pib: "PIB",
+    pibHint: "9 cifara",
+    mb: "Matični broj",
+    mbHint: "8 cifara",
+    address: "Adresa",
+    addressPlaceholder: "Ulica i broj",
+    city: "Grad",
+    cityPlaceholder: "npr. Niš",
+    country: "Država",
+    countryForeignHint: "Predračun stiže na engleskom, sa IBAN/SWIFT podacima.",
+    taxId: "Poreski broj (VAT / Tax ID)",
+    taxIdPlaceholder: "npr. DE123456789",
+    taxIdHint: "Opciono — možemo da ga tražimo kasnije.",
+    business: "Naziv biznisa",
+    businessPlaceholder: "Kako se zove tvoja firma ili brend",
+    aboutBusiness: "O biznisu",
+    aboutBusinessPlaceholder:
+      "Čime se baviš, ko su ti kupci, kako trenutno dolaze do tebe…",
+    aboutBusinessHint: "Bez ovoga procena je nagađanje.",
+    idea: "Šta ti treba",
+    ideaPlaceholder:
+      "npr. Prodavnica sa oko 200 artikala, plaćanje karticom, povezivanje sa postojećim magacinom. Sadašnji sajt je star pet godina i ne radi na telefonu.",
+    ideaHint: "Opiši problem koji rešavaš, ne samo alat koji želiš.",
+    wishes: "Želje i funkcionalnosti",
+    wishesPlaceholder:
+      "npr. prijava korisnika, izveštaji, dve verzije jezika, povezivanje sa Instagramom, sajt koji ti se dopada kao primer…",
+    wishesHint: "Opciono. Sve čega se setiš — lakše je precrtati nego dodati kasnije.",
+    timeframe: "Vreme isporuke",
+    timeframeHint: "Kada bi hteo da bude gotovo.",
+    timeframes: {
+      asap: "Što pre — hitno mi je",
+      "1-3m": "U naredna 1–3 meseca",
+      "3-6m": "U narednih 3–6 meseci",
+      flex: "Nije hitno / fleksibilno",
+    } as Record<Timeframe, string>,
+    budget: "Budžet (EUR)",
+    budgetHint: "Opciono. Ostavi prazno ako ne znaš — javićemo ti raspon.",
+    nextTitle: "Šta se dešava dalje",
+    nextBody:
+      "Pregledamo upit i javljamo se sa procenom cene i roka. Sve stiže na tvoj nalog i mejlom. Do tada te ništa ne obavezuje.",
+    submit: "Pošalji upit",
+    submitting: "Šaljem…",
+    submitNote: "Bez obaveze.",
+    minChars: (min: number) => `Najmanje ${min} karaktera.`,
+    sentEyebrow: (id: number) => `Upit #${id}`,
+    sentTitle: "Upit je",
+    sentTitleAccent: "stigao",
+    sentBody:
+      "Pregledamo šta si poslao i javljamo se sa procenom cene i roka. Sve dalje ide preko tvog naloga.",
+    sentSteps: [
+      "Pregledamo opis, želje i rok koji si naveo.",
+      "Cena i vreme izrade stižu na tvoj nalog — javljamo ti mejlom.",
+      "Tek tada odlučuješ da li prihvataš. Do tada te ništa ne obavezuje.",
+    ],
+    sentCta: "Prati status upita",
+    summaryOne: "Upit za",
+    summaryMany: "Upit za usluge",
+    summaryEmpty: "Izaberi uslugu da vidiš detalje ovde.",
+    changeService: "Promeni uslugu",
+    pickService: "Izaberi uslugu",
+    quoteTitle: "Privatna procena",
+    quoteBody:
+      "Cena zavisi od obima, pa se ne objavljuje na sajtu. Dobijaš je napisanu za tvoj projekat.",
+    errors: {
+      name: "Upiši ime i prezime.",
+      country: "Izaberi državu.",
+      companyName: "Upiši pun naziv firme.",
+      pib: "PIB mora imati 9 cifara.",
+      mb: "Matični broj mora imati 8 cifara.",
+      address: "Upiši adresu.",
+      city: "Upiši grad.",
+      businessName: "Upiši naziv biznisa.",
+      businessDescription: (min: number) => `Opiši biznis u bar ${min} karaktera.`,
+      idea: (min: number) => `Opiši šta ti treba u bar ${min} karaktera.`,
+      timeframe: "Izaberi vreme isporuke.",
+      budget: "Budžet mora biti broj veći od nule, ili ostavi prazno.",
+      generic: "Slanje nije uspelo. Pokušaj ponovo.",
+      network: "Nema veze sa serverom. Proveri internet i pokušaj ponovo.",
+    },
+  },
+  en: {
+    backToPackages: "← Back to services",
+    title: "Describe the",
+    titleAccent: "project",
+    signInEyebrow: "Sign in",
+    signInTitle: "Sign in first",
+    signInBody:
+      "The brief is kept in your account — that is where the quote, the timeline and every later message land. Signing in takes ten seconds.",
+    signInCta: "Continue with Google",
+    signInNote: "We only use your name and email. Nothing is published and there is no newsletter.",
+    formEyebrow: "Brief",
+    formTitle: "What you",
+    formTitleAccent: "need",
+    formBody:
+      "The more specific you are, the more accurate the quote. Price and timeline land in your account — nothing is binding until then.",
+    services: "Service",
+    servicesHint: "Pick what you need. One brief can cover several things.",
+    servicesChosen: (count: number, max: number) => ` — ${count} / ${max} selected`,
+    servicesRequired: "Pick at least one service.",
+    servicesFull: (max: number) => `Up to ${max} services in one brief.`,
+    buyerType: "Buyer",
+    individual: "Individual",
+    company: "Company",
+    fullName: "Full name",
+    contactPerson: "Contact person",
+    phone: "Phone",
+    billingTitle: "Invoice details",
+    billingBody:
+      "Only needed if you accept the quote — the proforma is then issued straight away, with no extra back and forth.",
+    legalName: "Registered company name",
+    legalNamePlaceholder: "e.g. Example Ltd",
+    pib: "PIB",
+    pibHint: "9 digits",
+    mb: "Company number",
+    mbHint: "8 digits",
+    address: "Address",
+    addressPlaceholder: "Street and number",
+    city: "City",
+    cityPlaceholder: "e.g. Berlin",
+    country: "Country",
+    countryForeignHint: "The proforma comes in English, with IBAN/SWIFT details.",
+    taxId: "VAT / Tax ID",
+    taxIdPlaceholder: "e.g. DE123456789",
+    taxIdHint: "Optional — we can ask for it later.",
+    business: "Business name",
+    businessPlaceholder: "Your company or brand name",
+    aboutBusiness: "About the business",
+    aboutBusinessPlaceholder:
+      "What you do, who your customers are, how they reach you today…",
+    aboutBusinessHint: "Without this a quote is guesswork.",
+    idea: "What you need",
+    ideaPlaceholder:
+      "e.g. A shop with around 200 products, card payments, connected to our existing warehouse. The current site is five years old and unusable on a phone.",
+    ideaHint: "Describe the problem you are solving, not only the tool you want.",
+    wishes: "Wishes and features",
+    wishesPlaceholder:
+      "e.g. user accounts, reports, two languages, Instagram integration, a site you like as a reference…",
+    wishesHint: "Optional. Anything you can think of — easier to cut than to add later.",
+    timeframe: "Delivery timeframe",
+    timeframeHint: "When you would like it finished.",
+    timeframes: {
+      asap: "As soon as possible — urgent",
+      "1-3m": "Within 1–3 months",
+      "3-6m": "Within 3–6 months",
+      flex: "Not urgent / flexible",
+    } as Record<Timeframe, string>,
+    budget: "Budget (EUR)",
+    budgetHint: "Optional. Leave blank if you are not sure — we will send a range.",
+    nextTitle: "What happens next",
+    nextBody:
+      "We read the brief and come back with a price and a timeline. Everything lands in your account and by email. Nothing is binding until then.",
+    submit: "Send brief",
+    submitting: "Sending…",
+    submitNote: "No obligation.",
+    minChars: (min: number) => `At least ${min} characters.`,
+    sentEyebrow: (id: number) => `Brief #${id}`,
+    sentTitle: "Your brief",
+    sentTitleAccent: "arrived",
+    sentBody:
+      "We will read what you sent and come back with a price and a timeline. Everything else goes through your account.",
+    sentSteps: [
+      "We read the description, the wishes and the timeframe you gave.",
+      "Price and delivery time land in your account — we email you.",
+      "Only then do you decide. Nothing is binding until that point.",
+    ],
+    sentCta: "Track the brief",
+    summaryOne: "Brief for",
+    summaryMany: "Brief for services",
+    summaryEmpty: "Pick a service to see the detail here.",
+    changeService: "Change service",
+    pickService: "Pick a service",
+    quoteTitle: "Private quote",
+    quoteBody:
+      "The price depends on scope, so it is not published. You get one written for your project.",
+    errors: {
+      name: "Enter your full name.",
+      country: "Pick a country.",
+      companyName: "Enter the registered company name.",
+      pib: "PIB must be 9 digits.",
+      mb: "Company number must be 8 digits.",
+      address: "Enter an address.",
+      city: "Enter a city.",
+      businessName: "Enter the business name.",
+      businessDescription: (min: number) => `Describe the business in at least ${min} characters.`,
+      idea: (min: number) => `Describe what you need in at least ${min} characters.`,
+      timeframe: "Pick a delivery timeframe.",
+      budget: "Budget must be a number above zero, or left blank.",
+      generic: "Sending failed. Please try again.",
+      network: "No connection to the server. Check your internet and try again.",
+    },
+  },
+};
+
+// Deliberately not `as const`: that would type every string as its own literal,
+// and the English block would then fail to match a type derived from the
+// Serbian one ("Sign in" is not assignable to "Prijava").
+type T = (typeof COPY)["sr"];
 
 const EMPTY = {
   buyerType: "individual" as "individual" | "company",
@@ -86,15 +308,33 @@ const EMPTY = {
   address: "",
   city: "",
   country: "",
-  idea: "",
-  clipCount: "3",
   businessName: "",
   businessDescription: "",
+  idea: "",
+  wishes: "",
+  timeframe: "" as "" | Timeframe,
   budgetEur: "",
 };
 
 type FormState = typeof EMPTY;
 type FieldKey = keyof Omit<FormState, "buyerType">;
+
+/** The order errors are walked in when the buyer submits an incomplete form,
+ *  so the page scrolls to the first problem rather than an arbitrary one. */
+const FIELD_ORDER: FieldKey[] = [
+  "name",
+  "country",
+  "companyName",
+  "pib",
+  "mb",
+  "address",
+  "city",
+  "businessName",
+  "businessDescription",
+  "idea",
+  "timeframe",
+  "budgetEur",
+];
 
 function validate(form: FormState, t: T): Partial<Record<FieldKey, string>> {
   const errors: Partial<Record<FieldKey, string>> = {};
@@ -108,10 +348,9 @@ function validate(form: FormState, t: T): Partial<Record<FieldKey, string>> {
     if (form.companyName.trim().length < 2) {
       errors.companyName = t.errors.companyName;
     }
-    // A PIB and a matični broj are issued by the Serbian business register, so
-    // they are only demanded of a Serbian company. A company anywhere else gives
-    // a VAT / tax ID in whatever shape its own registry uses — and optionally,
-    // because a missing one is a question the studio can ask later rather than a
+    // PIB and matični broj are issued by the Serbian register, so they are only
+    // demanded of a Serbian company. Everyone else gives one free-form tax ID,
+    // and optionally — a missing one is a question for the first call, not a
     // reason to lose the job at the form.
     if (isSerbia(form.country)) {
       if (!/^\d{9}$/.test(form.pib.trim())) {
@@ -137,18 +376,21 @@ function validate(form: FormState, t: T): Partial<Record<FieldKey, string>> {
   if (form.idea.trim().length < MIN.idea) {
     errors.idea = t.errors.idea(MIN.idea);
   }
-  const clips = Number(form.clipCount);
-  if (!Number.isInteger(clips) || clips < 1 || clips > 100) {
-    errors.clipCount = t.errors.clipCount;
+  if (!form.timeframe) {
+    errors.timeframe = t.errors.timeframe;
   }
-  const budget = Number(form.budgetEur);
-  if (!Number.isFinite(budget) || budget <= 0) {
-    errors.budgetEur = t.errors.budget;
+  // Blank is the documented answer, not an omission. Only a value that was
+  // typed and is nonsense counts as an error.
+  if (form.budgetEur.trim()) {
+    const budget = Number(form.budgetEur);
+    if (!Number.isFinite(budget) || budget <= 0) {
+      errors.budgetEur = t.errors.budget;
+    }
   }
   return errors;
 }
 
-export default function VideoInquiryFlow({
+export default function BuildInquiryFlow({
   packages,
   initialSlugs = [],
   nextPath,
@@ -156,9 +398,8 @@ export default function VideoInquiryFlow({
   user,
   profile,
 }: {
-  /** Every AI video service the studio currently sells (admin → Paketi). */
+  /** Every web/app service the studio currently lists (admin → Paketi). */
   packages: PackageSummary[];
-  /** Ticked on arrival — the service page passes its own, /upit passes none. */
   initialSlugs?: string[];
   /** Where Google sends the buyer back to. This flow renders on two routes. */
   nextPath: string;
@@ -166,10 +407,7 @@ export default function VideoInquiryFlow({
   user: { email: string; name: string | null } | null;
   profile: ProfileSummary | null;
 }) {
-  const copy = ui(locale).inquiry;
-  // Seeded from the URL, owned by the buyer from the first tap. A slug that has
-  // since been retired is dropped rather than kept as a ghost the server would
-  // reject on submit.
+  const copy: T = COPY[locale === "en" ? "en" : "sr"];
   const [selected, setSelected] = useState<string[]>(() =>
     initialSlugs.filter((slug) => packages.some((item) => item.slug === slug)),
   );
@@ -184,9 +422,6 @@ export default function VideoInquiryFlow({
     mb: profile?.mb ?? "",
     address: profile?.address ?? "",
     city: profile?.city ?? "",
-    // Serbia unless the buyer says otherwise — it is the overwhelming majority,
-    // and a country nobody chose is what silently issued every foreign buyer a
-    // domestic Serbian document.
     country: profile?.country ?? defaultCountry(locale),
   }));
   const [busy, setBusy] = useState(false);
@@ -199,20 +434,20 @@ export default function VideoInquiryFlow({
 
   const errors = validate(form, copy);
   const noService = selected.length === 0;
-  // A foreign company is asked for three fewer things than a Serbian one (no
-  // PIB, no matični broj), so the bar has to count what is actually required of
-  // *this* buyer — otherwise it sticks below 100% for someone who has finished.
   const domestic = isSerbia(form.country);
-  const requiredCount =
-    (form.buyerType === "company" ? (domestic ? 12 : 10) : 7) + 1;
-  const progress = Math.round(
-    ((requiredCount - Object.keys(errors).length - (noService ? 1 : 0)) / requiredCount) * 100,
+  // Counts what is actually required of *this* buyer: a foreign company is
+  // asked for two fewer things than a Serbian one, so a fixed total would stick
+  // below 100% for someone who has finished. Budget is excluded — it is
+  // optional, and a bar that never reaches full is worse than no bar.
+  const requiredCount = (form.buyerType === "company" ? (domestic ? 11 : 9) : 6) + 1;
+  const outstanding =
+    FIELD_ORDER.filter((key) => key !== "budgetEur" && errors[key]).length +
+    (noService ? 1 : 0);
+  const progress = Math.max(
+    0,
+    Math.round(((requiredCount - outstanding) / requiredCount) * 100),
   );
 
-  /** Tick, untick, and refuse the tick that would push the brief past what the
-   *  studio can quote as one job. Never empties to nothing by accident — the
-   *  last remaining service is untickable, which is also what makes this a
-   *  "change" control on a page that arrived with one already chosen. */
   const toggleService = (slug: string) =>
     setSelected((current) =>
       current.includes(slug)
@@ -253,21 +488,7 @@ export default function VideoInquiryFlow({
     }
     if (Object.keys(problems).length > 0) {
       setShowAll(true);
-      const first = ([
-        "name",
-        "country",
-        "companyName",
-        "pib",
-        "mb",
-        "address",
-        "city",
-        "businessName",
-        "businessDescription",
-        "idea",
-        "clipCount",
-        "budgetEur",
-      ] as FieldKey[])
-        .find((key) => problems[key]);
+      const first = FIELD_ORDER.find((key) => problems[key]);
       if (first) {
         const node = fieldRefs.current[first];
         node?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -280,14 +501,15 @@ export default function VideoInquiryFlow({
 
     setBusy(true);
     try {
-      const response = await fetch("/api/nalog/video-zahtevi", {
+      const response = await fetch("/api/nalog/razvoj-zahtevi", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           slugs: selected,
           ...form,
-          clipCount: Number(form.clipCount),
-          budgetEur: Number(form.budgetEur),
+          // Blank stays blank all the way to a NULL column rather than becoming
+          // a zero the studio would read as "this buyer has no money".
+          budgetEur: form.budgetEur.trim() ? Number(form.budgetEur) : null,
         }),
       });
       const data = await response.json();
@@ -311,12 +533,8 @@ export default function VideoInquiryFlow({
       <Reveal>
         <div className="mt-10 max-w-xl md:mt-14">
           <p className="eyebrow">{copy.signInEyebrow}</p>
-          <h2 className="display mt-5 text-3xl md:text-5xl">
-            {copy.signInTitle}
-          </h2>
-          <p className="mt-5 leading-relaxed text-muted">
-            {copy.signInBody}
-          </p>
+          <h2 className="display mt-5 text-3xl md:text-5xl">{copy.signInTitle}</h2>
+          <p className="mt-5 leading-relaxed text-muted">{copy.signInBody}</p>
           <a
             href={`/api/auth/google?next=${encodeURIComponent(nextPath)}`}
             className="mt-9 inline-flex min-h-12 w-full items-center justify-center gap-3 rounded-full bg-fg px-7 text-sm font-medium text-bg transition-colors duration-300 hover:bg-white active:scale-[0.99] sm:w-auto"
@@ -329,9 +547,7 @@ export default function VideoInquiryFlow({
             </svg>
             {copy.signInCta}
           </a>
-          <p className="mt-5 text-xs leading-relaxed text-faint">
-            {copy.signInNote}
-          </p>
+          <p className="mt-5 text-xs leading-relaxed text-faint">{copy.signInNote}</p>
         </div>
       </Reveal>
     );
@@ -356,9 +572,7 @@ export default function VideoInquiryFlow({
           <h2 className="display mt-5 text-3xl sm:text-4xl md:text-5xl">
             {copy.sentTitle} <em>{copy.sentTitleAccent}</em>.
           </h2>
-          <p className="mt-5 leading-relaxed text-muted">
-            {copy.sentBody}
-          </p>
+          <p className="mt-5 leading-relaxed text-muted">{copy.sentBody}</p>
 
           <ol className="mt-8 space-y-4 border-t border-line pt-7">
             {copy.sentSteps.map((step, i) => (
@@ -407,8 +621,6 @@ export default function VideoInquiryFlow({
           </p>
         </Reveal>
 
-        {/* Completeness, so the buyer can see the form filling up rather than
-            guessing why the last step is not available yet. */}
         <Reveal delay={0.05}>
           <div className="mt-8 flex items-center gap-4">
             <div className="h-px flex-1 overflow-hidden bg-line">
@@ -461,7 +673,7 @@ export default function VideoInquiryFlow({
                     >
                       {active && (
                         <motion.span
-                          layoutId="buyer-type-pill"
+                          layoutId="build-buyer-type-pill"
                           className="absolute inset-0 rounded-full bg-fg"
                           transition={{ type: "spring", stiffness: 420, damping: 34 }}
                         />
@@ -498,11 +710,10 @@ export default function VideoInquiryFlow({
             </div>
           </Reveal>
 
-          {/* Where the buyer is. This is the field the whole document set hangs
-              off: Serbia gets the domestic proforma with the dinar account and
-              the domestic VAT note, anywhere else gets the English one with
-              IBAN/SWIFT and the export note. Asked of individuals too — a
-              private buyer abroad needs the foreign document just as much. */}
+          {/* Decides which invoice template the buyer gets if they accept:
+              Serbia the domestic proforma, anywhere else the English one with
+              IBAN/SWIFT. Asked of individuals too — a private buyer abroad
+              needs the foreign document just as much. */}
           <Reveal delay={0.13}>
             <Select
               label={copy.country}
@@ -545,10 +756,6 @@ export default function VideoInquiryFlow({
                       error={errorFor("companyName")}
                       innerRef={(node) => (fieldRefs.current.companyName = node)}
                     />
-                    {/* A PIB and a matični broj exist only in the Serbian
-                        register. A company outside it is asked for one free-form
-                        tax ID, which prints under "Tax ID" on the English
-                        document, and is not held up by a format it cannot meet. */}
                     {domestic ? (
                       <div className="grid gap-7 sm:grid-cols-2">
                         <Field
@@ -663,28 +870,49 @@ export default function VideoInquiryFlow({
             />
           </Reveal>
 
+          {/* Optional, and deliberately open: this is where a buyer lists the
+              five things they would otherwise remember one at a time over the
+              next fortnight. `min={0}` drops the counter — a "0 / 0" above an
+              optional box reads as a requirement nobody set. */}
+          <Reveal delay={0.24}>
+            <Area
+              label={copy.wishes}
+              value={form.wishes}
+              onChange={set("wishes")}
+              placeholder={copy.wishesPlaceholder}
+              rows={4}
+              min={0}
+              minChars={copy.minChars}
+              hint={copy.wishesHint}
+            />
+          </Reveal>
+
           <Reveal delay={0.26}>
             <div className="grid gap-9 sm:grid-cols-2">
-              <Field
-                label={copy.clips}
+              <Select
+                label={copy.timeframe}
                 required
-                value={form.clipCount}
-                onChange={set("clipCount", digitsOnly)}
-                onBlur={blur("clipCount")}
-                inputMode="numeric"
-                placeholder="npr. 3"
-                hint={copy.clipsHint}
-                error={errorFor("clipCount")}
-                innerRef={(node) => (fieldRefs.current.clipCount = node)}
+                value={form.timeframe}
+                onChange={set("timeframe")}
+                onBlur={blur("timeframe")}
+                options={[
+                  { value: "", label: "—" },
+                  ...TIMEFRAMES.map((key) => ({
+                    value: key,
+                    label: copy.timeframes[key],
+                  })),
+                ]}
+                hint={copy.timeframeHint}
+                error={errorFor("timeframe")}
+                innerRef={(node) => (fieldRefs.current.timeframe = node)}
               />
               <Field
                 label={copy.budget}
-                required
                 value={form.budgetEur}
                 onChange={set("budgetEur", digitsOnly)}
                 onBlur={blur("budgetEur")}
                 inputMode="numeric"
-                placeholder="npr. 800"
+                placeholder="—"
                 hint={copy.budgetHint}
                 error={errorFor("budgetEur")}
                 innerRef={(node) => (fieldRefs.current.budgetEur = node)}
@@ -701,9 +929,7 @@ export default function VideoInquiryFlow({
               <p className="text-xs uppercase tracking-[0.18em] text-accent-soft">
                 {copy.nextTitle}
               </p>
-              <p className="mt-3 text-sm leading-relaxed text-muted">
-                {copy.nextBody}
-              </p>
+              <p className="mt-3 text-sm leading-relaxed text-muted">{copy.nextBody}</p>
             </div>
           </Reveal>
         </div>
@@ -734,9 +960,7 @@ export default function VideoInquiryFlow({
             >
               {busy ? copy.submitting : copy.submit}
             </button>
-            <span className="hidden text-xs text-faint sm:block">
-              {copy.submitNote}
-            </span>
+            <span className="hidden text-xs text-faint sm:block">{copy.submitNote}</span>
           </div>
         </div>
       </form>
@@ -744,18 +968,10 @@ export default function VideoInquiryFlow({
   );
 }
 
+/* ------------------------------------------------------------------ pieces */
 
-/**
- * Which AI video services the brief covers.
- *
- * Rows, not pricing cards: the landing already sold the service, and there is
- * no price to compare here anyway. All this has to do is show what is ticked
- * and make changing it a single tap — the aside carries the detail.
- *
- * Multi-select, so this control is both halves of what the page needs: on /upit
- * it is how the buyer picks anything at all, and on a single service page it is
- * how they swap that service or add a second one to the same brief.
- */
+/** Which services the brief covers. Rows rather than pricing cards: the landing
+ *  already sold the service and there is no price to compare here anyway. */
 function ServicePicker({
   copy,
   packages,
@@ -773,7 +989,8 @@ function ServicePicker({
   return (
     <fieldset>
       <legend className="text-xs uppercase tracking-[0.18em] text-faint">
-        {copy.services}<span className="ml-1 text-accent-soft">*</span>
+        {copy.services}
+        <span className="ml-1 text-accent-soft">*</span>
       </legend>
       <p className="mt-3 max-w-lg text-sm leading-relaxed text-muted">
         {copy.servicesHint}
@@ -786,8 +1003,6 @@ function ServicePicker({
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
         {packages.map((item) => {
           const active = selected.includes(item.slug);
-          // A full list greys out what cannot be added, rather than letting the
-          // tap do nothing and leaving the buyer to work out why.
           const blocked = !active && full;
           return (
             <button
@@ -857,21 +1072,13 @@ function ServicePicker({
           );
         })}
       </div>
-      <Note
-        error={error}
-        hint={full ? copy.servicesFull(MAX_SERVICES) : undefined}
-      />
+      <Note error={error} hint={full ? copy.servicesFull(MAX_SERVICES) : undefined} />
     </fieldset>
   );
 }
 
-/**
- * What the brief is currently for.
- *
- * Features are listed only when a single service is ticked: four feature lists
- * stacked in a sticky column is a wall, and by the time someone is comparing
- * services they are reading the picker, not this.
- */
+/** What the brief is currently for. Features are listed only when a single
+ *  service is ticked — stacked feature lists in a sticky column are a wall. */
 function Summary({
   copy,
   chosen,
@@ -899,9 +1106,7 @@ function Summary({
         </p>
 
         {chosen.length === 0 ? (
-          <p className="mt-4 text-sm leading-relaxed text-muted">
-            {copy.summaryEmpty}
-          </p>
+          <p className="mt-4 text-sm leading-relaxed text-muted">{copy.summaryEmpty}</p>
         ) : single ? (
           <>
             <h2 className="display mt-4 text-2xl">{single.name}</h2>
@@ -939,8 +1144,6 @@ function Summary({
           </ul>
         )}
 
-        {/* The way out of a page that arrived with one service already chosen:
-            nothing else on it says the brief can carry more than that one. */}
         <button
           type="button"
           onClick={onChange}
@@ -953,9 +1156,7 @@ function Summary({
           <p className="text-xs uppercase tracking-[0.18em] text-accent-soft">
             {copy.quoteTitle}
           </p>
-          <p className="mt-2 text-sm leading-relaxed text-faint">
-            {copy.quoteBody}
-          </p>
+          <p className="mt-2 text-sm leading-relaxed text-faint">{copy.quoteBody}</p>
         </div>
       </motion.div>
     </aside>

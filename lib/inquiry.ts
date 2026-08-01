@@ -21,9 +21,26 @@ export type InquiryPackage = {
 export async function getInquiryPackages(
   locale: Locale = DEFAULT_LOCALE,
 ): Promise<InquiryPackage[]> {
+  return byFlow("project", locale);
+}
+
+/**
+ * The web / app / automation rail (grp='razvoj', flow='build').
+ *
+ * A separate picker from the video one on purpose: the two briefs ask for
+ * different things, and a buyer who wants a web shop has no business ticking
+ * "AI Cinematic Ads" into the same quote.
+ */
+export async function getBuildPackages(
+  locale: Locale = DEFAULT_LOCALE,
+): Promise<InquiryPackage[]> {
+  return byFlow("build", locale);
+}
+
+async function byFlow(flow: string, locale: Locale): Promise<InquiryPackage[]> {
   const packages = await getPublicPackages(undefined, locale);
   return packages
-    .filter((item) => item.flow === "project" && item.slug)
+    .filter((item) => item.flow === flow && item.slug)
     .map((item) => ({
       slug: item.slug as string,
       name: item.name,

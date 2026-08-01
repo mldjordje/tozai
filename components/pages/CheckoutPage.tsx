@@ -2,8 +2,9 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import CheckoutFlow from "@/components/checkout/CheckoutFlow";
 import VideoInquiryFlow from "@/components/checkout/VideoInquiryFlow";
+import BuildInquiryFlow from "@/components/checkout/BuildInquiryFlow";
 import { getPackageBySlug } from "@/lib/packages";
-import { getInquiryPackages } from "@/lib/inquiry";
+import { getBuildPackages, getInquiryPackages } from "@/lib/inquiry";
 import { getSessionUser } from "@/lib/auth/user-session";
 import { getProfile } from "@/lib/account";
 import { paymentAvailability } from "@/lib/payments/provider";
@@ -36,11 +37,18 @@ export default async function CheckoutPage({
   const t = ui(locale).inquiry;
 
   // The buyer can swap this service or add more to the same brief, so the whole
-  // quotable catalogue comes along. The requested one is prepended if the list
-  // somehow misses it, so the page can never open with a ticked service that is
-  // not in its own picker.
-  const services = pkg.flow === "project" ? await getInquiryPackages(locale) : [];
+  // quotable catalogue comes along — but only from the *same* rail. Handing the
+  // video catalogue to a web-shop brief would let someone tick "AI Cinematic
+  // Ads" into a quote the build form never asked the right questions for.
+  const services =
+    pkg.flow === "project"
+      ? await getInquiryPackages(locale)
+      : pkg.flow === "build"
+        ? await getBuildPackages(locale)
+        : [];
   const inquirySlug = pkg.slug ?? slug;
+  // Prepended if the list somehow misses it, so the page can never open with a
+  // ticked service that is not in its own picker.
   const inquiryPackages = services.some((item) => item.slug === inquirySlug)
     ? services
     : [
@@ -52,6 +60,20 @@ export default async function CheckoutPage({
         },
         ...services,
       ];
+  const buyer = user ? { email: user.email, name: user.name ?? null } : null;
+  const billingProfile = profile
+    ? {
+        name: profile.name,
+        phone: profile.phone,
+        isCompany: profile.is_company,
+        companyName: profile.company_name,
+        pib: profile.pib,
+        mb: profile.mb,
+        address: profile.address,
+        city: profile.city,
+        country: profile.country,
+      }
+    : null;
 
   return (
     <main className="relative min-h-svh px-6 pb-24 pt-28 md:px-12">
@@ -76,6 +98,13 @@ export default async function CheckoutPage({
               {locale === "en" ? "Buy " : "Kupovina "}
               <em>{locale === "en" ? "hours" : "sati"}</em>.
             </>
+          ) : pkg.flow === "build" ? (
+            // The shared inquiry heading says "describe the idea", which is the
+            // video brief's word for it. A web shop is a project, not an idea.
+            <>
+              {locale === "en" ? "Describe the " : "Opiši "}
+              <em>{locale === "en" ? "project" : "projekat"}</em>.
+            </>
           ) : (
             <>
               {t.title} <em>{t.titleAccent}</em>.
@@ -89,22 +118,17 @@ export default async function CheckoutPage({
             packages={inquiryPackages}
             initialSlugs={[inquirySlug]}
             nextPath={localePath(locale, `/porudzbina/${inquirySlug}`)}
-            user={user ? { email: user.email, name: user.name ?? null } : null}
-            profile={
-              profile
-                ? {
-                    name: profile.name,
-                    phone: profile.phone,
-                    isCompany: profile.is_company,
-                    companyName: profile.company_name,
-                    pib: profile.pib,
-                    mb: profile.mb,
-                    address: profile.address,
-                    city: profile.city,
-                    country: profile.country,
-                  }
-                : null
-            }
+            user={buyer}
+            profile={billingProfile}
+          />
+        ) : pkg.flow === "build" ? (
+          <BuildInquiryFlow
+            locale={locale}
+            packages={inquiryPackages}
+            initialSlugs={[inquirySlug]}
+            nextPath={localePath(locale, `/porudzbina/${inquirySlug}`)}
+            user={buyer}
+            profile={billingProfile}
           />
         ) : (
           <CheckoutFlow
@@ -119,22 +143,8 @@ export default async function CheckoutPage({
               flow: pkg.flow,
               hours: pkg.hours,
             }}
-            user={user ? { email: user.email, name: user.name ?? null } : null}
-            profile={
-              profile
-                ? {
-                    name: profile.name,
-                    phone: profile.phone,
-                    isCompany: profile.is_company,
-                    companyName: profile.company_name,
-                    pib: profile.pib,
-                    mb: profile.mb,
-                    address: profile.address,
-                    city: profile.city,
-                    country: profile.country,
-                  }
-                : null
-            }
+            user={buyer}
+            profile={billingProfile}
             paymentAvailability={paymentAvailability()}
           />
         )}

@@ -444,6 +444,18 @@ await sql`
   WHERE package_ids = '{}' AND package_id IS NOT NULL
 `;
 await sql`ALTER TABLE video_requests ADD COLUMN IF NOT EXISTS turnaround_days INT`;
+// This table started as video briefs and now carries the web/app/automation
+// briefs too (grp='razvoj', flow='build'), because everything downstream of a
+// brief is identical for both: the studio quotes by hand, the buyer accepts,
+// that becomes an order and then a project. `kind` is what tells them apart.
+//
+// The two video-only columns are simply unused on a build brief — clip_count
+// keeps its default of 1 and is never read, and budget_eur stays NULL because a
+// buyer who does not know what a web shop costs must not be blocked at the form.
+// The build-only answers (wishes, deadline) ride in the `brief` JSONB rather
+// than as columns, which is what that column is for.
+await sql`ALTER TABLE video_requests ADD COLUMN IF NOT EXISTS kind TEXT NOT NULL DEFAULT 'video'`;
+await sql`CREATE INDEX IF NOT EXISTS video_requests_kind ON video_requests (kind, status, created_at DESC)`;
 // Invoice details are frozen when the request is sent. A later profile edit
 // must not silently change the buyer attached to an already accepted quote.
 await sql`ALTER TABLE video_requests ADD COLUMN IF NOT EXISTS billing JSONB`;

@@ -5,12 +5,18 @@ import Link from "next/link";
 import InvoiceDocument from "@/components/nalog/InvoiceDocument";
 import PaymentChoice from "@/components/checkout/PaymentChoice";
 import type { PaymentAvailability, PaymentMethod } from "@/lib/payments/selection";
+import { TIMEFRAME_LABEL, isTimeframe } from "@/lib/build-requests";
 
 type RequestRow = {
   id: number;
+  /** 'video' for an AI clip brief, 'build' for web / app / automation. Both
+   *  kinds are listed here — the quote, the accept and the payment that follow
+   *  are the same for either. */
+  kind: "video" | "build";
   service_name: string;
   project_title: string;
-  brief: { idea: string };
+  /** `wishes` and `timeframe` are only present on a build brief. */
+  brief: { idea: string; wishes?: string; timeframe?: string };
   buyer_type: "individual" | "company";
   clip_count: number;
   business_name: string;
@@ -167,7 +173,22 @@ export default function VideoRequests({
             <div>
               <p className="text-xs uppercase tracking-[0.14em] text-faint">Upit #{request.id} · {request.service_name}</p>
               <h2 className="mt-2 text-lg font-medium text-fg">{request.business_name}</h2>
-              <p className="mt-1 text-sm text-muted">{request.clip_count} klipova · budžet {request.budget_eur?.toLocaleString("sr-RS")} EUR</p>
+              {/* Both answers are video-only: a build brief never sets a clip
+                  count, and its budget is optional. Printing them anyway gave
+                  "1 klipova · budžet undefined EUR". */}
+              <p className="mt-1 text-sm text-muted">
+                {[
+                  request.kind === "video" ? `${request.clip_count} klipova` : null,
+                  isTimeframe(request.brief.timeframe)
+                    ? `rok: ${TIMEFRAME_LABEL[request.brief.timeframe]}`
+                    : null,
+                  request.budget_eur != null
+                    ? `budžet ${request.budget_eur.toLocaleString("sr-RS")} EUR`
+                    : null,
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </p>
             </div>
             <span className="rounded-full border border-line px-3 py-1 text-xs text-muted">{LABEL[request.status]}</span>
           </div>
@@ -176,7 +197,17 @@ export default function VideoRequests({
             <summary className="cursor-pointer text-sm text-muted">Pogledaj poslati upit</summary>
             <div className="mt-4 space-y-3 text-sm">
               <p><span className="text-faint">O biznisu:</span> {request.business_description}</p>
-              <p className="whitespace-pre-line"><span className="text-faint">Ideja:</span> {request.brief.idea}</p>
+              <p className="whitespace-pre-line">
+                <span className="text-faint">
+                  {request.kind === "build" ? "Šta traži:" : "Ideja:"}
+                </span>{" "}
+                {request.brief.idea}
+              </p>
+              {request.brief.wishes && (
+                <p className="whitespace-pre-line">
+                  <span className="text-faint">Želje:</span> {request.brief.wishes}
+                </p>
+              )}
             </div>
           </details>
 

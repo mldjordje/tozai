@@ -1,17 +1,24 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { TIMEFRAME_LABEL, isTimeframe } from "@/lib/build-requests";
 
 type RequestRow = {
   id: number;
+  /** 'video' for an AI clip brief, 'build' for web / app / automation. Both
+   *  live in the same table and quote through the same editor — see the note
+   *  on the column in scripts/init-db.mjs. */
+  kind: "video" | "build";
   service_name: string;
   project_title: string;
-  brief: { idea: string };
+  /** `wishes` and `timeframe` are only present on a build brief. */
+  brief: { idea: string; wishes?: string; timeframe?: string };
   buyer_type: "individual" | "company";
   clip_count: number;
   business_name: string;
   business_description: string;
-  budget_eur: number;
+  /** Null on a build brief — the buyer is not required to name one. */
+  budget_eur: number | null;
   status: "submitted" | "quoted" | "accepted" | "declined" | "canceled";
   quoted_amount: number | null;
   currency: string;
@@ -43,6 +50,9 @@ function futureDate(days: number) {
 export function VideoRequestsTab() {
   const [requests, setRequests] = useState<RequestRow[]>([]);
   const [filter, setFilter] = useState<"active" | RequestRow["status"] | "all">("active");
+  // Both rails land in this one list. The studio quotes them the same way, but
+  // they are different jobs to schedule, so they can be looked at separately.
+  const [kind, setKind] = useState<"all" | RequestRow["kind"]>("all");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState<number | null>(null);
@@ -73,11 +83,12 @@ export function VideoRequestsTab() {
 
   const visible = useMemo(
     () => requests.filter((request) => {
+      if (kind !== "all" && request.kind !== kind) return false;
       if (filter === "all") return true;
       if (filter === "active") return request.status === "submitted" || request.status === "quoted";
       return request.status === filter;
     }),
-    [requests, filter],
+    [requests, filter, kind],
   );
 
   function openQuote(request: RequestRow) {
@@ -135,11 +146,23 @@ export function VideoRequestsTab() {
   return (
     <div className="adm__video">
       <div>
-        <h1>Video upiti</h1>
-        <p className="adm__muted">Pregledaj ideju i budžet, zatim pošalji privatnu cenu i vreme izrade.</p>
+        <h1>Upiti</h1>
+        <p className="adm__muted">Pregledaj šta klijent traži, zatim pošalji privatnu cenu i vreme izrade.</p>
       </div>
 
       {error && <p className="adm__err" role="alert">{error}</p>}
+
+      <div className="adm__filters">
+        {[
+          ["all", "Sve vrste"],
+          ["video", "AI video"],
+          ["build", "Web & aplikacije"],
+        ].map(([value, label]) => (
+          <button key={value} className="adm__filter" aria-pressed={kind === value} onClick={() => setKind(value as typeof kind)}>
+            {label}
+          </button>
+        ))}
+      </div>
 
       <div className="adm__filters">
         {[
@@ -164,21 +187,40 @@ export function VideoRequestsTab() {
               <div className="adm__video-head">
                 <div>
                   <strong>{request.business_name}</strong>
-                  <span>{request.service_name} · {request.clip_count} klipova</span>
+                  {/* The clip count is a video-only answer; a build brief never
+                      set it and would otherwise read "1 klipova". */}
+                  <span>
+                    {request.service_name}
+                    {request.kind === "video" && ` · ${request.clip_count} klipova`}
+                  </span>
                 </div>
                 <span className={`adm__status adm__status--req-${request.status}`}>{LABEL[request.status]}</span>
               </div>
 
               <div className="adm__video-meta">
+                <span>{request.kind === "build" ? "Web & aplikacije" : "AI video"}</span>
                 <span>{request.buyer_type === "company" ? "Pravno lice" : "Fizičko lice"}</span>
-                <span>Budžet: {request.budget_eur.toLocaleString("sr-RS")} EUR</span>
+                {/* Optional on a build brief. "Nije naveden" is the honest
+                    reading — printing 0 EUR would look like an answer. */}
+                <span>
+                  Budžet:{" "}
+                  {request.budget_eur != null
+                    ? `${request.budget_eur.toLocaleString("sr-RS")} EUR`
+                    : "nije naveden"}
+                </span>
+                {isTimeframe(request.brief.timeframe) && (
+                  <span>Rok: {TIMEFRAME_LABEL[request.brief.timeframe]}</span>
+                )}
                 <a href={`mailto:${request.user_email}`}>{request.user_name ?? request.user_email}</a>
                 {request.user_phone && <a href={`tel:${request.user_phone}`}>{request.user_phone}</a>}
               </div>
 
               <div className="adm__video-brief">
                 <p><b>O biznisu</b>{request.business_description}</p>
-                <p><b>Ideja</b>{request.brief.idea}</p>
+                <p><b>{request.kind === "build" ? "Šta traži" : "Ideja"}</b>{request.brief.idea}</p>
+                {request.brief.wishes && (
+                  <p><b>Želje</b>{request.brief.wishes}</p>
+                )}
               </div>
 
               {request.quoted_amount != null && (

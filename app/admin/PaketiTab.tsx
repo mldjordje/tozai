@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Plus, Trash2, Star, Eye, EyeOff } from "lucide-react";
 import { LocaleTabs } from "./LocaleTabs";
+import { PACKAGE_GROUPS } from "@/lib/package-groups";
 
 type Pkg = {
   id: number;
@@ -31,14 +32,16 @@ type Pkg = {
 
 type Draft = Omit<Pkg, "id"> & { id?: number };
 
-const GROUPS: { key: string; label: string }[] = [
-  { key: "services", label: "AI Usluge" },
-  { key: "education", label: "Edukacija" },
-];
+// The rails come from lib/package-groups.ts, which is also what the write route
+// reads to decide a new package's `flow` and checkout slug. Adding a section
+// here without adding it there would produce cards whose buttons go nowhere.
+const GROUPS = PACKAGE_GROUPS;
 
 const emptyDraft = (grp: string): Draft => ({
   grp,
-  category: "",
+  // Prefilled from the rail so the studio does not have to guess what belongs
+  // in fields it never sees the effect of. Both stay editable.
+  category: GROUPS.find((g) => g.key === grp)?.category ?? "",
   name: "",
   price: null,
   currency: "EUR",
@@ -46,7 +49,7 @@ const emptyDraft = (grp: string): Draft => ({
   description: "",
   features: [],
   highlighted: false,
-  cta_label: "",
+  cta_label: GROUPS.find((g) => g.key === grp)?.cta ?? "",
   cta_href: "",
   sort: 0,
   active: true,
@@ -142,6 +145,9 @@ export function PaketiTab() {
         GROUPS.map((g) => (
           <section key={g.key} className="adm__pf-section">
             <h3>{g.label}</h3>
+            <p className="adm__hint" style={{ marginBottom: 12, maxWidth: 620 }}>
+              {g.hint}
+            </p>
             <div className="adm__pf-grid">
               {(grouped[g.key] ?? []).map((p) => (
                 <div

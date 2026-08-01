@@ -104,9 +104,10 @@ function organizationSchema(identity: LegalIdentity, socials: string[]): string 
 }
 
 export default async function Landing({ locale }: { locale: Locale }) {
-  const [services, education, contact, copy, shots, identity] = await Promise.all([
+  const [services, education, razvoj, contact, copy, shots, identity] = await Promise.all([
     getPublicPackages("services", locale),
     getPublicPackages("education", locale),
+    getPublicPackages("razvoj", locale),
     getPublicContact(),
     getLandingContent(locale),
     getPublicResultShots(locale),
@@ -122,6 +123,13 @@ export default async function Landing({ locale }: { locale: Locale }) {
   // Wrapped rather than passed by reference: map's second argument is the
   // index, which would arrive where the mapper expects the locale.
   const clipPackages = projects.map((item) => toClipPackage(item, locale));
+  // The web / app / automation rail. No static fallback on purpose: unlike the
+  // video packages there is nothing to mirror offline, so an empty table means
+  // the studio has not added these yet and the section stays off the page
+  // rather than rendering cards whose buttons go nowhere.
+  const buildPackages = razvoj
+    .filter((item) => item.flow === "build")
+    .map((item) => toClipPackage(item, locale));
   const serviceHours = services.filter((item) => item.flow === "hours");
   const hourPacks = [...education, ...serviceHours].map((item) => toHourPack(item, locale));
 
@@ -222,6 +230,38 @@ export default async function Landing({ locale }: { locale: Locale }) {
           body={copy.packages_body}
           note={copy.packages_note}
         />
+
+        {/* Web & Aplikacije — quoted per brief, delivered by the partner team.
+            Rendered only when the studio has actually added the packages, and
+            its copy is fixed rather than admin-driven: there is one paragraph
+            of it and site_content is already the longest table in the panel.
+
+            COPY RULE — same one that governs lib/content/offerings.ts. No
+            outcome promises, no numbers that cannot be shown, no other
+            company's brand named. */}
+        {buildPackages.length > 0 && (
+          <Packages
+            locale={locale}
+            id="razvoj"
+            packages={buildPackages}
+            eyebrow={locale === "en" ? "WEB & APPS" : "WEB & APLIKACIJE"}
+            title={
+              locale === "en"
+                ? "Sites, apps, automation."
+                : "Sajt, aplikacija, automatizacija."
+            }
+            body={
+              locale === "en"
+                ? "Describe what you need and we come back with a price and a timeline. The build is delivered by the studio's partner development team."
+                : "Opiši šta ti treba i javljamo se sa procenom cene i roka. Izradu vodi partnerski razvojni tim sa kojim radimo."
+            }
+            note={
+              locale === "en"
+                ? "Every project is quoted from its own brief — scope, integrations and timeline all move the number, so there is no list price."
+                : "Svaki projekat se procenjuje iz sopstvenog upita — obim, integracije i rok menjaju cenu, zato nema fiksnog cenovnika."
+            }
+          />
+        )}
 
         {/* Edukacija — buy 1-on-1 hour packs (admin-driven, static fallback) */}
         <Education

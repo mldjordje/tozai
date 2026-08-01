@@ -30,6 +30,7 @@ function splitLead(text: string): { lead: string; rest: string } {
 }
 export default function Packages({
   locale = DEFAULT_LOCALE,
+  id = "paketi",
   packages = CLIP_PACKAGES,
   eyebrow = DEFAULTS.packages_eyebrow,
   title = DEFAULTS.packages_title,
@@ -37,6 +38,10 @@ export default function Packages({
   note = DEFAULTS.packages_note,
 }: {
   locale?: Locale;
+  /** Anchor for this rail. The landing renders this component twice — once for
+   *  the AI video packages and once for web/apps — and two elements with
+   *  id="paketi" would make "#paketi" in the nav ambiguous. */
+  id?: string;
   packages?: ClipPackage[];
   eyebrow?: string;
   title?: string;
@@ -46,7 +51,7 @@ export default function Packages({
   const t = ui(locale).packages;
   return (
     <section
-      id="paketi"
+      id={id}
       className="relative flex min-h-[100svh] items-center px-6 py-28 md:px-12"
     >
       <div className="w-full max-w-6xl">
