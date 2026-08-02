@@ -49,5 +49,23 @@ for (const row of packages) {
   }
 }
 
+// The `faq` table renders publicly too (see components/sections/Faq.tsx) and
+// was the one CMS surface this audit did not read — added 2026-08-02 after the
+// razvoj rail and FAQ section shipped, so a future FAQ edit through the panel
+// gets the same check as everything else on the page.
+const faq = await sql`
+  SELECT id, question, answer, question_en, answer_en FROM faq WHERE active ORDER BY sort, id
+`;
+
+for (const row of faq) {
+  const text = [row.question, row.answer, row.question_en, row.answer_en].filter(Boolean).join(" ");
+  if (risky.test(text)) {
+    findings += 1;
+    console.log(`RISK faq #${row.id}: ${row.question}`);
+  } else {
+    console.log(`OK   faq #${row.id}: ${row.question}`);
+  }
+}
+
 console.log(`\n${findings ? `Found ${findings} risky CMS row(s).` : "No risky CMS copy found."}`);
 process.exitCode = findings ? 1 : 0;
