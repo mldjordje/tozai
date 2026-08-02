@@ -675,6 +675,9 @@ await sql`ALTER TABLE portfolio_categories ADD COLUMN IF NOT EXISTS name_en TEXT
 
 await sql`ALTER TABLE faq ADD COLUMN IF NOT EXISTS question_en TEXT`;
 await sql`ALTER TABLE faq ADD COLUMN IF NOT EXISTS answer_en TEXT`;
+// Lets the seed script upsert by question text instead of duplicating rows on
+// every re-run — the same shape as packages_slug.
+await sql`CREATE UNIQUE INDEX IF NOT EXISTS faq_question ON faq (question)`;
 
 /* ----------------------------------------------------------- social links --- */
 // One column per network meant a new platform was a migration and a deploy. The

@@ -13,11 +13,13 @@ import Hero from "@/components/sections/Hero";
 import ResultsShowcase from "@/components/sections/ResultsShowcase";
 import Packages from "@/components/sections/Packages";
 import Education from "@/components/sections/Education";
+import Faq from "@/components/sections/Faq";
 import { getPublicPackages, type Package } from "@/lib/packages";
 import { getLegalIdentity, getPublicContact, type LegalIdentity } from "@/lib/settings";
 import { toClipPackage, toHourPack } from "@/lib/content/offerings";
 import { getLandingContent } from "@/lib/content/landing.server";
 import { getPublicResultShots } from "@/lib/results";
+import { getPublicFaq, type FaqItem } from "@/lib/faq";
 import { localePath, type Locale } from "@/lib/i18n/config";
 import { normalizeSocialUrl } from "@/lib/socials";
 
@@ -103,11 +105,36 @@ function organizationSchema(identity: LegalIdentity, socials: string[]): string 
   });
 }
 
+/**
+ * The same questions the page renders, in the shape an AI answer engine or a
+ * search result actually reads. Google's FAQ rich result and every LLM crawler
+ * that has picked up FAQPage as a citation source both key off this — it is the
+ * cheapest, most direct SEO/AI-answer lever a site this size has, and it costs
+ * nothing beyond emitting what is already on the page as structured data.
+ *
+ * Emitted only when there is at least one question, same reasoning as
+ * organizationSchema: a schema.org node with an empty mainEntity is worse than
+ * none.
+ */
+function faqSchema(items: FaqItem[]): string | null {
+  if (items.length === 0) return null;
+  return JSON.stringify({
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    mainEntity: items.map((item) => ({
+      "@type": "Question",
+      name: item.question,
+      acceptedAnswer: { "@type": "Answer", text: item.answer },
+    })),
+  });
+}
+
 export default async function Landing({ locale }: { locale: Locale }) {
-  const [services, education, razvoj, contact, copy, shots, identity] = await Promise.all([
+  const [services, education, razvoj, faq, contact, copy, shots, identity] = await Promise.all([
     getPublicPackages("services", locale),
     getPublicPackages("education", locale),
     getPublicPackages("razvoj", locale),
+    getPublicFaq(locale),
     getPublicContact(),
     getLandingContent(locale),
     getPublicResultShots(locale),
@@ -119,6 +146,7 @@ export default async function Landing({ locale }: { locale: Locale }) {
   // arrive carrying igsh/utm tracking, which makes the profile harder for a
   // crawler to match against the one it already knows.
   const orgSchema = organizationSchema(identity, canonicalProfiles(contact.socials));
+  const faqSchemaJson = faqSchema(faq);
   const projects = services.filter((item) => item.flow === "project");
   // Wrapped rather than passed by reference: map's second argument is the
   // index, which would arrive where the mapper expects the locale.
@@ -160,6 +188,12 @@ export default async function Landing({ locale }: { locale: Locale }) {
           type="application/ld+json"
           // Server-rendered from our own database, never from user input.
           dangerouslySetInnerHTML={{ __html: orgSchema }}
+        />
+      )}
+      {faqSchemaJson && (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: faqSchemaJson }}
         />
       )}
       <Preloader />
@@ -271,6 +305,16 @@ export default async function Landing({ locale }: { locale: Locale }) {
           title={copy.education_title}
           body={copy.education_body}
           pills={copy.education_pills}
+        />
+
+        {/* FAQ — admin-driven (the `faq` table, /admin/faq). No static fallback:
+            unlike the pricing rails there is nothing to mirror offline, and an
+            empty section reads worse than no section. */}
+        <Faq
+          locale={locale}
+          items={faq}
+          eyebrow={locale === "en" ? "04 — FAQ" : "04 — Pitanja"}
+          title={locale === "en" ? "Questions, answered." : "Pitanja i odgovori."}
         />
 
         {/* Booking */}
