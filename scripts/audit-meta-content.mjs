@@ -14,6 +14,13 @@ if (!url) {
 
 const sql = neon(url);
 const risky = /100M|300K|Build Your Business|Virality Growth|Business Mastery|Full AI Transformation|organski rast/i;
+// Any aggregate "big number +" claim — the stats rail is exactly where a
+// re-added "200M+ Pregleda ostvarenih" (fixed 2 Aug 2026, see
+// scripts/fix-stats-claim-2026-08.mjs) got past the fixed keyword list above.
+// This does not run against result_shots: a per-account follower count there
+// ("207K pratilaca · Instagram") is the individually verifiable case the
+// original fix explicitly left alone, and would false-positive here.
+const aggregateNumber = /\d[\d.,]*\s*[MKmk]\+/;
 let findings = 0;
 
 const landing = await sql`
@@ -24,7 +31,7 @@ const landing = await sql`
 
 for (const row of landing) {
   const text = JSON.stringify(row.value);
-  if (risky.test(text)) {
+  if (risky.test(text) || aggregateNumber.test(text)) {
     findings += 1;
     console.log(`RISK landing override: ${row.key}`);
   } else {
