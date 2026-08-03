@@ -217,31 +217,12 @@ export default async function Landing({ locale }: { locale: Locale }) {
           body={copy.hero_body}
         />
 
-        {/* Brojevi */}
-        <PinnedSection id="services">
-          <div className="w-full max-w-6xl">
-            <p className="eyebrow mb-5">{copy.stats_eyebrow}</p>
-            <KineticTitle
-              text={copy.stats_title}
-              className="display mb-16 max-w-2xl text-4xl md:mb-24 md:text-7xl"
-            />
-            <div className={`grid grid-cols-2 gap-x-8 gap-y-14 ${statColumns(copy.stats.length)}`}>
-              {copy.stats.map((s, i) => (
-                <Reveal key={s.label} delay={i * 0.09}>
-                  <CountUp
-                    value={s.value}
-                    className="text-5xl font-semibold tracking-tighter tabular-nums md:text-7xl"
-                  />
-                  <div className="mt-3 border-t border-line pt-3 text-sm text-muted md:text-base">
-                    {s.label}
-                  </div>
-                </Reveal>
-              ))}
-            </div>
-          </div>
-        </PinnedSection>
-
-        <TextStrip items={copy.strip_items} />
+        {/* Proof, then price, then everything else.
+            The studio rail and the marquee used to sit between the hero and the
+            proof, which meant the first thing after the promise was us talking
+            about ourselves. A visitor who has just read the headline wants to
+            see the work and then what it costs; the studio numbers land better
+            once they have a reason to care who is behind them. */}
 
         {/* Proof — horizontal showcase: swipeable on touch, scroll-driven while
             pinned on desktop, every card opening full-size */}
@@ -265,6 +246,32 @@ export default async function Landing({ locale }: { locale: Locale }) {
           body={copy.packages_body}
           note={copy.packages_note}
         />
+
+        <TextStrip items={copy.strip_items} />
+
+        {/* Brojevi */}
+        <PinnedSection id="services">
+          <div className="w-full max-w-6xl">
+            <p className="eyebrow mb-5">{copy.stats_eyebrow}</p>
+            <KineticTitle
+              text={copy.stats_title}
+              className="display mb-16 max-w-2xl text-4xl md:mb-24 md:text-7xl"
+            />
+            <div className={`grid grid-cols-2 gap-x-8 gap-y-14 ${statColumns(copy.stats.length)}`}>
+              {copy.stats.map((s, i) => (
+                <Reveal key={s.label} delay={i * 0.09}>
+                  <CountUp
+                    value={s.value}
+                    className="text-5xl font-semibold tracking-tighter tabular-nums md:text-7xl"
+                  />
+                  <div className="mt-3 border-t border-line pt-3 text-sm text-muted md:text-base">
+                    {s.label}
+                  </div>
+                </Reveal>
+              ))}
+            </div>
+          </div>
+        </PinnedSection>
 
         {/* Web & Aplikacije — quoted per brief, delivered by the partner team.
             Rendered only when the studio has actually added the packages, and

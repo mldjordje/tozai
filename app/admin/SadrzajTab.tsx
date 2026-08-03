@@ -12,12 +12,16 @@ import type { LandingContent, Stat } from "@/lib/content/landing";
 // an empty field means exactly that — clear a box to revert that one line.
 
 type Field = { key: keyof LandingContent; label: string; multiline?: boolean; hint?: string };
-type Group = { title: string; note?: string; fields: Field[] };
+/** `id` is what the structured editors below key off. The title carries the
+ *  section number the page prints, so it moves whenever the page is reordered —
+ *  matching on it was one rename away from silently dropping the stats editor. */
+type Group = { id: string; title: string; note?: string; fields: Field[] };
 
 const ACCENT_HINT = "Reč u *zvezdicama* je istaknuta.";
 
 const GROUPS: Group[] = [
   {
+    id: "hero",
     title: "Hero",
     fields: [
       { key: "hero_eyebrow", label: "Nadnaslov" },
@@ -35,13 +39,7 @@ const GROUPS: Group[] = [
     ],
   },
   {
-    title: "01 — Brojevi",
-    fields: [
-      { key: "stats_eyebrow", label: "Nadnaslov" },
-      { key: "stats_title", label: "Naslov", hint: ACCENT_HINT },
-    ],
-  },
-  {
+    id: "results",
     title: "Rezultati",
     note: "Same slike se dodaju u tabu Rezultati.",
     fields: [
@@ -53,7 +51,8 @@ const GROUPS: Group[] = [
     ],
   },
   {
-    title: "02 — Paketi",
+    id: "packages",
+    title: "01 — Paketi",
     note: "Cene i tarife se uređuju u tabu Paketi.",
     fields: [
       { key: "packages_eyebrow", label: "Nadnaslov" },
@@ -63,6 +62,15 @@ const GROUPS: Group[] = [
     ],
   },
   {
+    id: "stats",
+    title: "02 — Brojevi",
+    fields: [
+      { key: "stats_eyebrow", label: "Nadnaslov" },
+      { key: "stats_title", label: "Naslov", hint: ACCENT_HINT },
+    ],
+  },
+  {
+    id: "education",
     title: "03 — Edukacija",
     fields: [
       { key: "education_eyebrow", label: "Nadnaslov" },
@@ -71,6 +79,7 @@ const GROUPS: Group[] = [
     ],
   },
   {
+    id: "booking",
     title: "Kontakt / booking",
     note: "Email, telefon i mreže se uređuju u tabu Podešavanja.",
     fields: [
@@ -81,6 +90,7 @@ const GROUPS: Group[] = [
     ],
   },
   {
+    id: "footer",
     title: "Futer",
     fields: [
       { key: "footer_tagline", label: "Opis pored logotipa", multiline: true },
@@ -177,7 +187,7 @@ export function SadrzajTab() {
       {values && defaults && (
         <>
           {GROUPS.map((group) => (
-            <section key={group.title} className="adm__content-section">
+            <section key={group.id} className="adm__content-section">
               <h3>{group.title}</h3>
               {group.note && <p className="adm__hint">{group.note}</p>}
               <div className="adm__content-grid">
@@ -208,7 +218,7 @@ export function SadrzajTab() {
                 ))}
 
                 {/* Structured editors sit inside the group they belong to. */}
-                {group.title === "01 — Brojevi" && (
+                {group.id === "stats" && (
                   <div style={{ gridColumn: "1/-1" }}>
                     <span className="adm__hint">Brojevi (do 8)</span>
                     {stats.map((stat, i) => (
@@ -259,7 +269,7 @@ export function SadrzajTab() {
                   </div>
                 )}
 
-                {group.title === "03 — Edukacija" && (
+                {group.id === "education" && (
                   <ChipList
                     label="Oznake iznad kartica"
                     items={pills}

@@ -27,7 +27,12 @@ export type LandingContent = {
   hero_cta_primary: string;
   hero_cta_secondary: string;
 
-  // --- 01 brojevi ---
+  // The numbers in the eyebrows count the sections in the order the page
+  // renders them (components/pages/Landing.tsx), which is proof → price →
+  // studio → education → FAQ. The fields below are grouped by topic rather
+  // than by that order, so the numbers here will not read in sequence.
+
+  // --- 02 brojevi ---
   stats_eyebrow: string;
   stats_title: string;
   stats: Stat[];
@@ -35,14 +40,14 @@ export type LandingContent = {
   // --- marquee ---
   strip_items: string[];
 
-  // --- rezultati ---
+  // --- rezultati (first section after the hero, deliberately unnumbered) ---
   results_eyebrow: string;
   results_title: string;
   results_body: string;
   results_card_title: string;
   results_cta: string;
 
-  // --- 02 paketi ---
+  // --- 01 paketi ---
   packages_eyebrow: string;
   packages_title: string;
   packages_body: string;
@@ -91,7 +96,7 @@ export const DEFAULTS: LandingContent = {
   hero_cta_primary: "Poruči AI video",
   hero_cta_secondary: "Pogledaj pakete",
 
-  stats_eyebrow: "01 — Studio",
+  stats_eyebrow: "02 — Studio",
   stats_title: "Jasno je *ko smo i šta radimo*.",
   // Keep the landing rail factual and identity-led. Audience and view counts
   // remain visible on their individual portfolio screenshots, where a visitor
@@ -111,7 +116,7 @@ export const DEFAULTS: LandingContent = {
   results_card_title: "Hoćeš ovakav *sadržaj*?",
   results_cta: "Pošalji upit",
 
-  packages_eyebrow: "02 — Paketi",
+  packages_eyebrow: "01 — Paketi",
   packages_title: "AI video po meri. *Ponuda po briefu*.",
   packages_body:
     "Izaberi smer i pošalji ideju. Dobijaš privatnu cenu i realno vreme izrade pre nego što bilo šta potvrdiš.",
@@ -156,7 +161,7 @@ export const DEFAULTS_EN: LandingContent = {
   hero_cta_primary: "Order an AI video",
   hero_cta_secondary: "See the packages",
 
-  stats_eyebrow: "01 — Studio",
+  stats_eyebrow: "02 — Studio",
   stats_title: "Clear about *who we are and what we do*.",
   // Mirrors the Serbian identity-led rail. Performance figures belong beside
   // their source in the portfolio, not as an aggregate marketing promise.
@@ -175,7 +180,7 @@ export const DEFAULTS_EN: LandingContent = {
   results_card_title: "Want content *like this*?",
   results_cta: "Send a brief",
 
-  packages_eyebrow: "02 — Packages",
+  packages_eyebrow: "01 — Packages",
   packages_title: "AI video, made to order. *Quoted from your brief*.",
   packages_body:
     "Pick a direction and send the idea. You get a private price and a realistic turnaround before you commit to anything.",
