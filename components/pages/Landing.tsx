@@ -9,6 +9,7 @@ import CountUp from "@/components/ui/CountUp";
 import CTAButton from "@/components/ui/CTAButton";
 import TextStrip from "@/components/ui/TextStrip";
 import SocialLinks from "@/components/ui/SocialLinks";
+import GoogleReviews from "@/components/ui/GoogleReviews";
 import Hero from "@/components/sections/Hero";
 import ResultsShowcase from "@/components/sections/ResultsShowcase";
 import Packages from "@/components/sections/Packages";
@@ -365,8 +366,13 @@ export default async function Landing({ locale }: { locale: Locale }) {
               </p>
               {/* The one place on the page where a visitor is already looking
                   for a way to reach the studio — and the proof rail above has
-                  just spent six cards talking about these very accounts. */}
-              <SocialLinks links={contact.socials} className="mt-7 justify-center" />
+                  just spent six cards talking about these very accounts.
+                  The Google profile sits with them: it is the one piece of
+                  proof that is not ours to edit. */}
+              <div className="mt-7 flex flex-col items-center gap-5">
+                <SocialLinks links={contact.socials} className="justify-center" />
+                <GoogleReviews locale={locale} mode="read" />
+              </div>
             </Reveal>
           </div>
         </PinnedSection>

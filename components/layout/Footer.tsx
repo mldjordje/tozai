@@ -2,6 +2,7 @@ import Link from "next/link";
 import BrandLogo from "@/components/brand/Logo";
 import { getLegalIdentity, type PublicContact } from "@/lib/settings";
 import SocialLinks from "@/components/ui/SocialLinks";
+import GoogleReviews from "@/components/ui/GoogleReviews";
 import { DEFAULTS } from "@/lib/content/landing";
 import { DEFAULT_LOCALE, localePath, type Locale } from "@/lib/i18n/config";
 import { ui } from "@/lib/i18n/ui";
@@ -110,6 +111,13 @@ export default async function Footer({
                   <SocialLinks links={socials} />
                 </li>
               )}
+              {/* The ask, rather than the read: a visitor who reached the floor
+                  of a page they came to on purpose is the one worth asking for
+                  a review. The landing's booking block links to the reviews
+                  themselves. */}
+              <li className="pt-2">
+                <GoogleReviews locale={locale} mode="write" />
+              </li>
               {!contact.email && !contact.phone && socials.length === 0 && (
                 <li className="text-muted">
                   <Link

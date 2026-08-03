@@ -37,6 +37,13 @@ export type UiStrings = {
     /** Privacy policy and terms — also the two URLs Google's OAuth review reads. */
     legalLinks: { href: string; label: string }[];
   };
+  /** The Google Business profile link — see components/ui/GoogleReviews.tsx. */
+  reviews: {
+    /** Opens the review composer. */
+    write: string;
+    /** Opens the reviews already left. */
+    read: string;
+  };
   packages: {
     popular: string;
     privateQuote: string;
@@ -200,6 +207,10 @@ const sr: UiStrings = {
       { href: "/privatnost", label: "Politika privatnosti" },
       { href: "/uslovi", label: "Uslovi korišćenja" },
     ],
+  },
+  reviews: {
+    write: "Oceni nas na Google-u",
+    read: "Recenzije na Google-u",
   },
   packages: {
     popular: "Najpopularnije",
@@ -374,6 +385,10 @@ const en: UiStrings = {
       { href: "/privatnost", label: "Privacy Policy" },
       { href: "/uslovi", label: "Terms of Service" },
     ],
+  },
+  reviews: {
+    write: "Review us on Google",
+    read: "Reviews on Google",
   },
   packages: {
     popular: "Most popular",
