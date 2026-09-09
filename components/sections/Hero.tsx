@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment, useState } from "react";
+import Image from "next/image";
 import { motion, useReducedMotion } from "framer-motion";
 import CTAButton from "@/components/ui/CTAButton";
 import { useIntroReleased } from "@/lib/intro";
@@ -273,6 +274,25 @@ export default function Hero({
                 {tertiaryLabel}
               </CTAButton>
             )}
+          </motion.div>
+          <motion.div variants={line} className="mt-6 w-fit md:mt-7">
+            <a
+              href="https://openclips.ai/?ref=tozaai"
+              target="_blank"
+              rel="noopener noreferrer sponsored"
+              className="openclips-referral"
+            >
+              <Image
+                src="/openclips-logo.svg"
+                alt="OpenClips AI"
+                width={366}
+                height={72}
+                className="openclips-referral-logo"
+              />
+              <span className="text-sm text-muted">
+                {locale === "en" ? "Turn your idea into an AI video" : "Pretvori svoju ideju u Ai video"}
+              </span>
+            </a>
           </motion.div>
         </motion.div>
 

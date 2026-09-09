@@ -436,6 +436,42 @@ textarea.field {
   min-height: 7rem;
 }
 
+.openclips-referral {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 4px 0;
+  perspective: 650px;
+  border-radius: 4px;
+}
+
+.openclips-referral-logo {
+  width: 190px;
+  height: auto;
+  transform: rotateX(9deg) rotateY(-9deg);
+  transform-origin: left center;
+  filter: drop-shadow(1px 1px 0 #49327a) drop-shadow(1px 2px 0 #30214f) drop-shadow(0 8px 10px #7c5cff30);
+  transition: transform 250ms ease, filter 250ms ease;
+}
+
+.openclips-referral:hover .openclips-referral-logo,
+.openclips-referral:focus-visible .openclips-referral-logo {
+  transform: rotateX(0) rotateY(0) translateY(-2px);
+  filter: drop-shadow(1px 2px 0 #49327a) drop-shadow(0 10px 14px #7c5cff55);
+}
+
+.openclips-referral:focus-visible {
+  outline: 2px solid #a78bfa;
+  outline-offset: 7px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .openclips-referral-logo { transition: none; transform: none; }
+  .openclips-referral:hover .openclips-referral-logo,
+  .openclips-referral:focus-visible .openclips-referral-logo { transform: none; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .field {
     transition: none;
