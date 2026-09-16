@@ -12,7 +12,8 @@
     "db:migrate:invoice-legal": "node scripts/migrate-invoice-legal-fields.mjs",
     "db:packages:2026-07": "node scripts/set-packages-2026-07.mjs",
     "audit:meta-content": "node scripts/audit-meta-content.mjs",
-    "email:check": "node scripts/check-outbox.mjs"
+    "email:check": "node scripts/check-outbox.mjs",
+    "pdf:smoke": "node --experimental-strip-types scripts/_pdf-smoke.mts"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.1.0",

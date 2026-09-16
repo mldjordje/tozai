@@ -1,9 +1,10 @@
-import "server-only";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import fontkit from "@pdf-lib/fontkit";
 import { PDFDocument, rgb, type PDFFont, type PDFPage } from "pdf-lib";
-import { settlementAccount } from "./rules";
+// Keep the extension explicit: this renderer is also exercised directly by the
+// Node smoke check, whose ESM resolver does not infer `.ts` like Next does.
+import { settlementAccount } from "./rules.ts";
 
 // Invoice / proforma renderer.
 //
