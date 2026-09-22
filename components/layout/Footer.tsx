@@ -142,7 +142,10 @@ export default async function Footer({
           className={`${registration.length > 0 ? "mt-6" : "mt-14 border-t border-line pt-7"} flex flex-col gap-4 text-xs text-faint sm:flex-row sm:items-center sm:justify-between`}
         >
           <p>
-            © {new Date().getFullYear()} TOZA AI. {t.footer.rights}
+            © {new Date().getFullYear()} TOZA AI. {t.footer.rights}{" · "}
+            <a href="https://adspire.rs/our-projects/toza-ai-platforma-za-ai-video-studio" target="_blank" rel="noopener">
+              Adspire
+            </a>
           </p>
           {/* Reachable from every page: a policy nobody can find is not a
               published policy, and Google's OAuth review looks for these. */}
